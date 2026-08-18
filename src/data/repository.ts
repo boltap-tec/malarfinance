@@ -5,29 +5,64 @@
 // these same functions with supabase-js and nothing else in the app changes.
 
 import seed from './seed.json'
+import { supabase, isSupabaseConfigured } from './supabase'
 import type {
   Dataset, Loan, Customer, InterestRow, LedgerRow, Partner, Finance, Deposit,
 } from './types'
 
 const STORAGE_KEY = 'arul-finance:data:v1'
 
-function load(): Dataset {
-  const saved = localStorage.getItem(STORAGE_KEY)
-  if (saved) {
-    try { return JSON.parse(saved) } catch { /* fall through */ }
-  }
+function fromSeed(): Dataset {
   return structuredClone(seed) as unknown as Dataset
+}
+
+function load(): Dataset {
+  // In Supabase mode we always start from a fresh pull, so ignore any local snapshot.
+  if (!isSupabaseConfigured) {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) {
+      try { return JSON.parse(saved) } catch { /* fall through */ }
+    }
+  }
+  return fromSeed()
 }
 
 let db: Dataset = load()
 
+// Tells the UI where the data came from, so we can show a badge / banner.
+export const source = { mode: (isSupabaseConfigured ? 'supabase' : 'local') as 'supabase' | 'local', live: false }
+
 function persist() {
+  if (isSupabaseConfigured) return // don't cache Supabase data locally
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)) } catch { /* quota */ }
 }
 
 export function resetToSeed() {
-  db = structuredClone(seed) as unknown as Dataset
+  db = fromSeed()
   persist()
+}
+
+// Pull every table from Supabase into memory once at startup. If a table is
+// missing or the request fails, that table keeps its seeded values — so the app
+// works both before and after migrate.sql has been run.
+export async function hydrate(): Promise<void> {
+  const client = supabase
+  if (!client) return
+  const tables = Object.keys(seed) as (keyof Dataset)[]
+  const results = await Promise.all(
+    tables.map(async (t) => {
+      const { data, error } = await client.from(t as string).select('*').limit(5000)
+      // error => table not migrated yet; keep the seeded rows for it
+      return error || !data ? null : { t, data }
+    }),
+  )
+  let anyLive = false
+  for (const r of results) {
+    if (!r) continue
+    ;(db as any)[r.t] = r.data
+    anyLive = true
+  }
+  source.live = anyLive
 }
 
 // ── Read helpers ─────────────────────────────────────────────────────────────

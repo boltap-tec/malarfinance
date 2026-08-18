@@ -5,7 +5,7 @@ import {
   Boxes, Gem, LogOut, Menu, X, Wallet, ChevronDown,
 } from 'lucide-react'
 import { useApp } from '../store/app'
-import { repo } from '../data/repository'
+import { repo, source } from '../data/repository'
 
 const nav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -69,6 +69,21 @@ function FinanceSwitcher() {
   )
 }
 
+function DataSourceBadge() {
+  const live = source.live
+  const configured = source.mode === 'supabase'
+  const label = live ? 'Live · Supabase' : configured ? 'Demo · run migrate.sql' : 'Demo data'
+  const cls = live
+    ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30'
+    : 'bg-amber-500/15 text-amber-300 ring-amber-500/30'
+  return (
+    <span className={`hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ring-inset sm:inline-flex ${cls}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${live ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+      {label}
+    </span>
+  )
+}
+
 export default function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useApp()
   const navigate = useNavigate()
@@ -113,6 +128,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <button className="lg:hidden" onClick={() => setMobileOpen(true)}><Menu className="text-slate-300" /></button>
           <div className="hidden lg:block" />
           <div className="flex items-center gap-3">
+            <DataSourceBadge />
             <FinanceSwitcher />
             <div className="flex items-center gap-2">
               <div className="grid h-8 w-8 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white">

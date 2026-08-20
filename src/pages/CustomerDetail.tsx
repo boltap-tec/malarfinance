@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Link, useParams, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Phone, Mail, HandCoins, Plus, Percent } from 'lucide-react'
 import { repo } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
@@ -13,7 +13,10 @@ export default function CustomerDetail() {
   const id = decodeURIComponent(stl)
   const navigate = useNavigate()
   const role = useApp(s => s.user?.role)
+  const setFinance = useApp(s => s.setFinance)
   const editable = canEdit(role)
+  const [sp] = useSearchParams()
+  const doParam = sp.get('do')
   const [tick, setTick] = useState(0)
   const [repay, setRepay] = useState<{ loan: Loan; interestOnly: boolean } | null>(null)
 
@@ -29,7 +32,18 @@ export default function CustomerDetail() {
     return { customer, loans, interest, totals }
   }, [id, tick])
 
+  // Opened from a row's Repay/Interest icon: auto-open the action for the
+  // outstanding loan so the customer's details are already loaded.
+  useEffect(() => {
+    if (!editable || !doParam) return
+    const outstanding = loans.filter(l => num(l.Outstand_Amount) > 0)
+    if (outstanding.length) setRepay({ loan: outstanding[0], interestOnly: doParam === 'interest' })
+  }, [doParam, editable]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!customer) return <EmptyState title="Customer not found" />
+
+  // Giving a loan needs a specific finance scope — adopt this customer's finance.
+  const giveLoan = () => { setFinance(customer.Finance_Name); navigate(`/loans?new=1&stl=${encodeURIComponent(customer.Customer_STL_NO)}`) }
 
   return (
     <div>
@@ -41,10 +55,7 @@ export default function CustomerDetail() {
           <div className="flex items-center gap-2">
             <Badge tone={statusTone(customer.Status)}>{customer.Status ?? '—'}</Badge>
             {editable && (
-              <button
-                className="btn-primary !py-1.5"
-                onClick={() => navigate(`/loans?new=1&stl=${encodeURIComponent(customer.Customer_STL_NO)}`)}
-              >
+              <button className="btn-primary !py-1.5" onClick={giveLoan}>
                 <Plus size={15} /> Give loan
               </button>
             )}
@@ -85,8 +96,8 @@ export default function CustomerDetail() {
                       <Td>
                         {num(l.Outstand_Amount) > 0 ? (
                           <div className="flex gap-1.5">
-                            <button className="btn-ghost !px-2.5 !py-1 text-xs" onClick={() => setRepay({ loan: l, interestOnly: false })}><HandCoins size={13} /> Repay</button>
-                            <button className="btn-ghost !px-2.5 !py-1 text-xs" onClick={() => setRepay({ loan: l, interestOnly: true })}><Percent size={13} /> Interest</button>
+                            <button className="btn-ghost !px-2.5 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setRepay({ loan: l, interestOnly: false })}><HandCoins size={13} /> Repay</button>
+                            <button className="btn-ghost !px-2.5 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30" onClick={() => setRepay({ loan: l, interestOnly: true })}><Percent size={13} /> Interest</button>
                           </div>
                         ) : <span className="text-xs text-slate-600">—</span>}
                       </Td>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Search, Plus, HandCoins, Percent } from 'lucide-react'
 import { repo, addCustomer } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
@@ -11,9 +11,14 @@ import type { Customer } from '../data/types'
 export default function Customers() {
   const finance = useApp(s => s.finance)
   const role = useApp(s => s.user?.role)
+  const setFinance = useApp(s => s.setFinance)
+  const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [open, setOpen] = useCreateParam()
   const [tick, setTick] = useState(0)
+
+  // Giving a loan needs a specific finance — adopt the customer's finance first.
+  const giveLoan = (c: Customer) => { setFinance(c.Finance_Name); navigate(`/loans?new=1&stl=${encodeURIComponent(c.Customer_STL_NO)}`) }
 
   const rows = useMemo(() => {
     const list = repo.customers(financeFilter(finance))
@@ -67,9 +72,9 @@ export default function Customers() {
                     {canEdit(role) && (
                       <Td>
                         <div className="flex gap-1.5">
-                          <Link title="Give loan" to={`/loans?new=1&stl=${encodeURIComponent(c.Customer_STL_NO)}`} className="btn-ghost !px-2 !py-1 text-xs"><Plus size={13} /></Link>
-                          <Link title="Repay" to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}`} className="btn-ghost !px-2 !py-1 text-xs"><HandCoins size={13} /></Link>
-                          <Link title="Interest" to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}`} className="btn-ghost !px-2 !py-1 text-xs"><Percent size={13} /></Link>
+                          <button title="Give loan" onClick={() => giveLoan(c)} className="btn-ghost !px-2 !py-1 text-xs text-brand-300 ring-1 ring-inset ring-brand-500/30"><Plus size={13} /></button>
+                          <Link title="Repay" to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"><HandCoins size={13} /></Link>
+                          <Link title="Interest" to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}?do=interest`} className="btn-ghost !px-2 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30"><Percent size={13} /></Link>
                         </div>
                       </Td>
                     )}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Building2, HandCoins, Percent } from 'lucide-react'
+import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom'
+import { ArrowLeft, Building2, HandCoins, Percent, Plus } from 'lucide-react'
 import { repo, repayOtherFinance } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
@@ -11,6 +11,8 @@ export default function OtherFinanceDetail() {
   const { code = '' } = useParams()
   const id = decodeURIComponent(code)
   const role = useApp(s => s.user?.role)
+  const setFinance = useApp(s => s.setFinance)
+  const navigate = useNavigate()
   const editable = canEdit(role)
   const [sp] = useSearchParams()
   const doParam = sp.get('do')
@@ -45,9 +47,14 @@ export default function OtherFinanceDetail() {
         action={
           <div className="flex items-center gap-2">
             <Badge tone={statusTone(first.Loan_Status)}>{first.Loan_Status ?? '—'}</Badge>
+            {editable && (
+              <button className="btn-primary !py-1.5" onClick={() => { setFinance(first.Finance_Name); navigate(`/other-finance?new=1&code=${encodeURIComponent(id)}`) }}>
+                <Plus size={15} /> Add loan
+              </button>
+            )}
             {editable && outstanding > 0 && <>
-              <button className="btn-ghost !py-1.5" onClick={() => setModal('repay')}><HandCoins size={15} /> Repay</button>
-              <button className="btn-ghost !py-1.5" onClick={() => setModal('interest')}><Percent size={15} /> Pay interest</button>
+              <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setModal('repay')}><HandCoins size={15} /> Repay</button>
+              <button className="btn-ghost !py-1.5 text-amber-300 ring-1 ring-inset ring-amber-500/30" onClick={() => setModal('interest')}><Percent size={15} /> Pay interest</button>
             </>}
           </div>
         }

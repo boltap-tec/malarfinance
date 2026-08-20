@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { PiggyBank, Plus, HandCoins, Percent } from 'lucide-react'
 import { repo, addDeposit, missingRequired, FORM_FIELDS } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
@@ -14,6 +14,8 @@ export default function Deposits() {
   const finance = useApp(s => s.finance)
   const role = useApp(s => s.user?.role)
   const [open, setOpen] = useCreateParam()
+  const [sp] = useSearchParams()
+  const initialCode = sp.get('code') ?? ''
   const [tick, setTick] = useState(0)
 
   const { rows, total, outstanding } = useMemo(() => {
@@ -66,8 +68,8 @@ export default function Deposits() {
                       <Td>
                         {num(d.Outstand_Amount) > 0 ? (
                           <div className="flex gap-1.5">
-                            <Link title="Repay" to={`/deposits/${encodeURIComponent(d.Deposit_No)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs"><HandCoins size={13} /></Link>
-                            <Link title="Pay interest" to={`/deposits/${encodeURIComponent(d.Deposit_No)}?do=interest`} className="btn-ghost !px-2 !py-1 text-xs"><Percent size={13} /></Link>
+                            <Link title="Repay" to={`/deposits/${encodeURIComponent(d.Deposit_No)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"><HandCoins size={13} /></Link>
+                            <Link title="Pay interest" to={`/deposits/${encodeURIComponent(d.Deposit_No)}?do=interest`} className="btn-ghost !px-2 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30"><Percent size={13} /></Link>
                           </div>
                         ) : <span className="text-xs text-slate-600">—</span>}
                       </Td>
@@ -83,6 +85,7 @@ export default function Deposits() {
       {open && (
         <DepositForm
           finance={finance}
+          initialCode={initialCode}
           onClose={() => setOpen(false)}
           onSaved={() => { setOpen(false); setTick(t => t + 1) }}
         />
@@ -93,7 +96,7 @@ export default function Deposits() {
 
 interface Depositor { code: string; name: string; phone?: number | string; email?: string; address?: string; out: number; count: number }
 
-function DepositForm({ finance, onClose, onSaved }: { finance: string; onClose: () => void; onSaved: () => void }) {
+function DepositForm({ finance, initialCode, onClose, onSaved }: { finance: string; initialCode?: string; onClose: () => void; onSaved: () => void }) {
   const existing = repo.deposits(finance)
   const prefix = (finance.slice(0, 3) || 'Fin')
 
@@ -110,9 +113,10 @@ function DepositForm({ finance, onClose, onSaved }: { finance: string; onClose: 
     return [...map.values()]
   }, [existing])
 
-  const [mode, setMode] = useState<'existing' | 'new'>(depositors.length ? 'existing' : 'new')
+  const preset = initialCode ? depositors.find(d => d.code === initialCode) ?? null : null
+  const [mode, setMode] = useState<'existing' | 'new'>(preset || depositors.length ? 'existing' : 'new')
   const [q, setQ] = useState('')
-  const [sel, setSel] = useState<Depositor | null>(null)
+  const [sel, setSel] = useState<Depositor | null>(preset)
   // New depositor
   const [name, setName] = useState('')
   const [phoneNo, setPhoneNo] = useState('')

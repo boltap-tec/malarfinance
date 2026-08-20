@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Building2, Plus, HandCoins, Percent } from 'lucide-react'
 import { repo, addOtherFinanceLoan, missingRequired, FORM_FIELDS } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
@@ -14,6 +14,8 @@ export default function OtherFinance() {
   const finance = useApp(s => s.finance)
   const role = useApp(s => s.user?.role)
   const [open, setOpen] = useCreateParam()
+  const [sp] = useSearchParams()
+  const initialCode = sp.get('code') ?? ''
   const [tick, setTick] = useState(0)
 
   const { rows, borrowed, outstanding } = useMemo(() => {
@@ -76,8 +78,8 @@ export default function OtherFinance() {
                       <Td>
                         {num(o.Outstand_Amount) > 0 ? (
                           <div className="flex gap-1.5">
-                            <Link title="Repay" to={`/other-finance/${encodeURIComponent(o.Loan_No)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs"><HandCoins size={13} /></Link>
-                            <Link title="Pay interest" to={`/other-finance/${encodeURIComponent(o.Loan_No)}?do=interest`} className="btn-ghost !px-2 !py-1 text-xs"><Percent size={13} /></Link>
+                            <Link title="Repay" to={`/other-finance/${encodeURIComponent(o.Loan_No)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"><HandCoins size={13} /></Link>
+                            <Link title="Pay interest" to={`/other-finance/${encodeURIComponent(o.Loan_No)}?do=interest`} className="btn-ghost !px-2 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30"><Percent size={13} /></Link>
                           </div>
                         ) : <span className="text-xs text-slate-600">—</span>}
                       </Td>
@@ -93,6 +95,7 @@ export default function OtherFinance() {
       {open && (
         <BorrowForm
           finance={finance}
+          initialCode={initialCode}
           onClose={() => setOpen(false)}
           onSaved={() => { setOpen(false); setTick(t => t + 1) }}
         />
@@ -103,7 +106,7 @@ export default function OtherFinance() {
 
 interface Lender { code: string; name: string; phone?: number | string; out: number; count: number }
 
-function BorrowForm({ finance, onClose, onSaved }: { finance: string; onClose: () => void; onSaved: () => void }) {
+function BorrowForm({ finance, initialCode, onClose, onSaved }: { finance: string; initialCode?: string; onClose: () => void; onSaved: () => void }) {
   const existing = repo.otherFinanceLoans(finance)
   const prefix = (finance.slice(0, 3) || 'Fin')
 
@@ -120,9 +123,10 @@ function BorrowForm({ finance, onClose, onSaved }: { finance: string; onClose: (
     return [...map.values()]
   }, [existing])
 
-  const [mode, setMode] = useState<'existing' | 'new'>(lenders.length ? 'existing' : 'new')
+  const preset = initialCode ? lenders.find(l => l.code === initialCode) ?? null : null
+  const [mode, setMode] = useState<'existing' | 'new'>(preset || lenders.length ? 'existing' : 'new')
   const [q, setQ] = useState('')
-  const [sel, setSel] = useState<Lender | null>(null)
+  const [sel, setSel] = useState<Lender | null>(preset)
   const [lender, setLender] = useState('')
   const [phoneNo, setPhoneNo] = useState('')
   const autoNum = existing.reduce((mx, o) => {

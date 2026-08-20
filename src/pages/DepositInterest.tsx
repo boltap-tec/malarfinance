@@ -63,7 +63,7 @@ export default function DepositInterest() {
                   <Fragment key={k}>
                     {(k === 0 || arr[k - 1].Month !== i.Month) && (
                       <tr className="bg-slate-900/80"><td colSpan={editable ? 8 : 7} className="px-3 py-1.5">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-3">
                           <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">{i.Month}</span>
                           <span className="text-xs text-slate-400">Interest <b className="text-white">{inr(monthTotals[i.Month ?? '—']?.interest ?? 0)}</b> · Pending <b className="text-amber-300">{inr(monthTotals[i.Month ?? '—']?.pending ?? 0)}</b></span>
                         </div>

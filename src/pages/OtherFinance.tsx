@@ -90,28 +90,58 @@ export default function OtherFinance() {
   )
 }
 
+interface Lender { code: string; name: string; phone?: number | string; out: number; count: number }
+
 function BorrowForm({ finance, onClose, onSaved }: { finance: string; onClose: () => void; onSaved: () => void }) {
   const existing = repo.otherFinanceLoans(finance)
   const prefix = (finance.slice(0, 3) || 'Fin')
+
+  // Distinct lender finances already on record, so a repeat borrowing links to the same FIN code.
+  const lenders = useMemo(() => {
+    const map = new Map<string, Lender>()
+    for (const o of existing) {
+      const key = (o.Loan_bought_Finance_Name || '').toLowerCase()
+      if (!key) continue
+      const cur = map.get(key) ?? { code: o.Loan_No, name: o.Loan_bought_Finance_Name, phone: o.Loan_bought_Finance_Phone_No, out: 0, count: 0 }
+      cur.out += num(o.Outstand_Amount); cur.count++
+      map.set(key, cur)
+    }
+    return [...map.values()]
+  }, [existing])
+
+  const [mode, setMode] = useState<'existing' | 'new'>(lenders.length ? 'existing' : 'new')
+  const [q, setQ] = useState('')
+  const [sel, setSel] = useState<Lender | null>(null)
   const [lender, setLender] = useState('')
+  const [phoneNo, setPhoneNo] = useState('')
+  const autoNum = existing.reduce((mx, o) => {
+    const m = String(o.Loan_No).match(/FIN(\d+)/i)
+    return m ? Math.max(mx, Number(m[1])) : mx
+  }, 0) + 1
+  const [finNum, setFinNum] = useState(String(autoNum))
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [type, setType] = useState<'Per_Day' | 'Per_Month'>('Per_Day')
   const [rate, setRate] = useState('')
-  const [phoneNo, setPhoneNo] = useState('')
   const [payType, setPayType] = useState('Cash')
 
-  const loanNo = `${prefix}-O-${existing.length + 1}-${lender || 'lender'}`
+  const matches = useMemo(() => {
+    const s = q.trim().toLowerCase()
+    return (s ? lenders.filter(l => l.name.toLowerCase().includes(s) || l.code.toLowerCase().includes(s) || String(l.phone ?? '').includes(s)) : lenders).slice(0, 8)
+  }, [lenders, q])
+
+  const newCode = `${prefix}-FIN${finNum.trim()}`
   const amt = num(amount)
-  const valid = lender.trim() && amt > 0 && num(rate) >= 0
+  const lenderReady = mode === 'existing' ? !!sel : lender.trim().length > 0 && finNum.trim().length > 0
+  const valid = lenderReady && amt > 0 && num(rate) >= 0
 
   async function save() {
     const row: OtherFinanceLoan = {
       Finance_Name: finance,
       Loan_Bought_Date: date,
-      Loan_No: loanNo,
-      Loan_bought_Finance_Name: lender.trim(),
-      Loan_bought_Finance_Phone_No: phoneNo || undefined,
+      Loan_No: mode === 'existing' ? sel!.code : newCode,
+      Loan_bought_Finance_Name: mode === 'existing' ? sel!.name : lender.trim(),
+      Loan_bought_Finance_Phone_No: mode === 'existing' ? sel!.phone : (phoneNo || undefined),
       Loan_Amount: amt,
       Interest_Type: type,
       Interest_Per_day_Per_Lakh: type === 'Per_Day' ? num(rate) : 0,
@@ -134,7 +164,59 @@ function BorrowForm({ finance, onClose, onSaved }: { finance: string; onClose: (
         <button className="btn-primary" disabled={!valid} onClick={save}>Save & post to ledger</button>
       </>}
     >
-      <Field label="Lender finance name"><input className="input" value={lender} onChange={e => setLender(e.target.value)} placeholder="e.g. AKPR finance" /></Field>
+      <div className="flex gap-1 rounded-xl bg-slate-800/60 p-1">
+        {(['existing', 'new'] as const).map(m => (
+          <button key={m} onClick={() => { setMode(m); setSel(null); setQ('') }}
+            className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium ${mode === m ? 'bg-brand-600 text-white' : 'text-slate-300'}`}>
+            {m === 'existing' ? 'Existing finance' : 'New finance'}
+          </button>
+        ))}
+      </div>
+
+      {mode === 'existing' ? (
+        sel ? (
+          <div className="rounded-xl bg-slate-800/40 p-3">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="font-semibold text-white">{sel.name}</p>
+                <p className="text-xs text-slate-500">{sel.code} · {phone(sel.phone)} · {sel.count} loan(s)</p>
+              </div>
+              <button onClick={() => setSel(null)} className="btn-ghost !py-1 text-xs">Change</button>
+            </div>
+            <p className="mt-2 text-xs text-amber-300">Linked · outstanding {inr(sel.out)}</p>
+          </div>
+        ) : (
+          <>
+            <Field label="Find finance (name / phone / FIN no.)">
+              <input className="input" placeholder="Type to search…" autoFocus value={q} onChange={e => setQ(e.target.value)} />
+            </Field>
+            <div className="max-h-44 space-y-1 overflow-y-auto">
+              {matches.length === 0 && <p className="px-1 text-sm text-slate-500">No matching finances.</p>}
+              {matches.map(l => (
+                <button key={l.code} type="button" onClick={() => setSel(l)}
+                  className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm ring-1 ring-inset ring-transparent hover:bg-slate-800/60 hover:ring-brand-500/40">
+                  <span><span className="font-medium text-slate-100">{l.name}</span><span className="ml-2 text-xs text-slate-500">{l.code} · {phone(l.phone)}</span></span>
+                  <span className="text-xs text-amber-300">{inr(l.out)} out</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )
+      ) : (
+        <>
+          <Field label="Lender finance name"><input className="input" value={lender} onChange={e => setLender(e.target.value)} placeholder="e.g. AKPR finance" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Lender phone"><input className="input" inputMode="tel" value={phoneNo} onChange={e => setPhoneNo(e.target.value)} /></Field>
+            <Field label="Finance no. (FIN)" hint="Only the number is editable.">
+              <div className="flex items-center gap-2">
+                <span className="rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm text-slate-400">{prefix}-FIN</span>
+                <input className="input" inputMode="numeric" value={finNum} onChange={e => setFinNum(e.target.value.replace(/\D/g, ''))} />
+              </div>
+            </Field>
+          </div>
+        </>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <Field label="Amount (₹)"><input className="input" inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} /></Field>
         <Field label="Bought date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
@@ -148,15 +230,11 @@ function BorrowForm({ finance, onClose, onSaved }: { finance: string; onClose: (
         </Field>
         <Field label="Rate (₹ / lakh)"><input className="input" inputMode="numeric" value={rate} onChange={e => setRate(e.target.value)} /></Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Lender phone"><input className="input" inputMode="tel" value={phoneNo} onChange={e => setPhoneNo(e.target.value)} /></Field>
-        <Field label="Payment type">
-          <select className="input" value={payType} onChange={e => setPayType(e.target.value)}>
-            <option>Cash</option><option>Bank</option><option>UPI</option><option>Cheque</option>
-          </select>
-        </Field>
-      </div>
-      <Field label="Loan no. (auto)" hint="Generated from finance + count + lender."><input className="input opacity-70" value={loanNo} readOnly /></Field>
+      <Field label="Payment type">
+        <select className="input" value={payType} onChange={e => setPayType(e.target.value)}>
+          <option>Cash</option><option>Bank</option><option>UPI</option><option>Cheque</option>
+        </select>
+      </Field>
     </Modal>
   )
 }

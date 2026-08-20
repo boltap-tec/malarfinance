@@ -20,6 +20,7 @@ export interface Partner {
   Phone_Number?: number | string
   Email_Address?: string
   Photo?: string
+  Pending_Message?: string
 }
 
 export interface Customer {
@@ -44,16 +45,27 @@ export interface Loan {
   Customer_STL_NO: string
   Customer_Name: string
   Customer_Phone_No?: number | string
+  Customer_Email?: string
+  Customer_Adhar_No?: string | number
   Loan_Amount: number
   Interest_Per_day_Per_Lakh?: number
   Interest_Per_Month_Per_Lakh?: number
   Interest_Type?: 'Per_Day' | 'Per_Month' | string
+  No_Bond_Received?: number
+  No_Chq_Received?: number
   Repaid_Amount?: number
   Outstand_Amount?: number
   Loan_Status?: string
   Referred_Partner?: string
   Payment_Type?: string
   Remarks?: string
+  Total_Month_Days?: number
+  Customer_Type?: string
+  Customer_Ref?: string
+  Attach1?: string
+  Attach2?: string
+  Photo1?: string
+  Photo2?: string
 }
 
 export interface InterestRow {
@@ -95,21 +107,99 @@ export interface LedgerRow {
 
 export interface Deposit {
   Finance_Name: string
+  Deposit_Bought_Date?: string
   Deposit_No: string
   Depositer_Name: string
   Depositer_Phone_No?: number | string
+  Depositer_Email?: string
+  Depositer_Address?: string
   Deposit_Amount?: number
   Interest_Per_Month_Per_Lakh?: number
   Repaid_Amount?: number
   Outstand_Amount?: number
   Deposit_Status?: string
+  Payment_Type?: string
+  Remarks?: string
   Interest_Type?: string
+  Depositer_Type?: string
+  Depositer_Type_Exists?: string
+}
+
+// A loan the firm has BORROWED from another finance house (a liability).
+export interface OtherFinanceLoan {
+  Finance_Name: string
+  Loan_Bought_Date?: string
+  Loan_No: string
+  Loan_bought_Finance_Name: string
+  Loan_bought_Finance_Phone_No?: number | string
+  Loan_bought_Finance_Email?: string
+  Loan_bought_Finance_Address?: string
+  Loan_Amount?: number
+  Interest_Per_day_Per_Lakh?: number
+  Interest_Per_Month_Per_Lakh?: number | string
+  Repaid_Amount?: number
+  Outstand_Amount?: number
+  Loan_Status?: string
+  Payment_Type?: string
+  Remarks?: string
+  Interest_Type?: string
+  Finance_Type?: string
 }
 
 export interface NatureTransaction {
   Nature_Transaction: string
   Type: 'Receipt' | 'Payment' | string
   Report?: string
+}
+
+// A staff member created by the MD, with an explicit list of menus they may use.
+export interface Worker {
+  Worker_ID: string
+  Finance_Name: string
+  Worker_Name: string
+  Phone_Number: number | string
+  Allowed_Menus: string[] // route paths, e.g. ['/loans','/ledger']
+  Status?: string
+  Created_By?: string
+}
+
+// Audit trail. Every create / update / delete / revoke is recorded here; delete
+// and revoke entries keep the removed row(s) so they can be restored.
+export interface LogEntry {
+  id: string
+  Date: string
+  User: string
+  Action: 'create' | 'update' | 'delete' | 'restore' | 'revoke'
+  Entity: string          // dataset table key, e.g. 'Partner'
+  Entity_Label?: string   // human description
+  Before?: any            // snapshot(s) before the change (row, or array for revoke)
+  After?: any             // snapshot after (create/update)
+  Restored?: boolean      // set once a delete/revoke has been undone
+}
+
+// A message between users — a group broadcast or a direct message.
+export interface Message {
+  id: string
+  Date: string
+  From_Phone: string
+  From_Name: string
+  Scope: 'group' | 'direct'
+  To_Phone?: string  // set for direct messages
+  To_Name?: string
+  Finance_Name?: string
+  Body: string
+}
+
+// In-app bell notification (e.g. a new loan routed to the referred partner).
+export interface AppNotification {
+  id: string
+  Finance_Name: string
+  To_Phone: string       // recipient's phone (partner / worker / md)
+  To_Party?: string      // human label of the recipient
+  Title: string
+  Body?: string
+  Date: string
+  Read?: boolean
 }
 
 export interface Dataset {
@@ -128,7 +218,11 @@ export interface Dataset {
   Chit_Member: any[]
   Chit_Auction: any[]
   Chit_Transaction: any[]
-  Other_Finance_Loan: any[]
+  Other_Finance_Loan: OtherFinanceLoan[]
+  Worker: Worker[]
+  Notification: AppNotification[]
+  Message: Message[]
+  Log: LogEntry[]
   Given: any[]
   Borrowed: any[]
   Jewel_Loan: any[]

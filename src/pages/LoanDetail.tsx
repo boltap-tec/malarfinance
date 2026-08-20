@@ -1,16 +1,21 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Calculator } from 'lucide-react'
+import { ArrowLeft, Calculator, HandCoins } from 'lucide-react'
 import { repo } from '../data/repository'
 import { computeInterest } from '../lib/interestEngine'
+import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
+import RepayModal from '../components/RepayModal'
 import { inr, fmtDate, num } from '../lib/format'
 
 export default function LoanDetail() {
   const { loanNo = '' } = useParams()
+  const role = useApp(s => s.user?.role)
   const id = decodeURIComponent(loanNo)
-  const loan = useMemo(() => repo.loan(id), [id])
-  const interest = useMemo(() => repo.interestByLoan(id), [id])
+  const [tick, setTick] = useState(0)
+  const loan = useMemo(() => repo.loan(id), [id, tick])
+  const interest = useMemo(() => repo.interestByLoan(id), [id, tick])
+  const [repayOpen, setRepayOpen] = useState(false)
 
   const today = new Date().toISOString().slice(0, 10)
   const monthStart = today.slice(0, 8) + '01'
@@ -23,6 +28,7 @@ export default function LoanDetail() {
 
   const billed = interest.reduce((s, i) => s + num(i.Interest_Amount), 0)
   const received = interest.reduce((s, i) => s + num(i.Amount_Received), 0)
+  const pendingInterest = interest.reduce((s, i) => s + num(i.Interest_Pending), 0)
 
   return (
     <div>
@@ -30,13 +36,20 @@ export default function LoanDetail() {
       <PageHeader
         title={`Loan ${loan.Loan_No}`}
         subtitle={<Link to={`/customers/${encodeURIComponent(loan.Customer_STL_NO)}`} className="text-brand-300">{loan.Customer_Name} · {loan.Customer_STL_NO}</Link>}
-        action={<Badge tone={statusTone(loan.Loan_Status)}>{loan.Loan_Status ?? '—'}</Badge>}
+        action={
+          <div className="flex items-center gap-2">
+            <Badge tone={statusTone(loan.Loan_Status)}>{loan.Loan_Status ?? '—'}</Badge>
+            {canEdit(role) && num(loan.Outstand_Amount) > 0 && (
+              <button className="btn-primary !py-1.5" onClick={() => setRepayOpen(true)}><HandCoins size={15} /> Repay</button>
+            )}
+          </div>
+        }
       />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Loan amount" value={inr(num(loan.Loan_Amount))} tone="blue" />
         <StatCard label="Outstanding" value={inr(num(loan.Outstand_Amount))} tone="amber" />
-        <StatCard label="Interest billed" value={inr(billed)} tone="slate" />
+        <StatCard label="Interest billed" value={inr(billed)} tone="slate" sub={`${inr(pendingInterest)} pending`} />
         <StatCard label="Interest received" value={inr(received)} tone="green" />
       </div>
 
@@ -104,6 +117,14 @@ export default function LoanDetail() {
             </table>
           </div>
         </Card>
+      )}
+
+      {repayOpen && (
+        <RepayModal
+          loan={loan}
+          onClose={() => setRepayOpen(false)}
+          onSaved={() => { setRepayOpen(false); setTick(t => t + 1) }}
+        />
       )}
     </div>
   )

@@ -1,10 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell,
 } from 'recharts'
-import { HandCoins, Percent, Users, PiggyBank, TrendingUp, ArrowRight } from 'lucide-react'
+import { HandCoins, Percent, Users, PiggyBank, TrendingUp, ArrowRight, UserPlus, Building2 } from 'lucide-react'
 import { repo } from '../data/repository'
 import { useApp, financeFilter } from '../store/app'
 import { PageHeader, StatCard, Card, Badge } from '../components/ui'
@@ -75,6 +75,15 @@ export default function Dashboard() {
         title="Dashboard"
         subtitle={finance === 'ALL' ? 'All finances combined' : finance}
       />
+
+      {/* Quick actions */}
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <QuickAction to="/loans?new=1" icon={<HandCoins size={18} />} label="New loan" />
+        <QuickAction to="/customers?new=1" icon={<UserPlus size={18} />} label="New customer" />
+        <QuickAction to="/deposits?new=1" icon={<PiggyBank size={18} />} label="New deposit" />
+        <QuickAction to="/other-finance?new=1" icon={<Building2 size={18} />} label="Borrow" />
+        <QuickAction to="/interest" icon={<Percent size={18} />} label="Post interest" />
+      </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Outstanding loans" value={inrShort(data.outstandingLoan)} tone="blue"
@@ -171,6 +180,18 @@ export default function Dashboard() {
         </div>
       </Card>
     </div>
+  )
+}
+
+function QuickAction({ to, icon, label }: { to: string; icon: ReactNode; label: string }) {
+  return (
+    <Link
+      to={to}
+      className="card flex items-center gap-3 p-3 transition hover:border-brand-600/50 hover:bg-slate-800/60"
+    >
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-500/15 text-brand-300 ring-1 ring-inset ring-brand-500/30">{icon}</span>
+      <span className="text-sm font-semibold text-white">{label}</span>
+    </Link>
   )
 }
 

@@ -17,7 +17,21 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 and sign in (demo login — pick **Owner / MD**).
+Open http://localhost:5173 and sign in with a **phone number + password** (default
+`1234`, changeable from the key icon in the header).
+
+### Roles
+| Role | Signs in with | Sees |
+|---|---|---|
+| **MD** | the finance's phone (`Finance_Details.Phone_Number`) | everything, all finances, full edit |
+| **Partner** | their partner phone | dashboard/loans/interest/ledger **scoped to loans they referred**, view-only |
+| **Worker** | phone the MD registered | only the menus the MD granted (created under **Workers**) |
+
+Sample MD login: `9626262427` (Malarvizhi · Malar_Finance). Sample partner: `8940864888`.
+
+New loans notify the referred partner via the **bell**. The **refresh** icon re-pulls
+data. Because this phase stores data locally per-browser, cross-device logins become
+real once Supabase is connected.
 
 Build for production:
 
@@ -28,19 +42,38 @@ npm run preview    # serve the build locally
 
 ---
 
-## What's built (Phase 1)
+## What's built
 
 | Module | Status |
 |---|---|
 | Dashboard (KPIs, billed-vs-collected chart, loan-status, recent txns) | ✅ |
-| Customers (search) + customer 360° detail | ✅ |
+| Customers (search) + customer 360° detail + **New customer** form | ✅ |
 | Loans (search, status filter) + loan detail with interest calculator | ✅ |
+| **New loan** + **Repay loan** (principal + interest, auto-closes) forms | ✅ |
 | **Interest engine** — preview + post monthly interest for active loans | ✅ |
-| Transaction ledger (receipts / payments, net) | ✅ |
-| Deposits (liabilities to depositors) | ✅ |
+| Transaction ledger — every flow auto-posts (loan out, repay, deposit, borrow) | ✅ |
+| Deposits (liabilities to depositors) + **New deposit** form | ✅ |
+| **Other-Finance loans** (money the firm borrows) + **Borrow** form | ✅ |
+| **Partners** directory | ✅ |
 | Chit funds (invested chits overview) | ✅ |
 | Owner / Partner roles, multi-finance switcher | ✅ |
 | Jewel loans, chit auctions, reports | ⏭️ next phase |
+
+### Money flows & the ledger
+Every data-entry action posts a matching row to the **Transaction Ledger** with an
+auto Ref_ID and a running balance:
+
+| Action | Ledger nature | Direction |
+|---|---|---|
+| Disburse a loan | `Loan_To_Customer` | Payment (out) |
+| Customer principal repayment | `Customer_Loan_Prin_Repayment` | Receipt (in) |
+| Customer interest received | `Customer_Interest` | Receipt (in) |
+| Take a deposit | `Deposit_From_Customer` | Receipt (in) |
+| Borrow from another finance | `Other_Receipt` | Receipt (in) |
+
+Repaying a loan settles pending interest rows oldest-first and marks the loan
+**Closed** when the outstanding principal reaches zero. Interest *posting* only
+bills (creates the schedule); cash is recognised when the customer actually pays.
 
 The interest engine (`src/lib/interestEngine.ts`) is a faithful port of your
 Google Apps Script: per-day / per-month formulas, actual-from-date, inclusive

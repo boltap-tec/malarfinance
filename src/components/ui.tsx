@@ -1,4 +1,5 @@
 import { ReactNode } from 'react'
+import { X } from 'lucide-react'
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <div className={`card p-4 sm:p-5 ${className}`}>{children}</div>
@@ -61,6 +62,35 @@ export function EmptyState({ title, hint }: { title: string; hint?: string }) {
       <p className="font-semibold text-slate-300">{title}</p>
       {hint && <p className="text-sm text-slate-500">{hint}</p>}
     </div>
+  )
+}
+
+// ── Form / modal primitives ──────────────────────────────────────────────────
+export function Modal({
+  title, onClose, children, footer,
+}: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="card relative z-10 w-full max-w-lg p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-white">{title}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-200"><X size={18} /></button>
+        </div>
+        <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-1">{children}</div>
+        {footer && <div className="mt-5 flex justify-end gap-2">{footer}</div>}
+      </div>
+    </div>
+  )
+}
+
+export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+  return (
+    <label className="block">
+      <span className="label">{label}</span>
+      <div className="mt-1">{children}</div>
+      {hint && <span className="mt-1 block text-xs text-slate-500">{hint}</span>}
+    </label>
   )
 }
 

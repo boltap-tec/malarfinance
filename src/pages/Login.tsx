@@ -1,17 +1,19 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShieldCheck, Users } from 'lucide-react'
-import { useApp, Role } from '../store/app'
+import { Phone, Lock } from 'lucide-react'
+import { useApp } from '../store/app'
 
 export default function Login() {
   const login = useApp(s => s.login)
   const navigate = useNavigate()
-  const [name, setName] = useState('')
-  const [role, setRole] = useState<Role>('owner')
+  const [phone, setPhone] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    login(name.trim() || (role === 'owner' ? 'Owner' : 'Partner'), role)
+    const err = login(phone, password)
+    if (err) { setError(err); return }
     navigate('/')
   }
 
@@ -30,9 +32,9 @@ export default function Login() {
             the whole operation, on web today and your phone tomorrow.
           </p>
           <div className="mt-8 flex gap-6 text-brand-100/70">
-            <div><p className="text-2xl font-bold text-white">40+</p><p className="text-xs">Customers</p></div>
-            <div><p className="text-2xl font-bold text-white">58</p><p className="text-xs">Loans tracked</p></div>
-            <div><p className="text-2xl font-bold text-white">Auto</p><p className="text-xs">Interest engine</p></div>
+            <div><p className="text-2xl font-bold text-white">MD</p><p className="text-xs">Full control</p></div>
+            <div><p className="text-2xl font-bold text-white">Partner</p><p className="text-xs">Their loans</p></div>
+            <div><p className="text-2xl font-bold text-white">Worker</p><p className="text-xs">Chosen menus</p></div>
           </div>
         </div>
         <p className="text-xs text-brand-100/50">© {new Date().getFullYear()} Arul Finance · Management Suite</p>
@@ -44,29 +46,38 @@ export default function Login() {
           <div className="mb-8 lg:hidden">
             <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-brand-400 to-brand-700 text-2xl font-black text-white">₹</div>
           </div>
-          <h2 className="text-2xl font-bold text-white">Welcome back</h2>
-          <p className="mt-1 text-sm text-slate-400">Sign in to your finance dashboard.</p>
+          <h2 className="text-2xl font-bold text-white">Sign in</h2>
+          <p className="mt-1 text-sm text-slate-400">Use your registered phone number.</p>
 
-          <div className="mt-6 grid grid-cols-2 gap-3">
-            {([['owner', 'Owner / MD', ShieldCheck], ['partner', 'Partner', Users]] as const).map(([r, label, Icon]) => (
-              <button type="button" key={r} onClick={() => setRole(r)}
-                className={`flex flex-col items-center gap-2 rounded-2xl border p-4 text-sm font-semibold transition ${
-                  role === r ? 'border-brand-500 bg-brand-500/10 text-white' : 'border-slate-800 text-slate-400 hover:border-slate-700'
-                }`}>
-                <Icon size={22} />{label}
-              </button>
-            ))}
+          <div className="mt-6">
+            <label className="label">Phone number</label>
+            <div className="relative mt-1.5">
+              <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                className="input pl-9" inputMode="tel" value={phone}
+                onChange={e => { setPhone(e.target.value); setError(null) }}
+                placeholder="e.g. 9626262427"
+              />
+            </div>
           </div>
 
-          <div className="mt-5">
-            <label className="label">Your name</label>
-            <input className="input mt-1.5" value={name} onChange={e => setName(e.target.value)}
-              placeholder={role === 'owner' ? 'e.g. Malarvizhi' : 'e.g. Arul Sampath'} />
+          <div className="mt-4">
+            <label className="label">Password</label>
+            <div className="relative mt-1.5">
+              <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                className="input pl-9" type="password" value={password}
+                onChange={e => { setPassword(e.target.value); setError(null) }}
+                placeholder="Default 1234"
+              />
+            </div>
           </div>
+
+          {error && <p className="mt-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300 ring-1 ring-rose-500/30">{error}</p>}
 
           <button className="btn-primary mt-6 w-full">Sign in</button>
           <p className="mt-4 text-center text-xs text-slate-500">
-            Demo sign-in. Real login (email / OTP) connects when Supabase is wired up.
+            First time? Your password is <span className="font-semibold text-slate-400">1234</span> — change it after signing in.
           </p>
         </form>
       </div>

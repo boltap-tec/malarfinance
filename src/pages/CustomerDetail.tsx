@@ -1,13 +1,21 @@
-import { useMemo } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Phone, Mail, HandCoins } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Link, useParams, useNavigate } from 'react-router-dom'
+import { ArrowLeft, Phone, Mail, HandCoins, Plus, Percent } from 'lucide-react'
 import { repo } from '../data/repository'
+import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
+import RepayModal from '../components/RepayModal'
 import { inr, phone, fmtDate, num } from '../lib/format'
+import type { Loan } from '../data/types'
 
 export default function CustomerDetail() {
   const { stl = '' } = useParams()
   const id = decodeURIComponent(stl)
+  const navigate = useNavigate()
+  const role = useApp(s => s.user?.role)
+  const editable = canEdit(role)
+  const [tick, setTick] = useState(0)
+  const [repay, setRepay] = useState<{ loan: Loan; interestOnly: boolean } | null>(null)
 
   const { customer, loans, interest, totals } = useMemo(() => {
     const customer = repo.customer(id)
@@ -19,7 +27,7 @@ export default function CustomerDetail() {
       interestDue: interest.reduce((s, i) => s + num(i.Interest_Pending), 0),
     }
     return { customer, loans, interest, totals }
-  }, [id])
+  }, [id, tick])
 
   if (!customer) return <EmptyState title="Customer not found" />
 
@@ -29,7 +37,19 @@ export default function CustomerDetail() {
       <PageHeader
         title={customer.Customer_Name}
         subtitle={`${customer.Customer_STL_NO} · ${customer.Finance_Name}`}
-        action={<Badge tone={statusTone(customer.Status)}>{customer.Status ?? '—'}</Badge>}
+        action={
+          <div className="flex items-center gap-2">
+            <Badge tone={statusTone(customer.Status)}>{customer.Status ?? '—'}</Badge>
+            {editable && (
+              <button
+                className="btn-primary !py-1.5"
+                onClick={() => navigate(`/loans?new=1&stl=${encodeURIComponent(customer.Customer_STL_NO)}`)}
+              >
+                <Plus size={15} /> Give loan
+              </button>
+            )}
+          </div>
+        }
       />
 
       <div className="mb-4 flex flex-wrap gap-4 text-sm text-slate-400">
@@ -50,7 +70,7 @@ export default function CustomerDetail() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Loan no.</Th><Th>Given</Th><Th right>Amount</Th><Th>Rate</Th><Th right>Outstanding</Th><Th>Status</Th></tr>
+                <tr><Th>Loan no.</Th><Th>Given</Th><Th right>Amount</Th><Th>Rate</Th><Th right>Outstanding</Th><Th>Status</Th>{editable && <Th>Actions</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {loans.map(l => (
@@ -61,6 +81,16 @@ export default function CustomerDetail() {
                     <Td className="text-slate-300">{rateLabel(l)}</Td>
                     <Td right className="text-amber-300">{inr(num(l.Outstand_Amount))}</Td>
                     <Td><Badge tone={statusTone(l.Loan_Status)}>{l.Loan_Status ?? '—'}</Badge></Td>
+                    {editable && (
+                      <Td>
+                        {num(l.Outstand_Amount) > 0 ? (
+                          <div className="flex gap-1.5">
+                            <button className="btn-ghost !px-2.5 !py-1 text-xs" onClick={() => setRepay({ loan: l, interestOnly: false })}><HandCoins size={13} /> Repay</button>
+                            <button className="btn-ghost !px-2.5 !py-1 text-xs" onClick={() => setRepay({ loan: l, interestOnly: true })}><Percent size={13} /> Interest</button>
+                          </div>
+                        ) : <span className="text-xs text-slate-600">—</span>}
+                      </Td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -92,6 +122,15 @@ export default function CustomerDetail() {
             </table>
           </div>
         </Card>
+      )}
+
+      {repay && (
+        <RepayModal
+          loan={repay.loan}
+          interestOnly={repay.interestOnly}
+          onClose={() => setRepay(null)}
+          onSaved={() => { setRepay(null); setTick(t => t + 1) }}
+        />
       )}
     </div>
   )

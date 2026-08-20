@@ -79,12 +79,23 @@ export function previewPosting(
   loans: Loan[],
   fromDate: string,
   toDate: string,
+  isPosted?: (loanNo: string, month: string) => boolean,
 ): InterestPreview[] {
   return loans
     .filter(l => (l.Loan_Status ?? '').toLowerCase() === 'active')
     .filter(l => !l.Loan_Given_Date || new Date(l.Loan_Given_Date) <= new Date(toDate))
     .map(l => computeInterest(l, fromDate, toDate))
     .filter(p => p.interest > 0)
+    // Skip loans already billed for this month (no double-posting a period).
+    .filter(p => !isPosted || !isPosted(p.loan.Loan_No, p.month))
+}
+
+// Last day of the month for a yyyy-mm-dd date — used to gate posting to month end.
+export function isMonthEnd(dateStr: string): boolean {
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return false
+  const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)
+  return next.getMonth() !== d.getMonth()
 }
 
 export function toInterestRow(p: InterestPreview): InterestRow {

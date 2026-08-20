@@ -15,7 +15,7 @@ export default function OtherFinanceInterest() {
   const [tick, setTick] = useState(0)
   const [pay, setPay] = useState<any | null>(null)
 
-  const { rows, billed, paid, pending } = useMemo(() => {
+  const { rows, monthTotals, billed, paid, pending } = useMemo(() => {
     let list = repo.otherFinanceInterest(financeFilter(finance))
     const s = q.trim().toLowerCase()
     if (s) list = list.filter((i: any) =>
@@ -23,7 +23,13 @@ export default function OtherFinanceInterest() {
       String(i.Loan_No ?? '').toLowerCase().includes(s) ||
       String(i.Month ?? '').toLowerCase().includes(s))
     list = list.slice().sort((a: any, b: any) => monthKey(b.Month) - monthKey(a.Month) || num(b.Interest_Pending) - num(a.Interest_Pending))
-    return {
+    const monthTotals: Record<string, { interest: number; pending: number }> = {}
+    for (const r of list) {
+      const m = r.Month ?? '—'
+      const t = monthTotals[m] ?? (monthTotals[m] = { interest: 0, pending: 0 })
+      t.interest += num(r.Interest_Amount); t.pending += num(r.Interest_Pending)
+    }
+    return { monthTotals,
       rows: list,
       billed: list.reduce((s2: number, i: any) => s2 + num(i.Interest_Amount), 0),
       paid: list.reduce((s2: number, i: any) => s2 + num(i.Amount_Received), 0),
@@ -56,7 +62,12 @@ export default function OtherFinanceInterest() {
                 {rows.slice(0, 300).map((i: any, k: number, arr: any[]) => (
                   <Fragment key={k}>
                     {(k === 0 || arr[k - 1].Month !== i.Month) && (
-                      <tr className="bg-slate-900/80"><td colSpan={editable ? 8 : 7} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-brand-300">{i.Month}</td></tr>
+                      <tr className="bg-slate-900/80"><td colSpan={editable ? 8 : 7} className="px-3 py-1.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">{i.Month}</span>
+                          <span className="text-xs text-slate-400">Interest <b className="text-white">{inr(monthTotals[i.Month ?? '—']?.interest ?? 0)}</b> · Pending <b className="text-amber-300">{inr(monthTotals[i.Month ?? '—']?.pending ?? 0)}</b></span>
+                        </div>
+                      </td></tr>
                     )}
                     <tr className="hover:bg-slate-800/40">
                       <Td className="text-slate-200">{i.Loan_bought_Finance_Name}</Td>

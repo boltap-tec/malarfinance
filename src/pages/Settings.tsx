@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Settings as Cog, RotateCcw, Check } from 'lucide-react'
-import { repo, getSettings, setSettings, revokeInterestForMonth } from '../data/repository'
+import { Settings as Cog, RotateCcw, Check, ListChecks } from 'lucide-react'
+import {
+  repo, getSettings, setSettings, revokeInterestForMonth,
+  getMandatory, setMandatory, FORM_FIELDS, type FormKind, type MandatoryConfig,
+} from '../data/repository'
 import { useApp } from '../store/app'
 import { PageHeader, Card, EmptyState } from '../components/ui'
 import { num, inr } from '../lib/format'
@@ -12,6 +15,17 @@ export default function Settings() {
   const [dataLoadedDate, setDataLoadedDate] = useState(s0.dataLoadedDate)
   const [lastPostedDate, setLastPostedDate] = useState(s0.lastPostedDate)
   const [savedDates, setSavedDates] = useState(false)
+  const [mand, setMand] = useState<MandatoryConfig>(getMandatory())
+
+  function toggleMand(kind: FormKind, key: string) {
+    setMand(prev => {
+      const set = new Set(prev[kind])
+      set.has(key) ? set.delete(key) : set.add(key)
+      const next = { ...prev, [kind]: [...set] }
+      setMandatory(next)
+      return next
+    })
+  }
 
   const finances = repo.finances()
   const [finance, setFinance] = useState(finances[0]?.Finance_Name ?? '')
@@ -103,6 +117,26 @@ export default function Settings() {
           )}
         </Card>
       </div>
+
+      <Card className="mt-4">
+        <h3 className="mb-1 flex items-center gap-2 font-semibold text-white"><ListChecks size={16} /> Mandatory fields</h3>
+        <p className="mb-3 text-xs text-slate-500">Tick the columns that must be filled before a loan, deposit or other-finance entry can be saved.</p>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {(['loan', 'deposit', 'other'] as FormKind[]).map(kind => (
+            <div key={kind}>
+              <p className="mb-2 text-sm font-semibold capitalize text-slate-300">{kind === 'other' ? 'Other-finance' : kind}</p>
+              <div className="space-y-1.5">
+                {FORM_FIELDS[kind].map(f => (
+                  <label key={f.key} className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+                    <input type="checkbox" className="accent-brand-500" checked={mand[kind].includes(f.key)} onChange={() => toggleMand(kind, f.key)} />
+                    {f.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
     </div>
   )
 }

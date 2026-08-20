@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PiggyBank, Plus, HandCoins, Percent } from 'lucide-react'
-import { repo, addDeposit } from '../data/repository'
+import { repo, addDeposit, missingRequired, FORM_FIELDS } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import {
   PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field,
@@ -137,7 +137,14 @@ function DepositForm({ finance, onClose, onSaved }: { finance: string; onClose: 
   const newCode = `${prefix}-DEP${depNum.trim()}`
   const amt = num(amount)
   const depositorReady = mode === 'existing' ? !!sel : name.trim().length > 0 && depNum.trim().length > 0
-  const valid = depositorReady && amt > 0
+  const missing = missingRequired('deposit', {
+    name: mode === 'existing' ? (sel ? 'y' : '') : name,
+    amount, date, rate,
+    phone: mode === 'existing' ? (sel?.phone ?? '') : phoneNo,
+    payType,
+  })
+  const missingLabels = missing.map(k => FORM_FIELDS.deposit.find(f => f.key === k)?.label ?? k)
+  const valid = depositorReady && amt > 0 && missing.length === 0
 
   async function save() {
     const code = mode === 'existing' ? sel!.code : newCode
@@ -237,6 +244,7 @@ function DepositForm({ finance, onClose, onSaved }: { finance: string; onClose: 
           </select>
         </Field>
       </div>
+      {missingLabels.length > 0 && <p className="text-xs text-amber-300">Required: {missingLabels.join(', ')}</p>}
     </Modal>
   )
 }

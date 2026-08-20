@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Search, Plus } from 'lucide-react'
-import { repo, addLoan, addCustomer } from '../data/repository'
+import { repo, addLoan, addCustomer, missingRequired, FORM_FIELDS } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
 import { inr, fmtDate, num, phone } from '../lib/format'
@@ -160,7 +160,11 @@ function LoanForm({ finance, initialStl, onClose, onSaved }: { finance: string; 
   const customerReady = mode === 'existing'
     ? !!cust
     : nName.trim().length > 0 && stlNum.trim().length > 0 && !stlTaken
-  const valid = customerReady && amt > 0 && num(rate) >= 0
+  const missing = missingRequired('loan', {
+    date, customer: customerReady ? 'y' : '', amount, interestType: type, rate, bonds, chqs, partner, payType,
+  })
+  const missingLabels = missing.map(k => FORM_FIELDS.loan.find(f => f.key === k)?.label ?? k)
+  const valid = customerReady && amt > 0 && num(rate) >= 0 && missing.length === 0
 
   async function save() {
     let stlNo: string, name: string, phoneNo: Customer['Customer_Phone_No']
@@ -327,6 +331,7 @@ function LoanForm({ finance, initialStl, onClose, onSaved }: { finance: string; 
       </div>
       <Field label="Remarks"><input className="input" value={remarks} onChange={e => setRemarks(e.target.value)} /></Field>
       <Field label="Loan no. (auto)"><input className="input opacity-70" value={loanNo} readOnly /></Field>
+      {missingLabels.length > 0 && <p className="text-xs text-amber-300">Required: {missingLabels.join(', ')}</p>}
     </Modal>
   )
 }

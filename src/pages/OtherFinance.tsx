@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Building2, Plus, HandCoins, Percent } from 'lucide-react'
-import { repo, addOtherFinanceLoan } from '../data/repository'
+import { repo, addOtherFinanceLoan, missingRequired, FORM_FIELDS } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import {
   PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field,
@@ -144,7 +144,14 @@ function BorrowForm({ finance, onClose, onSaved }: { finance: string; onClose: (
   const newCode = `${prefix}-FIN${finNum.trim()}`
   const amt = num(amount)
   const lenderReady = mode === 'existing' ? !!sel : lender.trim().length > 0 && finNum.trim().length > 0
-  const valid = lenderReady && amt > 0 && num(rate) >= 0
+  const missing = missingRequired('other', {
+    lender: mode === 'existing' ? (sel ? 'y' : '') : lender,
+    amount, date, rate,
+    phone: mode === 'existing' ? (sel?.phone ?? '') : phoneNo,
+    payType,
+  })
+  const missingLabels = missing.map(k => FORM_FIELDS.other.find(f => f.key === k)?.label ?? k)
+  const valid = lenderReady && amt > 0 && num(rate) >= 0 && missing.length === 0
 
   async function save() {
     const row: OtherFinanceLoan = {
@@ -246,6 +253,7 @@ function BorrowForm({ finance, onClose, onSaved }: { finance: string; onClose: (
           <option>Cash</option><option>Bank</option><option>UPI</option><option>Cheque</option>
         </select>
       </Field>
+      {missingLabels.length > 0 && <p className="text-xs text-amber-300">Required: {missingLabels.join(', ')}</p>}
     </Modal>
   )
 }

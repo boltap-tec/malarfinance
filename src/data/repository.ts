@@ -536,6 +536,47 @@ export function setSettings(patch: Partial<AppSettings>): void {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...getSettings(), ...patch }))
 }
 
+// ── Mandatory-field configuration (which columns each form requires) ──────────
+export type FormKind = 'loan' | 'deposit' | 'other'
+export interface FieldDef { key: string; label: string }
+export const FORM_FIELDS: Record<FormKind, FieldDef[]> = {
+  loan: [
+    { key: 'date', label: 'Date' }, { key: 'customer', label: 'Customer' }, { key: 'amount', label: 'Amount' },
+    { key: 'interestType', label: 'Interest type' }, { key: 'rate', label: 'Interest rate' },
+    { key: 'bonds', label: 'Bonds received' }, { key: 'chqs', label: 'Cheques received' },
+    { key: 'partner', label: 'Referred partner' }, { key: 'payType', label: 'Payment type' },
+  ],
+  deposit: [
+    { key: 'name', label: 'Depositor' }, { key: 'amount', label: 'Amount' }, { key: 'date', label: 'Date' },
+    { key: 'rate', label: 'Rate' }, { key: 'phone', label: 'Phone' }, { key: 'payType', label: 'Payment type' },
+  ],
+  other: [
+    { key: 'lender', label: 'Finance name' }, { key: 'amount', label: 'Amount' }, { key: 'date', label: 'Date' },
+    { key: 'rate', label: 'Rate' }, { key: 'phone', label: 'Phone' }, { key: 'payType', label: 'Payment type' },
+  ],
+}
+export type MandatoryConfig = Record<FormKind, string[]>
+const MAND_DEFAULT: MandatoryConfig = {
+  loan: ['date', 'customer', 'amount', 'interestType', 'rate'],
+  deposit: ['name', 'amount', 'date', 'rate'],
+  other: ['lender', 'amount', 'rate', 'date'],
+}
+const MAND_KEY = 'arul-finance:mandatory:v1'
+export function getMandatory(): MandatoryConfig {
+  try { return { ...MAND_DEFAULT, ...JSON.parse(localStorage.getItem(MAND_KEY) || '{}') } }
+  catch { return { ...MAND_DEFAULT } }
+}
+export function setMandatory(c: MandatoryConfig): void { localStorage.setItem(MAND_KEY, JSON.stringify(c)) }
+
+// Given a form's values, return the list of required fields that are still empty.
+export function missingRequired(kind: FormKind, values: Record<string, unknown>): string[] {
+  const req = getMandatory()[kind] ?? []
+  return req.filter(k => {
+    const v = values[k]
+    return v === undefined || v === null || String(v).trim() === '' || v === false
+  })
+}
+
 // ── Messaging ────────────────────────────────────────────────────────────────
 export interface Contact { phone: string; name: string; role: 'md' | 'partner' | 'worker'; finance?: string }
 

@@ -2,12 +2,13 @@ import { ReactNode, useEffect, useRef, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LogOut, Menu, X, Wallet, ChevronDown, LayoutGrid, Search,
-  PanelLeftClose, PanelLeftOpen, Bell, RefreshCw, KeyRound, MessageSquare,
+  PanelLeftClose, PanelLeftOpen, Bell, RefreshCw, KeyRound, MessageSquare, Volume2, VolumeX,
 } from 'lucide-react'
 import { useApp, canSeeRoute } from '../store/app'
 import { repo, source, refresh, markNotificationsRead } from '../data/repository'
 import { navGroups, bottomNav } from '../nav'
 import { Modal, Field } from './ui'
+import { playClick, playAction, isMuted, setMuted } from '../lib/sound'
 import CommandPalette from './CommandPalette'
 
 function NavList({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
@@ -97,6 +98,19 @@ function RefreshButton() {
       className="grid h-9 w-9 place-items-center rounded-xl text-slate-300 hover:bg-slate-800/60"
     >
       <RefreshCw size={18} className={busy ? 'animate-spin' : ''} />
+    </button>
+  )
+}
+
+function SoundToggle() {
+  const [muted, setMutedState] = useState(isMuted())
+  return (
+    <button
+      title={muted ? 'Sound off' : 'Sound on'}
+      onClick={() => { const v = !muted; setMuted(v); setMutedState(v) }}
+      className="grid h-9 w-9 place-items-center rounded-xl text-slate-300 hover:bg-slate-800/60"
+    >
+      {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
     </button>
   )
 }
@@ -236,6 +250,18 @@ export default function Layout({ children }: { children: ReactNode }) {
     localStorage.setItem('arul-finance:sidebar', collapsed ? 'collapsed' : 'expanded')
   }, [collapsed])
 
+  // Play a subtle sound on any button / menu-link / save action.
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const el = (e.target as HTMLElement)?.closest?.('button, a[href], [role="button"], label.cursor-pointer') as HTMLElement | null
+      if (!el || (el as HTMLButtonElement).disabled) return
+      const important = el.classList.contains('btn-primary') || (el as HTMLButtonElement).type === 'submit'
+      important ? playAction() : playClick()
+    }
+    document.addEventListener('click', onClick, true)
+    return () => document.removeEventListener('click', onClick, true)
+  }, [])
+
   // Global Ctrl/Cmd-K opens the command palette.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -315,6 +341,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-1.5 sm:gap-2">
             <button onClick={() => setPaletteOpen(true)} className="grid h-9 w-9 place-items-center text-slate-300 lg:hidden"><Search size={20} /></button>
             <RefreshButton />
+            <SoundToggle />
             <NavLink to="/messages" title="Messages" className={({ isActive }) => `grid h-9 w-9 place-items-center rounded-lg ${isActive ? 'text-brand-400' : 'text-slate-300 hover:bg-slate-800/60'}`}><MessageSquare size={20} /></NavLink>
             <NotificationBell />
             <ChangePasswordButton />

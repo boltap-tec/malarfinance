@@ -11,7 +11,9 @@ import LoanDetail from './pages/LoanDetail'
 import Interest from './pages/Interest'
 import Ledger from './pages/Ledger'
 import Deposits from './pages/Deposits'
+import DepositDetail from './pages/DepositDetail'
 import OtherFinance from './pages/OtherFinance'
+import OtherFinanceDetail from './pages/OtherFinanceDetail'
 import Partners from './pages/Partners'
 import Workers from './pages/Workers'
 import Logs from './pages/Logs'
@@ -55,7 +57,9 @@ export default function App() {
         <Route path="/interest" element={<Interest />} />
         <Route path="/ledger" element={<Ledger />} />
         <Route path="/deposits" element={<Deposits />} />
+        <Route path="/deposits/:code" element={<DepositDetail />} />
         <Route path="/other-finance" element={<OtherFinance />} />
+        <Route path="/other-finance/:code" element={<OtherFinanceDetail />} />
         <Route path="/partners" element={<Partners />} />
         <Route path="/workers" element={<Workers />} />
         <Route path="/logs" element={<Logs />} />

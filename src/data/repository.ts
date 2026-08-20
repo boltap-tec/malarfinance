@@ -146,6 +146,15 @@ export const repo = {
   otherFinanceLoans(finance?: string): OtherFinanceLoan[] {
     return (db.Other_Finance_Loan ?? []).filter(o => !finance || o.Finance_Name === finance)
   },
+  depositsByCode(code: string): Deposit[] {
+    return (db.Deposit_Amount ?? []).filter(d => d.Deposit_No === code)
+  },
+  otherFinanceByCode(code: string): OtherFinanceLoan[] {
+    return (db.Other_Finance_Loan ?? []).filter(o => o.Loan_No === code)
+  },
+  ledgerByRef(code: string): LedgerRow[] {
+    return (db.Transaction_Ledger ?? []).filter(t => String(t.Loan_No) === code)
+  },
   workers(finance?: string): Worker[] {
     return (db.Worker ?? []).filter(w => !finance || w.Finance_Name === finance)
   },
@@ -299,6 +308,47 @@ export async function recordLedger(row: Partial<LedgerRow>): Promise<LedgerRow> 
   db.Transaction_Ledger = [...(db.Transaction_Ledger ?? []), full]
   persist()
   return full
+}
+
+// Firm repays a depositor (principal refund and/or interest) — both are payments
+// out. Reduces outstanding across that depositor's linked deposit rows.
+export interface LiabilityRepay { code: string; principal: number; interest: number; date: string; payType?: string }
+
+export async function repayDeposit(o: LiabilityRepay): Promise<void> {
+  const rows = (db.Deposit_Amount ?? []).filter(d => d.Deposit_No === o.code)
+  if (!rows.length) return
+  let left = o.principal
+  db.Deposit_Amount = (db.Deposit_Amount ?? []).map(d => {
+    if (d.Deposit_No !== o.code || left <= 0) return d
+    const out = num(d.Outstand_Amount)
+    const pay = Math.min(out, left); left -= pay
+    const newOut = out - pay
+    return { ...d, Repaid_Amount: num(d.Repaid_Amount) + pay, Outstand_Amount: newOut, Deposit_Status: newOut === 0 ? 'Closed' : d.Deposit_Status }
+  })
+  const name = rows[0].Depositer_Name, finance = rows[0].Finance_Name
+  if (o.principal > 0) await recordLedger({ Nature_Transaction: 'Deposit_Prin_Refund', Loan_No: o.code, Customer_Name: name, Description: `Deposit refund — ${o.code}`, Payment_Amount: o.principal, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
+  if (o.interest > 0) await recordLedger({ Nature_Transaction: 'Depositer_Interest', Loan_No: o.code, Customer_Name: name, Description: `Deposit interest — ${o.code}`, Payment_Amount: o.interest, Interest_Amount: o.interest, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
+  writeLog({ Action: 'update', Entity: 'Deposit_Amount', Entity_Label: `Repay deposit ${o.code}`, Before: rows })
+  persist()
+}
+
+// Firm repays money it borrowed from another finance (principal and/or interest).
+export async function repayOtherFinance(o: LiabilityRepay): Promise<void> {
+  const rows = (db.Other_Finance_Loan ?? []).filter(l => l.Loan_No === o.code)
+  if (!rows.length) return
+  let left = o.principal
+  db.Other_Finance_Loan = (db.Other_Finance_Loan ?? []).map(l => {
+    if (l.Loan_No !== o.code || left <= 0) return l
+    const out = num(l.Outstand_Amount)
+    const pay = Math.min(out, left); left -= pay
+    const newOut = out - pay
+    return { ...l, Repaid_Amount: num(l.Repaid_Amount) + pay, Outstand_Amount: newOut, Loan_Status: newOut === 0 ? 'Closed' : l.Loan_Status }
+  })
+  const name = rows[0].Loan_bought_Finance_Name, finance = rows[0].Finance_Name
+  if (o.principal > 0) await recordLedger({ Nature_Transaction: 'Other_Finance_Loan_Refund', Loan_No: o.code, Customer_Name: name, Description: `Other-finance refund — ${o.code}`, Payment_Amount: o.principal, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
+  if (o.interest > 0) await recordLedger({ Nature_Transaction: 'Other_Finance_Interest', Loan_No: o.code, Customer_Name: name, Description: `Other-finance interest — ${o.code}`, Payment_Amount: o.interest, Interest_Amount: o.interest, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
+  writeLog({ Action: 'update', Entity: 'Other_Finance_Loan', Entity_Label: `Repay other-finance ${o.code}`, Before: rows })
+  persist()
 }
 
 export async function addDeposit(d: Deposit): Promise<void> {

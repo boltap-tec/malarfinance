@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { PiggyBank, Plus } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { PiggyBank, Plus, HandCoins, Percent } from 'lucide-react'
 import { repo, addDeposit } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import {
@@ -49,18 +50,28 @@ export default function Deposits() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Deposit no.</Th><Th>Depositor</Th><Th>Phone</Th><Th right>Amount</Th><Th>Rate/L·mo</Th><Th right>Outstanding</Th><Th>Status</Th></tr>
+                <tr><Th>Deposit no.</Th><Th>Depositor</Th><Th>Phone</Th><Th right>Amount</Th><Th>Rate/L·mo</Th><Th right>Outstanding</Th><Th>Status</Th>{canEdit(role) && <Th>Actions</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map((d, i) => (
                   <tr key={i} className="hover:bg-slate-800/40">
-                    <Td className="text-slate-300">{d.Deposit_No}</Td>
+                    <Td><Link to={`/deposits/${encodeURIComponent(d.Deposit_No)}`} className="font-medium text-brand-300">{d.Deposit_No}</Link></Td>
                     <Td className="text-slate-200">{d.Depositer_Name}</Td>
                     <Td className="text-slate-400">{phone(d.Depositer_Phone_No)}</Td>
                     <Td right className="text-white">{inr(num(d.Deposit_Amount))}</Td>
                     <Td className="text-slate-300">₹{num(d.Interest_Per_Month_Per_Lakh)}</Td>
                     <Td right className="text-rose-300">{inr(num(d.Outstand_Amount))}</Td>
                     <Td><Badge tone={statusTone(d.Deposit_Status)}>{d.Deposit_Status ?? '—'}</Badge></Td>
+                    {canEdit(role) && (
+                      <Td>
+                        {num(d.Outstand_Amount) > 0 ? (
+                          <div className="flex gap-1.5">
+                            <Link title="Repay" to={`/deposits/${encodeURIComponent(d.Deposit_No)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs"><HandCoins size={13} /></Link>
+                            <Link title="Pay interest" to={`/deposits/${encodeURIComponent(d.Deposit_No)}?do=interest`} className="btn-ghost !px-2 !py-1 text-xs"><Percent size={13} /></Link>
+                          </div>
+                        ) : <span className="text-xs text-slate-600">—</span>}
+                      </Td>
+                    )}
                   </tr>
                 ))}
               </tbody>

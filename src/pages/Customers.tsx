@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, Plus } from 'lucide-react'
+import { Search, Plus, HandCoins, Percent } from 'lucide-react'
 import { repo, addCustomer } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
@@ -48,7 +48,7 @@ export default function Customers() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Customer</Th><Th>STL No.</Th><Th>Phone</Th><Th right>Outstanding loan</Th><Th right>Interest due</Th><Th>Status</Th></tr>
+                <tr><Th>Customer</Th><Th>STL No.</Th><Th>Phone</Th><Th right>Outstanding loan</Th><Th right>Interest due</Th><Th>Status</Th>{canEdit(role) && <Th>Actions</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map(c => (
@@ -64,6 +64,15 @@ export default function Customers() {
                     <Td right className="font-semibold text-white">{inr(num(c.Outstand_Loan))}</Td>
                     <Td right className={num(c.Outstanding_Interest) > 0 ? 'font-semibold text-amber-400' : 'text-slate-400'}>{inr(num(c.Outstanding_Interest))}</Td>
                     <Td><Badge tone={statusTone(c.Status)}>{c.Status ?? '—'}</Badge></Td>
+                    {canEdit(role) && (
+                      <Td>
+                        <div className="flex gap-1.5">
+                          <Link title="Give loan" to={`/loans?new=1&stl=${encodeURIComponent(c.Customer_STL_NO)}`} className="btn-ghost !px-2 !py-1 text-xs"><Plus size={13} /></Link>
+                          <Link title="Repay" to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}`} className="btn-ghost !px-2 !py-1 text-xs"><HandCoins size={13} /></Link>
+                          <Link title="Interest" to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}`} className="btn-ghost !px-2 !py-1 text-xs"><Percent size={13} /></Link>
+                        </div>
+                      </Td>
+                    )}
                   </tr>
                 ))}
               </tbody>

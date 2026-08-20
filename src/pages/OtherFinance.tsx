@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Building2, Plus } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Building2, Plus, HandCoins, Percent } from 'lucide-react'
 import { repo, addOtherFinanceLoan } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import {
@@ -53,13 +54,13 @@ export default function OtherFinance() {
               <thead className="border-b border-slate-800 bg-slate-900/60">
                 <tr>
                   <Th>Loan no.</Th><Th>Lender</Th><Th>Phone</Th><Th>Bought</Th>
-                  <Th right>Amount</Th><Th>Rate</Th><Th right>Outstanding</Th><Th>Status</Th>
+                  <Th right>Amount</Th><Th>Rate</Th><Th right>Outstanding</Th><Th>Status</Th>{canEdit(role) && <Th>Actions</Th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map((o, i) => (
                   <tr key={i} className="hover:bg-slate-800/40">
-                    <Td className="text-slate-300">{o.Loan_No}</Td>
+                    <Td><Link to={`/other-finance/${encodeURIComponent(o.Loan_No)}`} className="font-medium text-brand-300">{o.Loan_No}</Link></Td>
                     <Td className="text-slate-200">{o.Loan_bought_Finance_Name}</Td>
                     <Td className="text-slate-400">{phone(o.Loan_bought_Finance_Phone_No)}</Td>
                     <Td className="text-slate-400">{fmtDate(o.Loan_Bought_Date)}</Td>
@@ -71,6 +72,16 @@ export default function OtherFinance() {
                     </Td>
                     <Td right className="text-rose-300">{inr(num(o.Outstand_Amount))}</Td>
                     <Td><Badge tone={statusTone(o.Loan_Status)}>{o.Loan_Status ?? '—'}</Badge></Td>
+                    {canEdit(role) && (
+                      <Td>
+                        {num(o.Outstand_Amount) > 0 ? (
+                          <div className="flex gap-1.5">
+                            <Link title="Repay" to={`/other-finance/${encodeURIComponent(o.Loan_No)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs"><HandCoins size={13} /></Link>
+                            <Link title="Pay interest" to={`/other-finance/${encodeURIComponent(o.Loan_No)}?do=interest`} className="btn-ghost !px-2 !py-1 text-xs"><Percent size={13} /></Link>
+                          </div>
+                        ) : <span className="text-xs text-slate-600">—</span>}
+                      </Td>
+                    )}
                   </tr>
                 ))}
               </tbody>

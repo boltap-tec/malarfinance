@@ -1,16 +1,19 @@
 import { useMemo, useState } from 'react'
-import { Search, ArrowDownLeft, ArrowUpRight, Scale } from 'lucide-react'
-import { repo, addBalanceCorrection, balanceForFinance } from '../data/repository'
+import { Search, ArrowDownLeft, ArrowUpRight, Scale, Trash2 } from 'lucide-react'
+import { repo, addBalanceCorrection, balanceForFinance, deleteLedgerEntry } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
-import { PageHeader, Card, StatCard, Th, Td, EmptyState, Badge, Modal, Field } from '../components/ui'
+import { PageHeader, Card, StatCard, Th, Td, EmptyState, Badge, Modal, Field, ConfirmModal } from '../components/ui'
 import { inr, fmtDate, num } from '../lib/format'
+import type { LedgerRow } from '../data/types'
 
 export default function Ledger() {
   const finance = useApp(s => s.finance)
   const role = useApp(s => s.user?.role)
   const editable = canEdit(role)
+  const isMd = role === 'md'
   const [q, setQ] = useState('')
   const [correct, setCorrect] = useState(false)
+  const [del, setDel] = useState<LedgerRow | null>(null)
   const [tick, setTick] = useState(0)
 
   const singleFinance = finance !== 'ALL'
@@ -62,7 +65,7 @@ export default function Ledger() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Date</Th><Th>Nature</Th><Th>Description</Th><Th right>Receipt</Th><Th right>Payment</Th>{singleFinance && <Th right>Balance</Th>}<Th>Mode</Th></tr>
+                <tr><Th>Date</Th><Th>Nature</Th><Th>Description</Th><Th right>Receipt</Th><Th right>Payment</Th>{singleFinance && <Th right>Balance</Th>}<Th>Mode</Th>{isMd && <Th>Del</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map((t, i) => (
@@ -77,6 +80,7 @@ export default function Ledger() {
                     <Td right className="text-rose-400">{num(t.Payment_Amount) ? inr(num(t.Payment_Amount)) : ''}</Td>
                     {singleFinance && <Td right className="font-medium text-slate-200">{inr(num(t.Balance))}</Td>}
                     <Td className="text-slate-400">{t.Payment_Type ?? '—'}</Td>
+                    {isMd && <Td><button title="Delete entry" className="btn-ghost !px-2 !py-1 text-xs text-rose-300" onClick={() => setDel(t)}><Trash2 size={13} /></button></Td>}
                   </tr>
                 ))}
               </tbody>
@@ -91,6 +95,15 @@ export default function Ledger() {
           defaultFinance={singleFinance ? finance : undefined}
           onClose={() => setCorrect(false)}
           onSaved={() => { setCorrect(false); setTick(t => t + 1) }}
+        />
+      )}
+
+      {del && (
+        <ConfirmModal
+          title="Delete ledger entry"
+          message={<>Delete <b className="text-white">{del.Description ?? del.Nature_Transaction}</b> (Ref {del.Ref_ID})? The finance balance will recompute.</>}
+          onConfirm={async () => { await deleteLedgerEntry(String(del.Ref_ID)); setDel(null); setTick(t => t + 1) }}
+          onClose={() => setDel(null)}
         />
       )}
     </div>

@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { PiggyBank, Plus, HandCoins, Percent } from 'lucide-react'
-import { repo, addDeposit, missingRequired, FORM_FIELDS } from '../data/repository'
+import { PiggyBank, Plus, HandCoins, Percent, Trash2 } from 'lucide-react'
+import { repo, addDeposit, deleteDeposit, missingRequired, FORM_FIELDS } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import {
-  PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field,
+  PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal,
 } from '../components/ui'
 import { inr, phone, num } from '../lib/format'
 import { useCreateParam } from '../lib/useCreateParam'
@@ -13,10 +13,12 @@ import type { Deposit } from '../data/types'
 export default function Deposits() {
   const finance = useApp(s => s.finance)
   const role = useApp(s => s.user?.role)
+  const isMd = role === 'md'
   const [open, setOpen] = useCreateParam()
   const [sp] = useSearchParams()
   const initialCode = sp.get('code') ?? ''
   const [tick, setTick] = useState(0)
+  const [del, setDel] = useState<Deposit | null>(null)
 
   const { rows, total, outstanding } = useMemo(() => {
     const list = repo.deposits(financeFilter(finance))
@@ -66,12 +68,13 @@ export default function Deposits() {
                     <Td><Badge tone={statusTone(d.Deposit_Status)}>{d.Deposit_Status ?? '—'}</Badge></Td>
                     {canEdit(role) && (
                       <Td>
-                        {num(d.Outstand_Amount) > 0 ? (
-                          <div className="flex gap-1.5">
+                        <div className="flex gap-1.5">
+                          {num(d.Outstand_Amount) > 0 && <>
                             <Link title="Repay" to={`/deposits/${encodeURIComponent(d.Deposit_No)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"><HandCoins size={13} /></Link>
                             <Link title="Pay interest" to={`/deposits/${encodeURIComponent(d.Deposit_No)}?do=interest`} className="btn-ghost !px-2 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30"><Percent size={13} /></Link>
-                          </div>
-                        ) : <span className="text-xs text-slate-600">—</span>}
+                          </>}
+                          {isMd && <button title="Delete" className="btn-ghost !px-2 !py-1 text-xs text-rose-300" onClick={() => setDel(d)}><Trash2 size={13} /></button>}
+                        </div>
                       </Td>
                     )}
                   </tr>
@@ -88,6 +91,15 @@ export default function Deposits() {
           initialCode={initialCode}
           onClose={() => setOpen(false)}
           onSaved={() => { setOpen(false); setTick(t => t + 1) }}
+        />
+      )}
+
+      {del && (
+        <ConfirmModal
+          title="Delete deposit"
+          message={<>Delete deposit <b className="text-white">{del.Deposit_No}</b> ({del.Depositer_Name}, {inr(num(del.Deposit_Amount))})?</>}
+          onConfirm={async () => { await deleteDeposit(del); setDel(null); setTick(t => t + 1) }}
+          onClose={() => setDel(null)}
         />
       )}
     </div>

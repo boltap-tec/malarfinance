@@ -3,7 +3,7 @@ import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Phone, Mail, HandCoins, Plus, Percent } from 'lucide-react'
 import { repo } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal } from '../components/ui'
 import RepayModal from '../components/RepayModal'
 import { inr, phone, fmtDate, num } from '../lib/format'
 import type { Loan } from '../data/types'
@@ -19,6 +19,7 @@ export default function CustomerDetail() {
   const doParam = sp.get('do')
   const [tick, setTick] = useState(0)
   const [repay, setRepay] = useState<{ loan: Loan; interestOnly: boolean } | null>(null)
+  const [chooser, setChooser] = useState<{ interestOnly: boolean } | null>(null)
 
   const { customer, loans, interest, totals } = useMemo(() => {
     const customer = repo.customer(id)
@@ -45,6 +46,14 @@ export default function CustomerDetail() {
   // Giving a loan needs a specific finance scope — adopt this customer's finance.
   const giveLoan = () => { setFinance(customer.Finance_Name); navigate(`/loans?new=1&stl=${encodeURIComponent(customer.Customer_STL_NO)}`) }
 
+  // Repay / pay-interest from the header: use the single outstanding loan, else
+  // let the user pick which one.
+  const outstandingLoans = loans.filter(l => num(l.Outstand_Amount) > 0)
+  const startRepay = (interestOnly: boolean) => {
+    if (outstandingLoans.length === 1) setRepay({ loan: outstandingLoans[0], interestOnly })
+    else if (outstandingLoans.length > 1) setChooser({ interestOnly })
+  }
+
   return (
     <div>
       <Link to="/customers" className="mb-4 inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-200"><ArrowLeft size={16} /> Customers</Link>
@@ -54,11 +63,17 @@ export default function CustomerDetail() {
         action={
           <div className="flex items-center gap-2">
             <Badge tone={statusTone(customer.Status)}>{customer.Status ?? '—'}</Badge>
-            {editable && (
+            {editable && <>
               <button className="btn-primary !py-1.5" onClick={giveLoan}>
                 <Plus size={15} /> Give loan
               </button>
-            )}
+              <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" disabled={outstandingLoans.length === 0} onClick={() => startRepay(false)}>
+                <HandCoins size={15} /> Repay loan
+              </button>
+              <button className="btn-ghost !py-1.5 text-amber-300 ring-1 ring-inset ring-amber-500/30" disabled={outstandingLoans.length === 0} onClick={() => startRepay(true)}>
+                <Percent size={15} /> Pay interest
+              </button>
+            </>}
           </div>
         }
       />
@@ -133,6 +148,20 @@ export default function CustomerDetail() {
             </table>
           </div>
         </Card>
+      )}
+
+      {chooser && (
+        <Modal title={chooser.interestOnly ? 'Pay interest — pick a loan' : 'Repay — pick a loan'} onClose={() => setChooser(null)}>
+          <div className="space-y-1.5">
+            {outstandingLoans.map(l => (
+              <button key={l.Loan_No} onClick={() => { setRepay({ loan: l, interestOnly: chooser.interestOnly }); setChooser(null) }}
+                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm ring-1 ring-inset ring-transparent hover:bg-slate-800/60 hover:ring-brand-500/40">
+                <span className="text-slate-100">{l.Loan_No} <span className="text-xs text-slate-500">· {fmtDate(l.Loan_Given_Date)}</span></span>
+                <span className="text-amber-300">{inr(num(l.Outstand_Amount))} out</span>
+              </button>
+            ))}
+          </div>
+        </Modal>
       )}
 
       {repay && (

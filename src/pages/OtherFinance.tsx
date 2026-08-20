@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Building2, Plus, HandCoins, Percent } from 'lucide-react'
-import { repo, addOtherFinanceLoan, missingRequired, FORM_FIELDS } from '../data/repository'
+import { Building2, Plus, HandCoins, Percent, Trash2 } from 'lucide-react'
+import { repo, addOtherFinanceLoan, deleteOtherFinance, missingRequired, FORM_FIELDS } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import {
-  PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field,
+  PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal,
 } from '../components/ui'
 import { inr, fmtDate, num, phone } from '../lib/format'
 import { useCreateParam } from '../lib/useCreateParam'
@@ -13,10 +13,12 @@ import type { OtherFinanceLoan } from '../data/types'
 export default function OtherFinance() {
   const finance = useApp(s => s.finance)
   const role = useApp(s => s.user?.role)
+  const isMd = role === 'md'
   const [open, setOpen] = useCreateParam()
   const [sp] = useSearchParams()
   const initialCode = sp.get('code') ?? ''
   const [tick, setTick] = useState(0)
+  const [del, setDel] = useState<OtherFinanceLoan | null>(null)
 
   const { rows, borrowed, outstanding } = useMemo(() => {
     const list = repo.otherFinanceLoans(financeFilter(finance))
@@ -76,12 +78,13 @@ export default function OtherFinance() {
                     <Td><Badge tone={statusTone(o.Loan_Status)}>{o.Loan_Status ?? '—'}</Badge></Td>
                     {canEdit(role) && (
                       <Td>
-                        {num(o.Outstand_Amount) > 0 ? (
-                          <div className="flex gap-1.5">
+                        <div className="flex gap-1.5">
+                          {num(o.Outstand_Amount) > 0 && <>
                             <Link title="Repay" to={`/other-finance/${encodeURIComponent(o.Loan_No)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"><HandCoins size={13} /></Link>
                             <Link title="Pay interest" to={`/other-finance/${encodeURIComponent(o.Loan_No)}?do=interest`} className="btn-ghost !px-2 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30"><Percent size={13} /></Link>
-                          </div>
-                        ) : <span className="text-xs text-slate-600">—</span>}
+                          </>}
+                          {isMd && <button title="Delete" className="btn-ghost !px-2 !py-1 text-xs text-rose-300" onClick={() => setDel(o)}><Trash2 size={13} /></button>}
+                        </div>
                       </Td>
                     )}
                   </tr>
@@ -98,6 +101,15 @@ export default function OtherFinance() {
           initialCode={initialCode}
           onClose={() => setOpen(false)}
           onSaved={() => { setOpen(false); setTick(t => t + 1) }}
+        />
+      )}
+
+      {del && (
+        <ConfirmModal
+          title="Delete other-finance loan"
+          message={<>Delete <b className="text-white">{del.Loan_No}</b> ({del.Loan_bought_Finance_Name}, {inr(num(del.Loan_Amount))})?</>}
+          onConfirm={async () => { await deleteOtherFinance(del); setDel(null); setTick(t => t + 1) }}
+          onClose={() => setDel(null)}
         />
       )}
     </div>

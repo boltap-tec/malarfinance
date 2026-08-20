@@ -25,7 +25,7 @@ export const navGroups: NavGroup[] = [
     title: 'Overview',
     items: [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, desc: 'KPIs & recent activity' },
-      { to: '/messages', label: 'Messages', icon: MessageSquare, desc: 'Group & direct chat' },
+      { to: '/ledger', label: 'Ledger', icon: BookOpenText, desc: 'All receipts & payments' },
     ],
   },
   {
@@ -50,12 +50,6 @@ export const navGroups: NavGroup[] = [
       { to: '/other-finances', label: 'Other Finances', icon: Landmark, desc: 'Finances you borrow from' },
       { to: '/other-finance', label: 'Other Finance Loans', icon: Banknote, desc: 'Money you borrowed' },
       { to: '/other-finance-interest', label: 'Other Finance Interest', icon: ReceiptText, desc: 'Interest you owe them' },
-    ],
-  },
-  {
-    title: 'Money',
-    items: [
-      { to: '/ledger', label: 'Ledger', icon: BookOpenText, desc: 'All receipts & payments' },
     ],
   },
   {

@@ -366,6 +366,55 @@ export async function addLoan(loan: Loan): Promise<void> {
   persist()
 }
 
+// ── Deletes (all logged & restorable) ────────────────────────────────────────
+export async function deleteLoan(loanNo: string): Promise<void> {
+  const row = (db.Loan_Processing ?? []).find(l => l.Loan_No === loanNo)
+  if (!row) return
+  db.Loan_Processing = (db.Loan_Processing ?? []).filter(l => l.Loan_No !== loanNo)
+  await sDelete('Loan_Processing', loanNo)
+  recomputeCustomer(row.Customer_STL_NO)
+  writeLog({ Action: 'delete', Entity: 'Loan_Processing', Entity_Label: `${loanNo} · ${row.Customer_Name}`, Before: row })
+  persist()
+}
+
+export async function deleteLedgerEntry(refId: string): Promise<void> {
+  const row = (db.Transaction_Ledger ?? []).find(t => String(t.Ref_ID) === String(refId))
+  if (!row) return
+  db.Transaction_Ledger = (db.Transaction_Ledger ?? []).filter(t => String(t.Ref_ID) !== String(refId))
+  await sDelete('Transaction_Ledger', String(refId))
+  recomputeBalances(String(row.Finance_Name ?? ''))
+  writeLog({ Action: 'delete', Entity: 'Transaction_Ledger', Entity_Label: `Ref ${refId} · ${row.Description ?? row.Nature_Transaction}`, Before: row })
+  persist()
+}
+
+// Deposit/other-finance rows have no unique key, so we match the exact row and
+// replace that finance's rows in Supabase.
+export async function deleteDeposit(row: Deposit): Promise<void> {
+  const before = (db.Deposit_Amount ?? []).find(d => sameDeposit(d, row))
+  if (!before) return
+  db.Deposit_Amount = (db.Deposit_Amount ?? []).filter(d => d !== before)
+  await sReplaceFinance('Deposit_Amount', before.Finance_Name, (db.Deposit_Amount ?? []).filter(d => d.Finance_Name === before.Finance_Name))
+  writeLog({ Action: 'delete', Entity: 'Deposit_Amount', Entity_Label: `${before.Deposit_No} · ${before.Depositer_Name}`, Before: before })
+  persist()
+}
+function sameDeposit(a: Deposit, b: Deposit): boolean {
+  return a.Deposit_No === b.Deposit_No && a.Deposit_Bought_Date === b.Deposit_Bought_Date &&
+    num(a.Deposit_Amount) === num(b.Deposit_Amount) && a.Depositer_Name === b.Depositer_Name
+}
+
+export async function deleteOtherFinance(row: OtherFinanceLoan): Promise<void> {
+  const before = (db.Other_Finance_Loan ?? []).find(o => sameOther(o, row))
+  if (!before) return
+  db.Other_Finance_Loan = (db.Other_Finance_Loan ?? []).filter(o => o !== before)
+  await sReplaceFinance('Other_Finance_Loan', before.Finance_Name, (db.Other_Finance_Loan ?? []).filter(o => o.Finance_Name === before.Finance_Name))
+  writeLog({ Action: 'delete', Entity: 'Other_Finance_Loan', Entity_Label: `${before.Loan_No} · ${before.Loan_bought_Finance_Name}`, Before: before })
+  persist()
+}
+function sameOther(a: OtherFinanceLoan, b: OtherFinanceLoan): boolean {
+  return a.Loan_No === b.Loan_No && a.Loan_Bought_Date === b.Loan_Bought_Date &&
+    num(a.Loan_Amount) === num(b.Loan_Amount) && a.Loan_bought_Finance_Name === b.Loan_bought_Finance_Name
+}
+
 export async function updateLoan(loanNo: string, patch: Partial<Loan>): Promise<void> {
   db.Loan_Processing = (db.Loan_Processing ?? []).map(l =>
     l.Loan_No === loanNo ? { ...l, ...patch } : l)

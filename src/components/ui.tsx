@@ -84,6 +84,24 @@ export function Modal({
   )
 }
 
+export function ConfirmModal({
+  title, message, confirmLabel = 'Delete', danger = true, onConfirm, onClose,
+}: { title: string; message: ReactNode; confirmLabel?: string; danger?: boolean; onConfirm: () => void; onClose: () => void }) {
+  return (
+    <Modal
+      title={title}
+      onClose={onClose}
+      footer={<>
+        <button className="btn-ghost" onClick={onClose}>Cancel</button>
+        <button className={`btn-primary ${danger ? '!bg-rose-600 hover:!bg-rose-500' : ''}`} onClick={onConfirm}>{confirmLabel}</button>
+      </>}
+    >
+      <div className="text-sm text-slate-300">{message}</div>
+      <p className="mt-2 text-xs text-slate-500">This is recorded in the Activity Log and can be restored from there.</p>
+    </Modal>
+  )
+}
+
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="block">

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Search, Plus } from 'lucide-react'
-import { repo, addLoan, addCustomer, missingRequired, FORM_FIELDS } from '../data/repository'
+import { Search, Plus, Trash2 } from 'lucide-react'
+import { repo, addLoan, addCustomer, deleteLoan, missingRequired, FORM_FIELDS } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
-import { PageHeader, Card, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
+import { PageHeader, Card, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal } from '../components/ui'
 import { inr, fmtDate, num, phone } from '../lib/format'
 import { useCreateParam } from '../lib/useCreateParam'
 import type { Loan, Customer } from '../data/types'
@@ -15,10 +15,12 @@ export default function Loans() {
   const role = useApp(s => s.user?.role)
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<typeof FILTERS[number]>('All')
+  const isMd = role === 'md'
   const [open, setOpen] = useCreateParam()
   const [sp] = useSearchParams()
   const initialStl = sp.get('stl') ?? ''
   const [tick, setTick] = useState(0)
+  const [del, setDel] = useState<Loan | null>(null)
 
   const { rows, totalOut, totalGiven } = useMemo(() => {
     let list = repo.loans(financeFilter(finance))
@@ -66,7 +68,7 @@ export default function Loans() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Loan no.</Th><Th>Customer</Th><Th>Given</Th><Th right>Amount</Th><Th>Rate</Th><Th right>Outstanding</Th><Th>Status</Th></tr>
+                <tr><Th>Loan no.</Th><Th>Customer</Th><Th>Given</Th><Th right>Amount</Th><Th>Rate</Th><Th right>Outstanding</Th><Th>Status</Th>{isMd && <Th>Del</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map(l => (
@@ -83,6 +85,7 @@ export default function Loans() {
                     </Td>
                     <Td right className="text-amber-300">{inr(num(l.Outstand_Amount))}</Td>
                     <Td><Badge tone={statusTone(l.Loan_Status)}>{l.Loan_Status ?? '—'}</Badge></Td>
+                    {isMd && <Td><button title="Delete loan" className="btn-ghost !px-2 !py-1 text-xs text-rose-300" onClick={() => setDel(l)}><Trash2 size={13} /></button></Td>}
                   </tr>
                 ))}
               </tbody>
@@ -101,6 +104,15 @@ export default function Loans() {
           initialStl={initialStl}
           onClose={() => setOpen(false)}
           onSaved={() => { setOpen(false); setTick(t => t + 1) }}
+        />
+      )}
+
+      {del && (
+        <ConfirmModal
+          title="Delete loan"
+          message={<>Delete loan <b className="text-white">{del.Loan_No}</b> ({del.Customer_Name})?</>}
+          onConfirm={async () => { await deleteLoan(del.Loan_No); setDel(null); setTick(t => t + 1) }}
+          onClose={() => setDel(null)}
         />
       )}
     </div>

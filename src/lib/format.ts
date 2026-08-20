@@ -23,6 +23,13 @@ export const num = (v: unknown): number => {
   return isNaN(n) ? 0 : n
 }
 
+// Sortable key from a "MM-YYYY" month label (e.g. "08-2025" -> 202508).
+export const monthKey = (m: unknown): number => {
+  const [mm, yy] = String(m ?? '').split('-')
+  const y = Number(yy), mo = Number(mm)
+  return (isNaN(y) ? 0 : y) * 100 + (isNaN(mo) ? 0 : mo)
+}
+
 export const phone = (p?: number | string): string => {
   if (!p) return '—'
   return String(p).replace(/\.0$/, '')

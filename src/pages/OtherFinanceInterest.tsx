@@ -3,7 +3,7 @@ import { ReceiptText, IndianRupee } from 'lucide-react'
 import { repo, payOtherFinanceInterest } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
-import { inr, fmtDate, num } from '../lib/format'
+import { inr, fmtDate, num, monthKey } from '../lib/format'
 
 // Interest the finance OWES the finances it borrowed from, from the schedule.
 export default function OtherFinanceInterest() {
@@ -20,6 +20,7 @@ export default function OtherFinanceInterest() {
       String(i.Loan_bought_Finance_Name ?? '').toLowerCase().includes(s) ||
       String(i.Loan_No ?? '').toLowerCase().includes(s) ||
       String(i.Month ?? '').toLowerCase().includes(s))
+    list = list.slice().sort((a: any, b: any) => monthKey(b.Month) - monthKey(a.Month) || num(b.Interest_Pending) - num(a.Interest_Pending))
     return {
       rows: list,
       billed: list.reduce((s2: number, i: any) => s2 + num(i.Interest_Amount), 0),
@@ -50,7 +51,7 @@ export default function OtherFinanceInterest() {
                 <tr><Th>Month</Th><Th>Finance</Th><Th>FIN no.</Th><Th>Period</Th><Th right>Interest</Th><Th right>Paid</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Pay</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {rows.slice().reverse().slice(0, 300).map((i: any, k: number) => (
+                {rows.slice(0, 300).map((i: any, k: number) => (
                   <tr key={k} className="hover:bg-slate-800/40">
                     <Td className="text-slate-300">{i.Month}</Td>
                     <Td className="text-slate-200">{i.Loan_bought_Finance_Name}</Td>

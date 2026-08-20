@@ -3,7 +3,7 @@ import { Percent, IndianRupee } from 'lucide-react'
 import { repo, payCustomerInterest } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
-import { inr, fmtDate, num } from '../lib/format'
+import { inr, fmtDate, num, monthKey } from '../lib/format'
 
 // Customer loan interest details, with a per-line "pay interest" action.
 export default function CustomerInterest() {
@@ -20,6 +20,7 @@ export default function CustomerInterest() {
       String(i.Customer_Name ?? '').toLowerCase().includes(s) ||
       String(i.Loan_No ?? '').toLowerCase().includes(s) ||
       String(i.Month ?? '').toLowerCase().includes(s))
+    list = list.slice().sort((a, b) => monthKey(b.Month) - monthKey(a.Month) || num(b.Interest_Pending) - num(a.Interest_Pending))
     return {
       rows: list,
       billed: list.reduce((s2, i) => s2 + num(i.Interest_Amount), 0),
@@ -50,7 +51,7 @@ export default function CustomerInterest() {
                 <tr><Th>Month</Th><Th>Customer</Th><Th>Loan</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Collect</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {rows.slice().reverse().slice(0, 300).map((i, k) => (
+                {rows.slice(0, 300).map((i, k) => (
                   <tr key={k} className="hover:bg-slate-800/40">
                     <Td className="text-slate-300">{i.Month}</Td>
                     <Td className="text-slate-200">{i.Customer_Name}</Td>

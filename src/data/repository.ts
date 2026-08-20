@@ -50,6 +50,7 @@ function writeLog(e: Omit<LogEntry, 'id' | 'Date' | 'User'>): void {
     ...e,
   }
   db.Log = [entry, ...(db.Log ?? [])]
+  void sInsert('Log', entry)
 }
 
 function partnerLoanNos(): Set<string> {
@@ -223,15 +224,85 @@ function nextRef(): string {
   return String(max + 1)
 }
 
-function runningBalance(): number {
-  const rows = db.Transaction_Ledger ?? []
-  return rows.reduce((b, r) => b + num(r.Receipt_Amount) - num(r.Payment_Amount), 0)
-}
 const num = (v: unknown) => { const n = Number(v); return isNaN(n) ? 0 : n }
+const refNum = (r: unknown) => { const n = Number(String(r).replace(/\D/g, '')); return isNaN(n) ? 0 : n }
 
-// ── Write helpers (in-memory + localStorage; async signature ready for Supabase)
+// Recompute the running Balance per finance, ordered by transaction date then
+// insertion order — so a back-dated entry correctly shifts later balances.
+// Pass a finance to recompute just that one; omit to recompute every finance.
+export function recomputeBalances(finance?: string): void {
+  const all = db.Transaction_Ledger ?? []
+  const finances = finance !== undefined
+    ? [finance]
+    : [...new Set(all.map(r => String(r.Finance_Name ?? '')))]
+  for (const f of finances) {
+    const rows = all.filter(r => String(r.Finance_Name ?? '') === f)
+    rows.sort((a, b) => {
+      const da = new Date(a.Date_Transaction ?? 0).getTime()
+      const dbt = new Date(b.Date_Transaction ?? 0).getTime()
+      return da !== dbt ? da - dbt : refNum(a.Ref_ID) - refNum(b.Ref_ID)
+    })
+    let bal = 0
+    for (const r of rows) { bal += num(r.Receipt_Amount) - num(r.Payment_Amount); r.Balance = bal }
+  }
+}
+
+// Balance of a finance as of a date (inclusive).
+export function balanceForFinance(finance: string, upto?: string): number {
+  return (db.Transaction_Ledger ?? [])
+    .filter(r => String(r.Finance_Name ?? '') === finance && (!upto || new Date(r.Date_Transaction ?? 0) <= new Date(upto)))
+    .reduce((b, r) => b + num(r.Receipt_Amount) - num(r.Payment_Amount), 0)
+}
+
+// ── Supabase write-through ───────────────────────────────────────────────────
+// When Supabase is configured, each mutation below also pushes the change to the
+// database, so data persists and syncs across devices. In local mode these are
+// no-ops and localStorage persist() provides durability.
+const PK: Partial<Record<keyof Dataset, string>> = {
+  Finance_Details: 'Finance_Name', Partner: 'Partner_ID', STL_CRM: 'Customer_STL_NO',
+  Loan_Processing: 'Loan_No', Interest_Details: 'ID', Transaction_Ledger: 'Ref_ID',
+  Deposit_Amount: 'Deposit_No', Other_Finance_Loan: 'Loan_No', Worker: 'Worker_ID',
+  Notification: 'id', Message: 'id', Log: 'id',
+}
+export let lastWriteError = ''
+function noteErr(where: string, msg?: string) {
+  if (!msg) return
+  lastWriteError = `${where}: ${msg}`
+  console.warn('[sync]', lastWriteError)
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('arul-sync-error', { detail: lastWriteError }))
+}
+function clean<T extends Record<string, any>>(row: T): Record<string, any> {
+  const out: Record<string, any> = {}
+  for (const k in row) if (row[k] !== undefined) out[k] = row[k]
+  return out
+}
+async function sInsert(table: keyof Dataset, rows: any): Promise<void> {
+  if (!supabase) return
+  const arr = (Array.isArray(rows) ? rows : [rows]).map(clean)
+  if (!arr.length) return
+  const { error } = await supabase.from(table as string).insert(arr)
+  noteErr(`insert ${table}`, error?.message)
+}
+async function sUpdate(table: keyof Dataset, keyVal: string, patch: any): Promise<void> {
+  if (!supabase) return
+  const k = PK[table]; if (!k) return
+  const { error } = await supabase.from(table as string).update(clean(patch)).eq(k, keyVal)
+  noteErr(`update ${table}`, error?.message)
+}
+async function sDelete(table: keyof Dataset, keyVal: string): Promise<void> {
+  if (!supabase) return
+  const k = PK[table]; if (!k) return
+  const { error } = await supabase.from(table as string).delete().eq(k, keyVal)
+  noteErr(`delete ${table}`, error?.message)
+}
+async function sReplace(table: keyof Dataset, keyVal: string, rows: any[]): Promise<void> {
+  await sDelete(table, keyVal); await sInsert(table, rows)
+}
+
+// ── Write helpers (in-memory + localStorage + Supabase write-through) ─────────
 export async function addLoan(loan: Loan): Promise<void> {
   db.Loan_Processing = [loan, ...(db.Loan_Processing ?? [])]
+  await sInsert('Loan_Processing', loan)
   recomputeCustomer(loan.Customer_STL_NO)
   await recordLedger({
     Nature_Transaction: 'Loan_To_Customer',
@@ -265,17 +336,20 @@ export async function addLoan(loan: Loan): Promise<void> {
 export async function updateLoan(loanNo: string, patch: Partial<Loan>): Promise<void> {
   db.Loan_Processing = (db.Loan_Processing ?? []).map(l =>
     l.Loan_No === loanNo ? { ...l, ...patch } : l)
+  await sUpdate('Loan_Processing', loanNo, patch)
   persist()
 }
 
 export async function addCustomer(c: Customer): Promise<void> {
   db.STL_CRM = [c, ...(db.STL_CRM ?? [])]
+  await sInsert('STL_CRM', c)
   persist()
 }
 
 export async function updateCustomer(stl: string, patch: Partial<Customer>): Promise<void> {
   db.STL_CRM = (db.STL_CRM ?? []).map(c =>
     c.Customer_STL_NO === stl ? { ...c, ...patch } : c)
+  await sUpdate('STL_CRM', stl, patch)
   persist()
 }
 
@@ -293,6 +367,7 @@ export function nextStlNo(finance: string): string {
 
 export async function appendInterestRows(rows: InterestRow[]): Promise<void> {
   db.Interest_Details = [...(db.Interest_Details ?? []), ...rows]
+  await sInsert('Interest_Details', rows)
   persist()
 }
 
@@ -303,11 +378,33 @@ export async function recordLedger(row: Partial<LedgerRow>): Promise<LedgerRow> 
     ...row,
     Ref_ID: row.Ref_ID ?? nextRef(),
     Date_Transaction: row.Date_Transaction ?? new Date().toISOString().slice(0, 10),
-    Balance: runningBalance() + num(row.Receipt_Amount) - num(row.Payment_Amount),
+    Balance: 0,
   } as LedgerRow
   db.Transaction_Ledger = [...(db.Transaction_Ledger ?? []), full]
+  // Interest_Amount is a text column in the DB — send it as a string.
+  await sInsert('Transaction_Ledger', { ...full, Interest_Amount: full.Interest_Amount != null ? String(full.Interest_Amount) : undefined })
+  // Re-run the per-finance, date-ordered balance so a back-dated entry is correct.
+  recomputeBalances(String(full.Finance_Name ?? ''))
   persist()
   return full
+}
+
+// A manual "balance correction" row that makes a finance's balance equal a target
+// as of a date — it's a normal ledger entry, so it shows in the ledger and log.
+export async function addBalanceCorrection(finance: string, date: string, targetBalance: number, remarks?: string): Promise<void> {
+  const current = balanceForFinance(finance, date)
+  const diff = targetBalance - current
+  if (diff === 0) return
+  await recordLedger({
+    Nature_Transaction: 'Balance_Correction',
+    Description: remarks || 'Balance correction',
+    Receipt_Amount: diff > 0 ? diff : undefined,
+    Payment_Amount: diff < 0 ? -diff : undefined,
+    Finance_Name: finance,
+    Date_Transaction: date,
+  })
+  writeLog({ Action: 'create', Entity: 'Transaction_Ledger', Entity_Label: `Balance correction · ${finance} → ₹${targetBalance.toLocaleString('en-IN')} on ${date}` })
+  persist()
 }
 
 // Firm repays a depositor (principal refund and/or interest) — both are payments
@@ -325,6 +422,7 @@ export async function repayDeposit(o: LiabilityRepay): Promise<void> {
     const newOut = out - pay
     return { ...d, Repaid_Amount: num(d.Repaid_Amount) + pay, Outstand_Amount: newOut, Deposit_Status: newOut === 0 ? 'Closed' : d.Deposit_Status }
   })
+  await sReplace('Deposit_Amount', o.code, (db.Deposit_Amount ?? []).filter(d => d.Deposit_No === o.code))
   const name = rows[0].Depositer_Name, finance = rows[0].Finance_Name
   if (o.principal > 0) await recordLedger({ Nature_Transaction: 'Deposit_Prin_Refund', Loan_No: o.code, Customer_Name: name, Description: `Deposit refund — ${o.code}`, Payment_Amount: o.principal, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
   if (o.interest > 0) await recordLedger({ Nature_Transaction: 'Depositer_Interest', Loan_No: o.code, Customer_Name: name, Description: `Deposit interest — ${o.code}`, Payment_Amount: o.interest, Interest_Amount: o.interest, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
@@ -344,6 +442,7 @@ export async function repayOtherFinance(o: LiabilityRepay): Promise<void> {
     const newOut = out - pay
     return { ...l, Repaid_Amount: num(l.Repaid_Amount) + pay, Outstand_Amount: newOut, Loan_Status: newOut === 0 ? 'Closed' : l.Loan_Status }
   })
+  await sReplace('Other_Finance_Loan', o.code, (db.Other_Finance_Loan ?? []).filter(l => l.Loan_No === o.code))
   const name = rows[0].Loan_bought_Finance_Name, finance = rows[0].Finance_Name
   if (o.principal > 0) await recordLedger({ Nature_Transaction: 'Other_Finance_Loan_Refund', Loan_No: o.code, Customer_Name: name, Description: `Other-finance refund — ${o.code}`, Payment_Amount: o.principal, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
   if (o.interest > 0) await recordLedger({ Nature_Transaction: 'Other_Finance_Interest', Loan_No: o.code, Customer_Name: name, Description: `Other-finance interest — ${o.code}`, Payment_Amount: o.interest, Interest_Amount: o.interest, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
@@ -353,6 +452,7 @@ export async function repayOtherFinance(o: LiabilityRepay): Promise<void> {
 
 export async function addDeposit(d: Deposit): Promise<void> {
   db.Deposit_Amount = [d, ...(db.Deposit_Amount ?? [])]
+  await sInsert('Deposit_Amount', d)
   await recordLedger({
     Nature_Transaction: 'Deposit_From_Customer',
     Loan_No: d.Deposit_No,
@@ -368,6 +468,7 @@ export async function addDeposit(d: Deposit): Promise<void> {
 
 export async function addOtherFinanceLoan(o: OtherFinanceLoan): Promise<void> {
   db.Other_Finance_Loan = [o, ...(db.Other_Finance_Loan ?? [])]
+  await sInsert('Other_Finance_Loan', o)
   await recordLedger({
     Nature_Transaction: 'Other_Receipt',
     Loan_No: o.Loan_No,
@@ -383,18 +484,21 @@ export async function addOtherFinanceLoan(o: OtherFinanceLoan): Promise<void> {
 
 export async function addPartner(p: Partner): Promise<void> {
   db.Partner = [p, ...(db.Partner ?? [])]
+  await sInsert('Partner', p)
   writeLog({ Action: 'create', Entity: 'Partner', Entity_Label: `${p.Partner_Name} (${p.Partner_ID})`, After: p })
   persist()
 }
 
 export async function addWorker(w: Worker): Promise<void> {
   db.Worker = [w, ...(db.Worker ?? [])]
+  await sInsert('Worker', w)
   writeLog({ Action: 'create', Entity: 'Worker', Entity_Label: `${w.Worker_Name} (${w.Phone_Number})`, After: w })
   persist()
 }
 
 export async function updateWorker(id: string, patch: Partial<Worker>): Promise<void> {
   db.Worker = (db.Worker ?? []).map(w => w.Worker_ID === id ? { ...w, ...patch } : w)
+  await sUpdate('Worker', id, patch)
   persist()
 }
 
@@ -406,11 +510,13 @@ export async function addNotification(n: Omit<AppNotification, 'id' | 'Date' | '
     ...n,
   }
   db.Notification = [row, ...(db.Notification ?? [])]
+  await sInsert('Notification', row)
   persist()
 }
 
 export async function markNotificationsRead(phone: string): Promise<void> {
   db.Notification = (db.Notification ?? []).map(n => n.To_Phone === phone ? { ...n, Read: true } : n)
+  if (supabase) { const { error } = await supabase.from('Notification').update({ Read: true }).eq('To_Phone', phone); noteErr('update Notification', error?.message) }
   persist()
 }
 
@@ -461,6 +567,7 @@ export function messagesFor(phone: string): Message[] {
 export async function sendMessage(msg: Omit<Message, 'id' | 'Date'>): Promise<void> {
   const row: Message = { id: `M-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, Date: new Date().toISOString(), ...msg }
   db.Message = [...(db.Message ?? []), row]
+  await sInsert('Message', row)
   // Bell the recipient(s).
   const recipients = row.Scope === 'group'
     ? allContacts().filter(c => c.phone !== row.From_Phone)
@@ -482,6 +589,7 @@ export async function updatePartner(id: string, patch: Partial<Partner>): Promis
   const before = (db.Partner ?? []).find(p => p.Partner_ID === id)
   db.Partner = (db.Partner ?? []).map(p => p.Partner_ID === id ? { ...p, ...patch } : p)
   const after = (db.Partner ?? []).find(p => p.Partner_ID === id)
+  await sUpdate('Partner', id, patch)
   writeLog({ Action: 'update', Entity: 'Partner', Entity_Label: `${after?.Partner_Name} (${id})`, Before: before, After: after })
   persist()
 }
@@ -490,6 +598,7 @@ export async function deletePartner(id: string): Promise<void> {
   const row = (db.Partner ?? []).find(p => p.Partner_ID === id)
   if (!row) return
   db.Partner = (db.Partner ?? []).filter(p => p.Partner_ID !== id)
+  await sDelete('Partner', id)
   writeLog({ Action: 'delete', Entity: 'Partner', Entity_Label: `${row.Partner_Name} (${id})`, Before: row })
   persist()
 }
@@ -499,6 +608,7 @@ export async function updateInterestRow(id: string, patch: Partial<InterestRow>)
   const before = (db.Interest_Details ?? []).find(i => i.ID === id)
   db.Interest_Details = (db.Interest_Details ?? []).map(i => i.ID === id ? { ...i, ...patch } : i)
   const after = (db.Interest_Details ?? []).find(i => i.ID === id)
+  await sUpdate('Interest_Details', id, patch)
   if (after?.Customer_STL_NO) recomputeCustomer(after.Customer_STL_NO)
   writeLog({ Action: 'update', Entity: 'Interest_Details', Entity_Label: `${after?.Loan_No} · ${after?.Month}`, Before: before, After: after })
   persist()
@@ -509,6 +619,7 @@ export async function revokeInterestForMonth(finance: string, month: string): Pr
   const removed = (db.Interest_Details ?? []).filter(i => i.Finance_Name === finance && i.Month === month)
   if (removed.length === 0) return 0
   db.Interest_Details = (db.Interest_Details ?? []).filter(i => !(i.Finance_Name === finance && i.Month === month))
+  if (supabase) { const { error } = await supabase.from('Interest_Details').delete().eq('Finance_Name', finance).eq('Month', month); noteErr('delete Interest_Details', error?.message) }
   new Set(removed.map(r => r.Customer_STL_NO)).forEach(stl => stl && recomputeCustomer(stl))
   writeLog({ Action: 'revoke', Entity: 'Interest_Details', Entity_Label: `${finance} · ${month} · ${removed.length} rows`, Before: removed })
   persist()
@@ -522,10 +633,12 @@ export async function restoreFromLog(logId: string): Promise<void> {
   const table = entry.Entity as keyof Dataset
   const rows = Array.isArray(entry.Before) ? entry.Before : [entry.Before]
   ;(db as any)[table] = [...rows, ...((db as any)[table] ?? [])]
+  await sInsert(table, rows)
   if (entry.Entity === 'Interest_Details' || entry.Entity === 'Loan_Processing') {
     new Set(rows.map((r: any) => r.Customer_STL_NO)).forEach((stl: any) => stl && recomputeCustomer(stl))
   }
   db.Log = (db.Log ?? []).map(l => l.id === logId ? { ...l, Restored: true } : l)
+  await sUpdate('Log', logId, { Restored: true })
   writeLog({ Action: 'restore', Entity: entry.Entity, Entity_Label: entry.Entity_Label, After: rows })
   persist()
 }
@@ -537,13 +650,14 @@ export function recomputeCustomer(stl: string): void {
   if (!cust) return
   const loans = (db.Loan_Processing ?? []).filter(l => l.Customer_STL_NO === stl)
   const interest = (db.Interest_Details ?? []).filter(i => i.Customer_STL_NO === stl)
-  db.STL_CRM = (db.STL_CRM ?? []).map(c => c.Customer_STL_NO === stl ? {
-    ...c,
+  const rollup = {
     Total_Loan_Given: loans.reduce((s, l) => s + num(l.Loan_Amount), 0),
     Outstand_Loan: loans.reduce((s, l) => s + num(l.Outstand_Amount), 0),
     Total_Interest_Paid: interest.reduce((s, i) => s + num(i.Amount_Received), 0),
     Outstanding_Interest: interest.reduce((s, i) => s + num(i.Interest_Pending), 0),
-  } : c)
+  }
+  db.STL_CRM = (db.STL_CRM ?? []).map(c => c.Customer_STL_NO === stl ? { ...c, ...rollup } : c)
+  void sUpdate('STL_CRM', stl, rollup)
 }
 
 export interface RepayOptions {
@@ -583,6 +697,7 @@ export async function repayLoan(opts: RepayOptions): Promise<void> {
       Referred_Partner: loan.Referred_Partner, Interest_Type: loan.Interest_Type,
     }
     db.Interest_Details = [...(db.Interest_Details ?? []), row]
+    await sInsert('Interest_Details', row)
   }
 
   // 2) Principal receipt.
@@ -598,13 +713,17 @@ export async function repayLoan(opts: RepayOptions): Promise<void> {
   // 3) If paying interest now, settle every pending interest row for this loan.
   if (payInterest) {
     let settled = 0
+    const changed: InterestRow[] = []
     db.Interest_Details = (db.Interest_Details ?? []).map(r => {
       if (r.Loan_No !== loanNo) return r
       const pending = num(r.Interest_Pending)
       if (pending <= 0) return r
       settled += pending
-      return { ...r, Amount_Received: num(r.Amount_Received) + pending, Interest_Pending: 0, Status: 'Paid' }
+      const upd = { ...r, Amount_Received: num(r.Amount_Received) + pending, Interest_Pending: 0, Status: 'Paid' }
+      changed.push(upd)
+      return upd
     })
+    for (const r of changed) await sUpdate('Interest_Details', r.ID, { Amount_Received: r.Amount_Received, Interest_Pending: 0, Status: 'Paid' })
     if (settled > 0) {
       await recordLedger({
         Nature_Transaction: 'Customer_Interest',

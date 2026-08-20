@@ -219,6 +219,17 @@ export default function Layout({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [syncError, setSyncError] = useState<string | null>(null)
+
+  // Surface a Supabase write failure (e.g. RLS blocking, column mismatch).
+  useEffect(() => {
+    const onErr = (e: Event) => {
+      setSyncError((e as CustomEvent).detail as string)
+      window.setTimeout(() => setSyncError(null), 8000)
+    }
+    window.addEventListener('arul-sync-error', onErr)
+    return () => window.removeEventListener('arul-sync-error', onErr)
+  }, [])
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('arul-finance:sidebar') === 'collapsed')
 
   useEffect(() => {
@@ -250,6 +261,13 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-slate-950">
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      {syncError && (
+        <div className="fixed inset-x-0 top-0 z-[60] flex justify-center p-2">
+          <div className="max-w-lg rounded-xl bg-rose-600/95 px-4 py-2 text-sm text-white shadow-lg">
+            Couldn’t save to the database — {syncError}. Changes are kept locally; check Supabase RLS / run phase3.sql.
+          </div>
+        </div>
+      )}
 
       {/* Sidebar (desktop) */}
       <aside className={`fixed inset-y-0 left-0 hidden flex-col border-r border-slate-800 bg-slate-900/40 p-4 lg:flex ${collapsed ? 'w-20' : 'w-64'}`}>

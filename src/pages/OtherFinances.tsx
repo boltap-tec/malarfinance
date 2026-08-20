@@ -35,7 +35,7 @@ export default function OtherFinances() {
           </button>}
       />
 
-      <div className="mb-4 grid grid-cols-3 gap-3">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="Lenders" value={rows.length} tone="blue" icon={<Landmark size={18} />} />
         <StatCard label="Total borrowed" value={inr(borrowed)} tone="slate" />
         <StatCard label="Outstanding payable" value={inr(outstanding)} tone="red" />

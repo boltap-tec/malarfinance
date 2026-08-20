@@ -45,12 +45,12 @@ export function StatCard({
   label, value, sub, tone = 'blue', icon,
 }: { label: string; value: ReactNode; sub?: ReactNode; tone?: keyof typeof toneMap; icon?: ReactNode }) {
   return (
-    <div className="card p-4">
-      <div className="flex items-start justify-between">
-        <p className="label">{label}</p>
-        {icon && <span className={`grid h-9 w-9 place-items-center rounded-xl ${toneMap[tone]}`}>{icon}</span>}
+    <div className="card min-w-0 p-3 sm:p-4">
+      <div className="flex items-start justify-between gap-2">
+        <p className="label min-w-0">{label}</p>
+        {icon && <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl sm:h-9 sm:w-9 ${toneMap[tone]}`}>{icon}</span>}
       </div>
-      <p className="mt-2 text-2xl font-bold text-white">{value}</p>
+      <p className="mt-1.5 break-words text-lg font-bold leading-tight tabular-nums text-white sm:mt-2 sm:text-2xl">{value}</p>
       {sub && <p className="mt-1 text-xs text-slate-400">{sub}</p>}
     </div>
   )

@@ -36,7 +36,7 @@ export default function Depositors() {
           </button>}
       />
 
-      <div className="mb-4 grid grid-cols-3 gap-3">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="Depositors" value={rows.length} tone="blue" icon={<Users2 size={18} />} />
         <StatCard label="Total deposited" value={inr(deposited)} tone="slate" />
         <StatCard label="Outstanding payable" value={inr(outstanding)} tone="red" />

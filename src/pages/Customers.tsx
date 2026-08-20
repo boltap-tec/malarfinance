@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Search, Plus, HandCoins, Percent } from 'lucide-react'
+import { Search, Plus, HandCoins, Percent, Users } from 'lucide-react'
 import { repo, addCustomer } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
-import { PageHeader, Card, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
 import { inr, phone, num } from '../lib/format'
 import { useCreateParam } from '../lib/useCreateParam'
 import type { Customer } from '../data/types'
@@ -20,13 +20,18 @@ export default function Customers() {
   // Giving a loan needs a specific finance — adopt the customer's finance first.
   const giveLoan = (c: Customer) => { setFinance(c.Finance_Name); navigate(`/loans?new=1&stl=${encodeURIComponent(c.Customer_STL_NO)}`) }
 
-  const rows = useMemo(() => {
+  const { rows, outLoan, outInterest } = useMemo(() => {
     const list = repo.customers(financeFilter(finance))
     const s = q.trim().toLowerCase()
-    return list.filter(c =>
+    const filtered = list.filter(c =>
       !s || c.Customer_Name?.toLowerCase().includes(s) || c.Customer_STL_NO?.toLowerCase().includes(s) ||
       String(c.Customer_Phone_No ?? '').includes(s),
     )
+    return {
+      rows: filtered,
+      outLoan: filtered.reduce((s2, c) => s2 + num(c.Outstand_Loan), 0),
+      outInterest: filtered.reduce((s2, c) => s2 + num(c.Outstanding_Interest), 0),
+    }
   }, [finance, q, tick])
 
   return (
@@ -41,6 +46,12 @@ export default function Customers() {
         }
       />
 
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <StatCard label="Customers" value={rows.length} tone="blue" icon={<Users size={18} />} />
+        <StatCard label="Outstanding loan" value={inr(outLoan)} tone="amber" />
+        <StatCard label="Outstanding interest" value={inr(outInterest)} tone="red" />
+      </div>
+
       <Card className="mb-4 !p-3">
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -53,7 +64,7 @@ export default function Customers() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Customer</Th><Th>STL No.</Th><Th>Phone</Th><Th right>Outstanding loan</Th><Th right>Interest due</Th><Th>Status</Th>{canEdit(role) && <Th>Actions</Th>}</tr>
+                <tr><Th>Customer</Th><Th>STL No.</Th><Th>Phone</Th><Th right>Outstanding loan</Th><Th right>Outstanding interest</Th><Th>Status</Th>{canEdit(role) && <Th>Actions</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map(c => (

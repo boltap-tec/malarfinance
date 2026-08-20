@@ -17,9 +17,7 @@ export default function OtherFinanceDetail() {
   const [sp] = useSearchParams()
   const doParam = sp.get('do')
   const [tick, setTick] = useState(0)
-  const [modal, setModal] = useState<'repay' | 'interest' | null>(
-    editable && (doParam === 'repay' || doParam === 'interest') ? doParam : null,
-  )
+  const [modal, setModal] = useState<'repay' | null>(editable && doParam === 'repay' ? 'repay' : null)
 
   const { rows, ledger, outstanding, borrowed, first } = useMemo(() => {
     const rows = repo.otherFinanceByCode(id)
@@ -52,10 +50,8 @@ export default function OtherFinanceDetail() {
                 <Plus size={15} /> Add loan
               </button>
             )}
-            {editable && outstanding > 0 && <>
-              <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setModal('repay')}><HandCoins size={15} /> Repay</button>
-              <button className="btn-ghost !py-1.5 text-amber-300 ring-1 ring-inset ring-amber-500/30" onClick={() => setModal('interest')}><Percent size={15} /> Pay interest</button>
-            </>}
+            {editable && outstanding > 0 && <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setModal('repay')}><HandCoins size={15} /> Repay</button>}
+            {editable && repo.otherFinanceInterestPending(id) > 0 && <Link to="/other-finance-interest" className="btn-ghost !py-1.5 text-amber-300 ring-1 ring-inset ring-amber-500/30"><Percent size={15} /> Pay interest</Link>}
           </div>
         }
       />
@@ -128,7 +124,7 @@ export default function OtherFinanceDetail() {
           perDay={perDay}
           perMonth={perMonth}
           sinceDate={since}
-          interestOnly={modal === 'interest'}
+          principalOnly
           onRepay={(principal, interest, date) => repayOtherFinance({ code: id, principal, interest, date })}
           onClose={() => setModal(null)}
           onSaved={() => { setModal(null); setTick(t => t + 1) }}

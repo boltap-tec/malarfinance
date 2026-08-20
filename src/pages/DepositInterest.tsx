@@ -1,14 +1,17 @@
 import { useMemo, useState } from 'react'
-import { Percent } from 'lucide-react'
-import { repo } from '../data/repository'
-import { useApp, financeFilter } from '../store/app'
+import { Percent, IndianRupee } from 'lucide-react'
+import { repo, payDepositInterest } from '../data/repository'
+import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
 import { inr, fmtDate, num } from '../lib/format'
 
 // Interest the finance OWES its depositors (a payable), from the Depositer_Interest schedule.
 export default function DepositInterest() {
   const finance = useApp(s => s.finance)
+  const role = useApp(s => s.user?.role)
+  const editable = canEdit(role)
   const [q, setQ] = useState('')
+  const [tick, setTick] = useState(0)
 
   const { rows, billed, paid, pending } = useMemo(() => {
     let list = repo.depositInterest(financeFilter(finance))
@@ -23,7 +26,7 @@ export default function DepositInterest() {
       paid: list.reduce((s2: number, i: any) => s2 + num(i.Amount_Received), 0),
       pending: list.reduce((s2: number, i: any) => s2 + num(i.Interest_Pending), 0),
     }
-  }, [finance, q])
+  }, [finance, q, tick])
 
   return (
     <div>
@@ -44,7 +47,7 @@ export default function DepositInterest() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Month</Th><Th>Depositor</Th><Th>DEP no.</Th><Th>Period</Th><Th right>Interest</Th><Th right>Paid</Th><Th right>Pending</Th><Th>Status</Th></tr>
+                <tr><Th>Month</Th><Th>Depositor</Th><Th>DEP no.</Th><Th>Period</Th><Th right>Interest</Th><Th right>Paid</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Pay</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.slice().reverse().slice(0, 300).map((i: any, k: number) => (
@@ -57,6 +60,14 @@ export default function DepositInterest() {
                     <Td right className="text-emerald-400">{inr(num(i.Amount_Received))}</Td>
                     <Td right className="text-amber-400">{inr(num(i.Interest_Pending))}</Td>
                     <Td><Badge tone={statusTone(i.Status)}>{i.Status ?? '—'}</Badge></Td>
+                    {editable && (
+                      <Td>
+                        {num(i.Interest_Pending) > 0
+                          ? <button className="btn-ghost !px-2.5 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30"
+                              onClick={async () => { await payDepositInterest(i.ID); setTick(t => t + 1) }}><IndianRupee size={13} /> Pay</button>
+                          : <span className="text-xs text-slate-600">—</span>}
+                      </Td>
+                    )}
                   </tr>
                 ))}
               </tbody>

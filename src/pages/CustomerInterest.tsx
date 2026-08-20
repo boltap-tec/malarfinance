@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
-import { ReceiptText, IndianRupee } from 'lucide-react'
-import { repo, payOtherFinanceInterest } from '../data/repository'
+import { Percent, IndianRupee } from 'lucide-react'
+import { repo, payCustomerInterest } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
 import { inr, fmtDate, num } from '../lib/format'
 
-// Interest the finance OWES the finances it borrowed from, from the schedule.
-export default function OtherFinanceInterest() {
+// Customer loan interest details, with a per-line "pay interest" action.
+export default function CustomerInterest() {
   const finance = useApp(s => s.finance)
   const role = useApp(s => s.user?.role)
   const editable = canEdit(role)
@@ -14,46 +14,46 @@ export default function OtherFinanceInterest() {
   const [tick, setTick] = useState(0)
 
   const { rows, billed, paid, pending } = useMemo(() => {
-    let list = repo.otherFinanceInterest(financeFilter(finance))
+    let list = repo.interest(financeFilter(finance))
     const s = q.trim().toLowerCase()
-    if (s) list = list.filter((i: any) =>
-      String(i.Loan_bought_Finance_Name ?? '').toLowerCase().includes(s) ||
+    if (s) list = list.filter(i =>
+      String(i.Customer_Name ?? '').toLowerCase().includes(s) ||
       String(i.Loan_No ?? '').toLowerCase().includes(s) ||
       String(i.Month ?? '').toLowerCase().includes(s))
     return {
       rows: list,
-      billed: list.reduce((s2: number, i: any) => s2 + num(i.Interest_Amount), 0),
-      paid: list.reduce((s2: number, i: any) => s2 + num(i.Amount_Received), 0),
-      pending: list.reduce((s2: number, i: any) => s2 + num(i.Interest_Pending), 0),
+      billed: list.reduce((s2, i) => s2 + num(i.Interest_Amount), 0),
+      paid: list.reduce((s2, i) => s2 + num(i.Amount_Received), 0),
+      pending: list.reduce((s2, i) => s2 + num(i.Interest_Pending), 0),
     }
   }, [finance, q, tick])
 
   return (
     <div>
-      <PageHeader title="Other Finance Interest" subtitle="Interest you owe the finances you borrowed from." />
+      <PageHeader title="Customer Interest" subtitle="Interest billed on customer loans — collect pending interest per line." />
 
       <div className="mb-4 grid grid-cols-3 gap-3">
-        <StatCard label="Total interest" value={inr(billed)} tone="blue" icon={<ReceiptText size={18} />} />
-        <StatCard label="Paid" value={inr(paid)} tone="green" />
+        <StatCard label="Total interest" value={inr(billed)} tone="blue" icon={<Percent size={18} />} />
+        <StatCard label="Collected" value={inr(paid)} tone="green" />
         <StatCard label="Pending" value={inr(pending)} tone="amber" />
       </div>
 
       <Card className="mb-4 !p-3">
-        <input className="input" placeholder="Search finance, FIN no., month…" value={q} onChange={e => setQ(e.target.value)} />
+        <input className="input" placeholder="Search customer, loan no., month…" value={q} onChange={e => setQ(e.target.value)} />
       </Card>
 
-      {rows.length === 0 ? <EmptyState title="No other-finance interest yet" hint="Run Interest posting to generate lines." /> : (
+      {rows.length === 0 ? <EmptyState title="No customer interest yet" hint="Run Interest posting to generate lines." /> : (
         <Card className="!p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Month</Th><Th>Finance</Th><Th>FIN no.</Th><Th>Period</Th><Th right>Interest</Th><Th right>Paid</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Pay</Th>}</tr>
+                <tr><Th>Month</Th><Th>Customer</Th><Th>Loan</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Collect</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {rows.slice().reverse().slice(0, 300).map((i: any, k: number) => (
+                {rows.slice().reverse().slice(0, 300).map((i, k) => (
                   <tr key={k} className="hover:bg-slate-800/40">
                     <Td className="text-slate-300">{i.Month}</Td>
-                    <Td className="text-slate-200">{i.Loan_bought_Finance_Name}</Td>
+                    <Td className="text-slate-200">{i.Customer_Name}</Td>
                     <Td className="text-slate-400">{i.Loan_No}</Td>
                     <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>
                     <Td right className="text-white">{inr(num(i.Interest_Amount))}</Td>
@@ -63,8 +63,8 @@ export default function OtherFinanceInterest() {
                     {editable && (
                       <Td>
                         {num(i.Interest_Pending) > 0
-                          ? <button className="btn-ghost !px-2.5 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30"
-                              onClick={async () => { await payOtherFinanceInterest(i.ID); setTick(t => t + 1) }}><IndianRupee size={13} /> Pay</button>
+                          ? <button className="btn-ghost !px-2.5 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"
+                              onClick={async () => { await payCustomerInterest(i.ID); setTick(t => t + 1) }}><IndianRupee size={13} /> Pay</button>
                           : <span className="text-xs text-slate-600">—</span>}
                       </Td>
                     )}

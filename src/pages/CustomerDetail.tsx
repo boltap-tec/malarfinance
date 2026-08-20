@@ -46,12 +46,16 @@ export default function CustomerDetail() {
   // Giving a loan needs a specific finance scope — adopt this customer's finance.
   const giveLoan = () => { setFinance(customer.Finance_Name); navigate(`/loans?new=1&stl=${encodeURIComponent(customer.Customer_STL_NO)}`) }
 
-  // Repay / pay-interest from the header: use the single outstanding loan, else
-  // let the user pick which one.
+  // Repay / pay-interest from the header: use the single candidate loan, else
+  // let the user pick which one. Repay = has outstanding principal; interest =
+  // has pending interest.
+  const loanPending = (loanNo: string) => interest.filter(i => i.Loan_No === loanNo).reduce((s, i) => s + num(i.Interest_Pending), 0)
   const outstandingLoans = loans.filter(l => num(l.Outstand_Amount) > 0)
+  const interestLoans = loans.filter(l => loanPending(l.Loan_No) > 0)
   const startRepay = (interestOnly: boolean) => {
-    if (outstandingLoans.length === 1) setRepay({ loan: outstandingLoans[0], interestOnly })
-    else if (outstandingLoans.length > 1) setChooser({ interestOnly })
+    const cands = interestOnly ? interestLoans : outstandingLoans
+    if (cands.length === 1) setRepay({ loan: cands[0], interestOnly })
+    else if (cands.length > 1) setChooser({ interestOnly })
   }
 
   return (
@@ -67,12 +71,16 @@ export default function CustomerDetail() {
               <button className="btn-primary !py-1.5" onClick={giveLoan}>
                 <Plus size={15} /> Give loan
               </button>
-              <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" disabled={outstandingLoans.length === 0} onClick={() => startRepay(false)}>
-                <HandCoins size={15} /> Repay loan
-              </button>
-              <button className="btn-ghost !py-1.5 text-amber-300 ring-1 ring-inset ring-amber-500/30" disabled={outstandingLoans.length === 0} onClick={() => startRepay(true)}>
-                <Percent size={15} /> Pay interest
-              </button>
+              {outstandingLoans.length > 0 && (
+                <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => startRepay(false)}>
+                  <HandCoins size={15} /> Repay loan
+                </button>
+              )}
+              {interestLoans.length > 0 && (
+                <button className="btn-ghost !py-1.5 text-amber-300 ring-1 ring-inset ring-amber-500/30" onClick={() => startRepay(true)}>
+                  <Percent size={15} /> Pay interest
+                </button>
+              )}
             </>}
           </div>
         }
@@ -109,12 +117,11 @@ export default function CustomerDetail() {
                     <Td><Badge tone={statusTone(l.Loan_Status)}>{l.Loan_Status ?? '—'}</Badge></Td>
                     {editable && (
                       <Td>
-                        {num(l.Outstand_Amount) > 0 ? (
-                          <div className="flex gap-1.5">
-                            <button className="btn-ghost !px-2.5 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setRepay({ loan: l, interestOnly: false })}><HandCoins size={13} /> Repay</button>
-                            <button className="btn-ghost !px-2.5 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30" onClick={() => setRepay({ loan: l, interestOnly: true })}><Percent size={13} /> Interest</button>
-                          </div>
-                        ) : <span className="text-xs text-slate-600">—</span>}
+                        <div className="flex gap-1.5">
+                          {num(l.Outstand_Amount) > 0 && <button className="btn-ghost !px-2.5 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setRepay({ loan: l, interestOnly: false })}><HandCoins size={13} /> Repay</button>}
+                          {loanPending(l.Loan_No) > 0 && <button className="btn-ghost !px-2.5 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30" onClick={() => setRepay({ loan: l, interestOnly: true })}><Percent size={13} /> Interest</button>}
+                          {num(l.Outstand_Amount) <= 0 && loanPending(l.Loan_No) <= 0 && <span className="text-xs text-slate-600">—</span>}
+                        </div>
                       </Td>
                     )}
                   </tr>
@@ -153,7 +160,7 @@ export default function CustomerDetail() {
       {chooser && (
         <Modal title={chooser.interestOnly ? 'Pay interest — pick a loan' : 'Repay — pick a loan'} onClose={() => setChooser(null)}>
           <div className="space-y-1.5">
-            {outstandingLoans.map(l => (
+            {(chooser.interestOnly ? interestLoans : outstandingLoans).map(l => (
               <button key={l.Loan_No} onClick={() => { setRepay({ loan: l, interestOnly: chooser.interestOnly }); setChooser(null) }}
                 className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm ring-1 ring-inset ring-transparent hover:bg-slate-800/60 hover:ring-brand-500/40">
                 <span className="text-slate-100">{l.Loan_No} <span className="text-xs text-slate-500">· {fmtDate(l.Loan_Given_Date)}</span></span>

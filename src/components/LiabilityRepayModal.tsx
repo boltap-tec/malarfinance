@@ -13,7 +13,7 @@ const shiftDay = (d: string, days: number) => {
 // lender). Both are payments OUT; interest is suggested from the rate.
 export default function LiabilityRepayModal({
   title, name, code, outstanding, interestType, perDay, perMonth, sinceDate,
-  interestOnly, onRepay, onClose, onSaved,
+  interestOnly, principalOnly, onRepay, onClose, onSaved,
 }: {
   title: string
   name: string
@@ -24,6 +24,7 @@ export default function LiabilityRepayModal({
   perMonth?: number
   sinceDate?: string
   interestOnly?: boolean
+  principalOnly?: boolean
   onRepay: (principal: number, interest: number, date: string) => Promise<void>
   onClose: () => void
   onSaved: () => void
@@ -50,7 +51,7 @@ export default function LiabilityRepayModal({
     return computeInterest(pseudo, from, calcTo).interest
   }, [base, from, calcTo, interestType, perDay, perMonth])
 
-  const interest = interestOverride !== null ? num(interestOverride) : suggested
+  const interest = principalOnly ? 0 : (interestOverride !== null ? num(interestOverride) : suggested)
   const valid = (p > 0 || (payInterest && interest > 0)) && p <= outstanding
 
   async function save() {
@@ -70,27 +71,28 @@ export default function LiabilityRepayModal({
       <div className="rounded-xl bg-slate-800/40 p-3 text-sm">
         <p className="font-semibold text-white">{name} <span className="text-xs font-normal text-slate-500">· {code}</span></p>
         <div className="mt-1 flex justify-between"><span className="text-slate-400">Outstanding</span><span className="font-semibold text-white">{inr(outstanding)}</span></div>
-        <div className="mt-1 flex justify-between"><span className="text-slate-400">Interest {fmtDate(from)} → {fmtDate(calcTo)}</span><span className="font-semibold text-amber-300">{inr(interest)}</span></div>
+        {!principalOnly && <div className="mt-1 flex justify-between"><span className="text-slate-400">Interest {fmtDate(from)} → {fmtDate(calcTo)}</span><span className="font-semibold text-amber-300">{inr(interest)}</span></div>}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Principal paid (₹)"><input className="input" inputMode="numeric" value={principal} onChange={e => setPrincipal(e.target.value)} /></Field>
         <Field label="Payment date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Interest from"><input type="date" className="input" value={from} onChange={e => setFrom(e.target.value)} /></Field>
-        <Field label="Interest amount (₹)"><input className="input" inputMode="numeric" value={interest} onChange={e => setInterestOverride(e.target.value)} /></Field>
-      </div>
-
-      <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
-        <input type="checkbox" className="accent-brand-500" checked={includeToday} onChange={e => setIncludeToday(e.target.checked)} />
-        Include the payment date in interest (else up to the previous day)
-      </label>
-      <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-slate-800/40 px-3 py-2.5 text-sm">
-        <input type="checkbox" className="accent-brand-500" checked={payInterest} onChange={e => setPayInterest(e.target.checked)} />
-        <span className="text-slate-200">Pay the interest now</span>
-        <span className="ml-auto font-semibold text-white">{inr(interest)}</span>
-      </label>
+      {!principalOnly && <>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Interest from"><input type="date" className="input" value={from} onChange={e => setFrom(e.target.value)} /></Field>
+          <Field label="Interest amount (₹)"><input className="input" inputMode="numeric" value={interest} onChange={e => setInterestOverride(e.target.value)} /></Field>
+        </div>
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+          <input type="checkbox" className="accent-brand-500" checked={includeToday} onChange={e => setIncludeToday(e.target.checked)} />
+          Include the payment date in interest (else up to the previous day)
+        </label>
+        <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-slate-800/40 px-3 py-2.5 text-sm">
+          <input type="checkbox" className="accent-brand-500" checked={payInterest} onChange={e => setPayInterest(e.target.checked)} />
+          <span className="text-slate-200">Pay the interest now</span>
+          <span className="ml-auto font-semibold text-white">{inr(interest)}</span>
+        </label>
+      </>}
 
       <Field label="Payment type">
         <select className="input" value={payType} onChange={e => setPayType(e.target.value)}>

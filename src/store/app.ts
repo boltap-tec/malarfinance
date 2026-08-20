@@ -88,7 +88,7 @@ export const canEdit = (role?: Role) => role === 'md' || role === 'worker'
 
 // Which routes a user may reach. MD: all. Partner: a fixed read-only set.
 // Worker: exactly the menus the MD granted (plus the dashboard).
-export const PARTNER_ROUTES = ['/', '/messages', '/customers', '/loans', '/interest', '/ledger']
+export const PARTNER_ROUTES = ['/', '/messages', '/customers', '/loans', '/customer-interest', '/ledger']
 export function canSeeRoute(user: AppUser | null, to: string): boolean {
   if (!user) return false
   if (user.role === 'md') return true

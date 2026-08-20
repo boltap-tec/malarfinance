@@ -9,6 +9,7 @@ import CustomerDetail from './pages/CustomerDetail'
 import Loans from './pages/Loans'
 import LoanDetail from './pages/LoanDetail'
 import Interest from './pages/Interest'
+import CustomerInterest from './pages/CustomerInterest'
 import Ledger from './pages/Ledger'
 import Deposits from './pages/Deposits'
 import DepositDetail from './pages/DepositDetail'
@@ -59,6 +60,7 @@ export default function App() {
         <Route path="/loans" element={<Loans />} />
         <Route path="/loans/:loanNo" element={<LoanDetail />} />
         <Route path="/interest" element={<Interest />} />
+        <Route path="/customer-interest" element={<CustomerInterest />} />
         <Route path="/ledger" element={<Ledger />} />
         <Route path="/depositors" element={<Depositors />} />
         <Route path="/deposits" element={<Deposits />} />

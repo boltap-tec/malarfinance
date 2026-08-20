@@ -26,6 +26,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, desc: 'KPIs & recent activity' },
       { to: '/ledger', label: 'Ledger', icon: BookOpenText, desc: 'All receipts & payments' },
+      { to: '/interest', label: 'Interest Posting', icon: Percent, desc: 'Post all interest in one click' },
     ],
   },
   {
@@ -33,7 +34,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { to: '/customers', label: 'Customers', icon: Users, desc: 'Borrowers & STL 360°' },
       { to: '/loans', label: 'Loans', icon: HandCoins, desc: 'Give & repay loans' },
-      { to: '/interest', label: 'Interest', icon: Percent, desc: 'Post monthly interest' },
+      { to: '/customer-interest', label: 'Customer Interest', icon: Percent, desc: 'Collect loan interest' },
     ],
   },
   {

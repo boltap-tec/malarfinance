@@ -84,8 +84,8 @@ export default function Customers() {
                       <Td>
                         <div className="flex gap-1.5">
                           <button title="Give loan" onClick={() => giveLoan(c)} className="btn-ghost !px-2 !py-1 text-xs text-brand-300 ring-1 ring-inset ring-brand-500/30"><Plus size={13} /></button>
-                          <Link title="Repay" to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"><HandCoins size={13} /></Link>
-                          <Link title="Interest" to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}?do=interest`} className="btn-ghost !px-2 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30"><Percent size={13} /></Link>
+                          {num(c.Outstand_Loan) > 0 && <Link title="Repay" to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"><HandCoins size={13} /></Link>}
+                          {num(c.Outstanding_Interest) > 0 && <Link title="Interest" to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}?do=interest`} className="btn-ghost !px-2 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30"><Percent size={13} /></Link>}
                         </div>
                       </Td>
                     )}

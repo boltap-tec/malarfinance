@@ -219,6 +219,7 @@ export interface Dataset {
   Chit_Auction: any[]
   Chit_Transaction: any[]
   Other_Finance_Loan: OtherFinanceLoan[]
+  Other_Finance_Interest: any[]
   Worker: Worker[]
   Notification: AppNotification[]
   Message: Message[]

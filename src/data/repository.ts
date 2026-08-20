@@ -183,8 +183,23 @@ export const repo = {
   depositInterestByCode(code: string): any[] {
     return (db.Depositer_Interest ?? []).filter((i: any) => i.Deposit_No === code)
   },
-  otherFinanceInterest(finance?: string): LedgerRow[] {
-    return (db.Transaction_Ledger ?? []).filter(t => t.Nature_Transaction === 'Other_Finance_Interest' && (!finance || t.Finance_Name === finance))
+  depositInterestPending(code: string): number {
+    return (db.Depositer_Interest ?? []).filter((i: any) => i.Deposit_No === code).reduce((s: number, i: any) => s + num(i.Interest_Pending), 0)
+  },
+  depositPostedMonths(code: string): Set<string> {
+    return new Set((db.Depositer_Interest ?? []).filter((i: any) => i.Deposit_No === code && i.Month).map((i: any) => i.Month as string))
+  },
+  otherFinanceInterest(finance?: string): any[] {
+    return (db.Other_Finance_Interest ?? []).filter((i: any) => !finance || i.Finance_Name === finance)
+  },
+  otherFinanceInterestByCode(code: string): any[] {
+    return (db.Other_Finance_Interest ?? []).filter((i: any) => i.Loan_No === code)
+  },
+  otherFinanceInterestPending(code: string): number {
+    return (db.Other_Finance_Interest ?? []).filter((i: any) => i.Loan_No === code).reduce((s: number, i: any) => s + num(i.Interest_Pending), 0)
+  },
+  otherPostedMonths(code: string): Set<string> {
+    return new Set((db.Other_Finance_Interest ?? []).filter((i: any) => i.Loan_No === code && i.Month).map((i: any) => i.Month as string))
   },
   ledgerByRef(code: string): LedgerRow[] {
     return (db.Transaction_Ledger ?? []).filter(t => String(t.Loan_No) === code)
@@ -295,6 +310,7 @@ const PK: Partial<Record<keyof Dataset, string>> = {
   Finance_Details: 'Finance_Name', Partner: 'Partner_ID', STL_CRM: 'Customer_STL_NO',
   Loan_Processing: 'Loan_No', Interest_Details: 'ID', Transaction_Ledger: 'Ref_ID',
   Deposit_Amount: 'Deposit_No', Other_Finance_Loan: 'Loan_No', Worker: 'Worker_ID',
+  Depositer_Interest: 'ID', Other_Finance_Interest: 'ID',
   Notification: 'id', Message: 'id', Log: 'id',
 }
 export let lastWriteError = ''
@@ -450,6 +466,67 @@ export function nextStlNo(finance: string): string {
 export async function appendInterestRows(rows: InterestRow[]): Promise<void> {
   db.Interest_Details = [...(db.Interest_Details ?? []), ...rows]
   await sInsert('Interest_Details', rows)
+  persist()
+}
+
+export async function appendDepositInterest(rows: any[]): Promise<void> {
+  if (!rows.length) return
+  db.Depositer_Interest = [...(db.Depositer_Interest ?? []), ...rows]
+  await sInsert('Depositer_Interest', rows)
+  persist()
+}
+
+export async function appendOtherFinanceInterest(rows: any[]): Promise<void> {
+  if (!rows.length) return
+  db.Other_Finance_Interest = [...(db.Other_Finance_Interest ?? []), ...rows]
+  await sInsert('Other_Finance_Interest', rows)
+  persist()
+}
+
+// Pay a single pending interest line (from any of the three interest tables).
+export async function payCustomerInterest(id: string, date?: string, payType?: string): Promise<void> {
+  const row = (db.Interest_Details ?? []).find(i => i.ID === id)
+  if (!row) return
+  const pending = num(row.Interest_Pending); if (pending <= 0) return
+  await updateInterestRow(id, { Amount_Received: num(row.Amount_Received) + pending, Interest_Pending: 0, Status: 'Paid' })
+  await recordLedger({
+    Nature_Transaction: 'Customer_Interest', STL_No: row.Customer_STL_NO, Loan_No: row.Loan_No,
+    Customer_Name: row.Customer_Name, Description: `Interest received — ${row.Loan_No}`,
+    Receipt_Amount: pending, Interest_Amount: pending, Payment_Type: payType,
+    Finance_Name: row.Finance_Name, Date_Transaction: date,
+  })
+  persist()
+}
+
+export async function payDepositInterest(id: string, date?: string, payType?: string): Promise<void> {
+  const row: any = (db.Depositer_Interest ?? []).find((i: any) => i.ID === id)
+  if (!row) return
+  const pending = num(row.Interest_Pending); if (pending <= 0) return
+  const patch = { Amount_Received: num(row.Amount_Received) + pending, Interest_Pending: 0, Status: 'Paid' }
+  db.Depositer_Interest = (db.Depositer_Interest ?? []).map((i: any) => i.ID === id ? { ...i, ...patch } : i)
+  await sUpdate('Depositer_Interest', id, patch)
+  await recordLedger({
+    Nature_Transaction: 'Depositer_Interest', Loan_No: row.Deposit_No, Customer_Name: row.Depositer_Name,
+    Description: `Deposit interest — ${row.Deposit_No}`, Payment_Amount: pending, Interest_Amount: pending,
+    Payment_Type: payType, Finance_Name: row.Finance_Name, Date_Transaction: date,
+  })
+  writeLog({ Action: 'update', Entity: 'Depositer_Interest', Entity_Label: `Pay deposit interest ${row.Deposit_No} · ${row.Month}`, Before: row })
+  persist()
+}
+
+export async function payOtherFinanceInterest(id: string, date?: string, payType?: string): Promise<void> {
+  const row: any = (db.Other_Finance_Interest ?? []).find((i: any) => i.ID === id)
+  if (!row) return
+  const pending = num(row.Interest_Pending); if (pending <= 0) return
+  const patch = { Amount_Received: num(row.Amount_Received) + pending, Interest_Pending: 0, Status: 'Paid' }
+  db.Other_Finance_Interest = (db.Other_Finance_Interest ?? []).map((i: any) => i.ID === id ? { ...i, ...patch } : i)
+  await sUpdate('Other_Finance_Interest', id, patch)
+  await recordLedger({
+    Nature_Transaction: 'Other_Finance_Interest', Loan_No: row.Loan_No, Customer_Name: row.Loan_bought_Finance_Name,
+    Description: `Other-finance interest — ${row.Loan_No}`, Payment_Amount: pending, Interest_Amount: pending,
+    Payment_Type: payType, Finance_Name: row.Finance_Name, Date_Transaction: date,
+  })
+  writeLog({ Action: 'update', Entity: 'Other_Finance_Interest', Entity_Label: `Pay other-finance interest ${row.Loan_No} · ${row.Month}`, Before: row })
   persist()
 }
 

@@ -69,10 +69,8 @@ export default function Deposits() {
                     {canEdit(role) && (
                       <Td>
                         <div className="flex gap-1.5">
-                          {num(d.Outstand_Amount) > 0 && <>
-                            <Link title="Repay" to={`/deposits/${encodeURIComponent(d.Deposit_No)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"><HandCoins size={13} /></Link>
-                            <Link title="Pay interest" to={`/deposits/${encodeURIComponent(d.Deposit_No)}?do=interest`} className="btn-ghost !px-2 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30"><Percent size={13} /></Link>
-                          </>}
+                          {num(d.Outstand_Amount) > 0 && <Link title="Repay" to={`/deposits/${encodeURIComponent(d.Deposit_No)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"><HandCoins size={13} /></Link>}
+                          {repo.depositInterestPending(d.Deposit_No) > 0 && <Link title="Pay interest" to="/deposit-interest" className="btn-ghost !px-2 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30"><Percent size={13} /></Link>}
                           {isMd && <button title="Delete" className="btn-ghost !px-2 !py-1 text-xs text-rose-300" onClick={() => setDel(d)}><Trash2 size={13} /></button>}
                         </div>
                       </Td>

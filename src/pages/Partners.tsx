@@ -3,7 +3,7 @@ import { Users2, Plus, Pencil, Trash2 } from 'lucide-react'
 import { repo, addPartner, updatePartner, deletePartner } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Th, Td, EmptyState, Modal, Field } from '../components/ui'
-import { phone } from '../lib/format'
+import { phone, inr, num } from '../lib/format'
 import type { Partner } from '../data/types'
 
 export default function Partners() {
@@ -14,7 +14,21 @@ export default function Partners() {
   const [form, setForm] = useState<{ mode: 'new' | 'edit'; partner?: Partner } | null>(null)
   const [confirm, setConfirm] = useState<Partner | null>(null)
 
-  const rows = useMemo(() => repo.partners(financeFilter(finance)), [finance, tick])
+  // Per-partner exposure: outstanding on the loans they referred, plus the
+  // pending interest on those loans.
+  const { rows, totals } = useMemo(() => {
+    const f = financeFilter(finance)
+    const list = repo.partners(f)
+    const loans = repo.loans(f)
+    const interest = repo.interest(f)
+    const totals: Record<string, { loan: number; interest: number }> = {}
+    for (const p of list) {
+      const loan = loans.filter(l => l.Referred_Partner === p.Partner_ID).reduce((s, l) => s + num(l.Outstand_Amount), 0)
+      const int = interest.filter(i => i.Referred_Partner === p.Partner_ID).reduce((s, i) => s + num(i.Interest_Pending), 0)
+      totals[p.Partner_ID] = { loan, interest: int }
+    }
+    return { rows: list, totals }
+  }, [finance, tick])
   const finances = repo.finances()
 
   return (
@@ -35,7 +49,7 @@ export default function Partners() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Partner</Th><Th>ID</Th><Th>Finance</Th><Th>Phone</Th><Th>Email</Th>{isMd && <Th>Actions</Th>}</tr>
+                <tr><Th>Partner</Th><Th>ID</Th><Th>Finance</Th><Th>Phone</Th><Th right>Outstanding loan</Th><Th right>Outstanding interest</Th>{isMd && <Th>Actions</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map((p, i) => (
@@ -51,7 +65,8 @@ export default function Partners() {
                     <Td className="text-slate-400">{p.Partner_ID}</Td>
                     <Td className="text-slate-300">{p.Finance_Name}</Td>
                     <Td className="text-slate-400">{phone(p.Phone_Number)}</Td>
-                    <Td className="text-slate-400">{p.Email_Address ?? '—'}</Td>
+                    <Td right className="font-semibold text-white">{inr(totals[p.Partner_ID]?.loan ?? 0)}</Td>
+                    <Td right className={num(totals[p.Partner_ID]?.interest) > 0 ? 'font-semibold text-amber-400' : 'text-slate-400'}>{inr(totals[p.Partner_ID]?.interest ?? 0)}</Td>
                     {isMd && (
                       <Td>
                         <div className="flex gap-1.5">

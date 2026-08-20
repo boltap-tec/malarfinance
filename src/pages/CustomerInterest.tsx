@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { Percent, IndianRupee } from 'lucide-react'
 import { repo, payCustomerInterest } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
@@ -50,28 +50,32 @@ export default function CustomerInterest() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Month</Th><Th>Customer</Th><Th>Loan</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Collect</Th>}</tr>
+                <tr><Th>Customer</Th><Th>Loan</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Collect</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {rows.slice(0, 300).map((i, k) => (
-                  <tr key={k} className="hover:bg-slate-800/40">
-                    <Td className="text-slate-300">{i.Month}</Td>
-                    <Td className="text-slate-200">{i.Customer_Name}</Td>
-                    <Td className="text-slate-400">{i.Loan_No}</Td>
-                    <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>
-                    <Td right className="text-white">{inr(num(i.Interest_Amount))}</Td>
-                    <Td right className="text-emerald-400">{inr(num(i.Amount_Received))}</Td>
-                    <Td right className="text-amber-400">{inr(num(i.Interest_Pending))}</Td>
-                    <Td><Badge tone={statusTone(i.Status)}>{i.Status ?? '—'}</Badge></Td>
-                    {editable && (
-                      <Td>
-                        {num(i.Interest_Pending) > 0
-                          ? <button className="btn-ghost !px-2.5 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"
-                              onClick={() => setPay(i)}><IndianRupee size={13} /> Pay</button>
-                          : <span className="text-xs text-slate-600">—</span>}
-                      </Td>
+                {rows.slice(0, 300).map((i, k, arr) => (
+                  <Fragment key={k}>
+                    {(k === 0 || arr[k - 1].Month !== i.Month) && (
+                      <tr className="bg-slate-900/80"><td colSpan={editable ? 8 : 7} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-brand-300">{i.Month}</td></tr>
                     )}
-                  </tr>
+                    <tr className="hover:bg-slate-800/40">
+                      <Td className="text-slate-200">{i.Customer_Name}</Td>
+                      <Td className="text-slate-400">{i.Loan_No}</Td>
+                      <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>
+                      <Td right className="text-white">{inr(num(i.Interest_Amount))}</Td>
+                      <Td right className="text-emerald-400">{inr(num(i.Amount_Received))}</Td>
+                      <Td right className="text-amber-400">{inr(num(i.Interest_Pending))}</Td>
+                      <Td><Badge tone={statusTone(i.Status)}>{i.Status ?? '—'}</Badge></Td>
+                      {editable && (
+                        <Td>
+                          {num(i.Interest_Pending) > 0
+                            ? <button className="btn-ghost !px-2.5 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"
+                                onClick={() => setPay(i)}><IndianRupee size={13} /> Pay</button>
+                            : <span className="text-xs text-slate-600">—</span>}
+                        </Td>
+                      )}
+                    </tr>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

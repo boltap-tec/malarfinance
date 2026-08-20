@@ -48,8 +48,7 @@ export default function DepositDetail() {
                 <Plus size={15} /> Add deposit
               </button>
             )}
-            {editable && outstanding > 0 && <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setModal('repay')}><HandCoins size={15} /> Repay</button>}
-            {editable && repo.depositInterestPending(id) > 0 && <Link to="/deposit-interest" className="btn-ghost !py-1.5 text-amber-300 ring-1 ring-inset ring-amber-500/30"><Percent size={15} /> Pay interest</Link>}
+            {editable && (outstanding > 0 || repo.depositInterestPending(id) > 0) && <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setModal('repay')}><HandCoins size={15} /> Repay</button>}
           </div>
         }
       />
@@ -119,10 +118,7 @@ export default function DepositDetail() {
           name={first.Depositer_Name}
           code={id}
           outstanding={outstanding}
-          interestType="Per_Month"
-          perMonth={rate}
-          sinceDate={since}
-          principalOnly
+          pendingInterest={repo.depositInterestPending(id)}
           onRepay={(principal, interest, date) => repayDeposit({ code: id, principal, interest, date })}
           onClose={() => setModal(null)}
           onSaved={() => { setModal(null); setTick(t => t + 1) }}

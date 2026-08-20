@@ -23,7 +23,7 @@ export default function OtherFinance() {
   const { rows, borrowed, outstanding } = useMemo(() => {
     const list = repo.otherFinanceLoans(financeFilter(finance))
       .slice()
-      .sort((a, b) => new Date(b.Loan_Bought_Date ?? 0).getTime() - new Date(a.Loan_Bought_Date ?? 0).getTime())
+      .sort((a, b) => num(b.Outstand_Amount) - num(a.Outstand_Amount))
     return {
       rows: list,
       borrowed: list.reduce((s, o) => s + num(o.Loan_Amount), 0),

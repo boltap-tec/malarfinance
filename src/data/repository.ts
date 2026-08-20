@@ -573,19 +573,45 @@ export interface LiabilityRepay { code: string; principal: number; interest: num
 export async function repayDeposit(o: LiabilityRepay): Promise<void> {
   const rows = (db.Deposit_Amount ?? []).filter(d => d.Deposit_No === o.code)
   if (!rows.length) return
-  let left = o.principal
+  const name = rows[0].Depositer_Name, finance = rows[0].Finance_Name
+
+  // Principal refund → oldest deposit first.
+  const payByRef = new Map<Deposit, number>()
+  let leftP = o.principal
+  for (const d of rows.filter(d => num(d.Outstand_Amount) > 0).sort((a, b) => new Date(a.Deposit_Bought_Date ?? 0).getTime() - new Date(b.Deposit_Bought_Date ?? 0).getTime())) {
+    if (leftP <= 0) break
+    const pay = Math.min(num(d.Outstand_Amount), leftP); leftP -= pay
+    payByRef.set(d, pay)
+  }
   db.Deposit_Amount = (db.Deposit_Amount ?? []).map(d => {
-    if (d.Deposit_No !== o.code || left <= 0) return d
-    const out = num(d.Outstand_Amount)
-    const pay = Math.min(out, left); left -= pay
-    const newOut = out - pay
+    const pay = payByRef.get(d); if (!pay) return d
+    const newOut = num(d.Outstand_Amount) - pay
     return { ...d, Repaid_Amount: num(d.Repaid_Amount) + pay, Outstand_Amount: newOut, Deposit_Status: newOut === 0 ? 'Closed' : d.Deposit_Status }
   })
   await sReplace('Deposit_Amount', o.code, (db.Deposit_Amount ?? []).filter(d => d.Deposit_No === o.code))
-  const name = rows[0].Depositer_Name, finance = rows[0].Finance_Name
-  if (o.principal > 0) await recordLedger({ Nature_Transaction: 'Deposit_Prin_Refund', Loan_No: o.code, Customer_Name: name, Description: `Deposit refund — ${o.code}`, Payment_Amount: o.principal, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
-  if (o.interest > 0) await recordLedger({ Nature_Transaction: 'Depositer_Interest', Loan_No: o.code, Customer_Name: name, Description: `Deposit interest — ${o.code}`, Payment_Amount: o.interest, Interest_Amount: o.interest, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
-  writeLog({ Action: 'update', Entity: 'Deposit_Amount', Entity_Label: `Repay deposit ${o.code}`, Before: rows })
+  const paidP = o.principal - leftP
+
+  // Interest → settle the depositor's pending interest schedule, oldest first.
+  const paidById = new Map<string, number>()
+  let leftI = o.interest
+  for (const r of (db.Depositer_Interest ?? []).filter((i: any) => i.Deposit_No === o.code && num(i.Interest_Pending) > 0).sort((a: any, b: any) => new Date(a.From_Date ?? a.Month ?? 0).getTime() - new Date(b.From_Date ?? b.Month ?? 0).getTime())) {
+    if (leftI <= 0) break
+    const pay = Math.min(num(r.Interest_Pending), leftI); leftI -= pay
+    paidById.set(r.ID, pay)
+  }
+  const changed: any[] = []
+  db.Depositer_Interest = (db.Depositer_Interest ?? []).map((i: any) => {
+    const pay = paidById.get(i.ID); if (!pay) return i
+    const p = num(i.Interest_Pending)
+    const upd = { ...i, Amount_Received: num(i.Amount_Received) + pay, Interest_Pending: p - pay, Status: p - pay <= 0 ? 'Paid' : 'Partial' }
+    changed.push(upd); return upd
+  })
+  const paidI = o.interest - leftI
+
+  if (paidP > 0) await recordLedger({ Nature_Transaction: 'Deposit_Prin_Refund', Loan_No: o.code, Customer_Name: name, Description: `Deposit refund — ${o.code}`, Payment_Amount: paidP, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
+  if (paidI > 0) await recordLedger({ Nature_Transaction: 'Depositer_Interest', Loan_No: o.code, Customer_Name: name, Description: `Deposit interest — ${o.code}`, Payment_Amount: paidI, Interest_Amount: paidI, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
+  for (const r of changed) await sUpdate('Depositer_Interest', r.ID, { Amount_Received: r.Amount_Received, Interest_Pending: r.Interest_Pending, Status: r.Status })
+  writeLog({ Action: 'update', Entity: 'Deposit_Amount', Entity_Label: `Repay deposit ${o.code} · prin ₹${paidP.toLocaleString('en-IN')} + int ₹${paidI.toLocaleString('en-IN')}`, Before: rows })
   persist()
 }
 
@@ -593,19 +619,45 @@ export async function repayDeposit(o: LiabilityRepay): Promise<void> {
 export async function repayOtherFinance(o: LiabilityRepay): Promise<void> {
   const rows = (db.Other_Finance_Loan ?? []).filter(l => l.Loan_No === o.code)
   if (!rows.length) return
-  let left = o.principal
+  const name = rows[0].Loan_bought_Finance_Name, finance = rows[0].Finance_Name
+
+  // Principal refund → oldest borrowing first.
+  const payByRef = new Map<OtherFinanceLoan, number>()
+  let leftP = o.principal
+  for (const l of rows.filter(l => num(l.Outstand_Amount) > 0).sort((a, b) => new Date(a.Loan_Bought_Date ?? 0).getTime() - new Date(b.Loan_Bought_Date ?? 0).getTime())) {
+    if (leftP <= 0) break
+    const pay = Math.min(num(l.Outstand_Amount), leftP); leftP -= pay
+    payByRef.set(l, pay)
+  }
   db.Other_Finance_Loan = (db.Other_Finance_Loan ?? []).map(l => {
-    if (l.Loan_No !== o.code || left <= 0) return l
-    const out = num(l.Outstand_Amount)
-    const pay = Math.min(out, left); left -= pay
-    const newOut = out - pay
+    const pay = payByRef.get(l); if (!pay) return l
+    const newOut = num(l.Outstand_Amount) - pay
     return { ...l, Repaid_Amount: num(l.Repaid_Amount) + pay, Outstand_Amount: newOut, Loan_Status: newOut === 0 ? 'Closed' : l.Loan_Status }
   })
   await sReplace('Other_Finance_Loan', o.code, (db.Other_Finance_Loan ?? []).filter(l => l.Loan_No === o.code))
-  const name = rows[0].Loan_bought_Finance_Name, finance = rows[0].Finance_Name
-  if (o.principal > 0) await recordLedger({ Nature_Transaction: 'Other_Finance_Loan_Refund', Loan_No: o.code, Customer_Name: name, Description: `Other-finance refund — ${o.code}`, Payment_Amount: o.principal, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
-  if (o.interest > 0) await recordLedger({ Nature_Transaction: 'Other_Finance_Interest', Loan_No: o.code, Customer_Name: name, Description: `Other-finance interest — ${o.code}`, Payment_Amount: o.interest, Interest_Amount: o.interest, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
-  writeLog({ Action: 'update', Entity: 'Other_Finance_Loan', Entity_Label: `Repay other-finance ${o.code}`, Before: rows })
+  const paidP = o.principal - leftP
+
+  // Interest → settle the lender's pending interest schedule, oldest first.
+  const paidById = new Map<string, number>()
+  let leftI = o.interest
+  for (const r of (db.Other_Finance_Interest ?? []).filter((i: any) => i.Loan_No === o.code && num(i.Interest_Pending) > 0).sort((a: any, b: any) => new Date(a.From_Date ?? a.Month ?? 0).getTime() - new Date(b.From_Date ?? b.Month ?? 0).getTime())) {
+    if (leftI <= 0) break
+    const pay = Math.min(num(r.Interest_Pending), leftI); leftI -= pay
+    paidById.set(r.ID, pay)
+  }
+  const changed: any[] = []
+  db.Other_Finance_Interest = (db.Other_Finance_Interest ?? []).map((i: any) => {
+    const pay = paidById.get(i.ID); if (!pay) return i
+    const p = num(i.Interest_Pending)
+    const upd = { ...i, Amount_Received: num(i.Amount_Received) + pay, Interest_Pending: p - pay, Status: p - pay <= 0 ? 'Paid' : 'Partial' }
+    changed.push(upd); return upd
+  })
+  const paidI = o.interest - leftI
+
+  if (paidP > 0) await recordLedger({ Nature_Transaction: 'Other_Finance_Loan_Refund', Loan_No: o.code, Customer_Name: name, Description: `Other-finance refund — ${o.code}`, Payment_Amount: paidP, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
+  if (paidI > 0) await recordLedger({ Nature_Transaction: 'Other_Finance_Interest', Loan_No: o.code, Customer_Name: name, Description: `Other-finance interest — ${o.code}`, Payment_Amount: paidI, Interest_Amount: paidI, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
+  for (const r of changed) await sUpdate('Other_Finance_Interest', r.ID, { Amount_Received: r.Amount_Received, Interest_Pending: r.Interest_Pending, Status: r.Status })
+  writeLog({ Action: 'update', Entity: 'Other_Finance_Loan', Entity_Label: `Repay other-finance ${o.code} · prin ₹${paidP.toLocaleString('en-IN')} + int ₹${paidI.toLocaleString('en-IN')}`, Before: rows })
   persist()
 }
 
@@ -936,6 +988,79 @@ export function recomputeCustomer(stl: string): void {
   }
   db.STL_CRM = (db.STL_CRM ?? []).map(c => c.Customer_STL_NO === stl ? { ...c, ...rollup } : c)
   void sUpdate('STL_CRM', stl, rollup)
+}
+
+// Customer risk from unpaid interest: count distinct months still pending.
+export function customerRisk(stl: string): { level: 'low' | 'medium' | 'high'; months: number } {
+  const months = new Set(
+    (db.Interest_Details ?? [])
+      .filter(i => i.Customer_STL_NO === stl && num(i.Interest_Pending) > 0 && i.Month)
+      .map(i => i.Month as string),
+  ).size
+  const level = months >= 6 ? 'high' : months >= 3 ? 'medium' : 'low'
+  return { level, months }
+}
+
+// One-shot customer repayment — no loan picker. Principal is applied to the
+// customer's outstanding loans oldest-first; interest settles pending interest
+// oldest-first. The ledger gets TWO separate entries (principal + interest).
+export async function repayCustomer(opts: { stl: string; principal: number; interest: number; date: string; payType?: string }): Promise<void> {
+  const { stl, principal, interest, date, payType } = opts
+  const cust = (db.STL_CRM ?? []).find(c => c.Customer_STL_NO === stl)
+  if (!cust) return
+  const finance = cust.Finance_Name
+
+  // 1) Principal → oldest loan first.
+  let leftP = principal
+  const loans = (db.Loan_Processing ?? [])
+    .filter(l => l.Customer_STL_NO === stl && num(l.Outstand_Amount) > 0)
+    .sort((a, b) => new Date(a.Loan_Given_Date ?? 0).getTime() - new Date(b.Loan_Given_Date ?? 0).getTime())
+  for (const l of loans) {
+    if (leftP <= 0) break
+    const out = num(l.Outstand_Amount)
+    const pay = Math.min(out, leftP); leftP -= pay
+    const newOut = out - pay
+    await updateLoan(l.Loan_No, { Repaid_Amount: num(l.Repaid_Amount) + pay, Outstand_Amount: newOut, Loan_Status: newOut === 0 ? 'Closed' : l.Loan_Status })
+  }
+  const paidPrincipal = principal - leftP
+
+  // 2) Interest → oldest pending row first.
+  const pendingRows = (db.Interest_Details ?? [])
+    .filter(i => i.Customer_STL_NO === stl && num(i.Interest_Pending) > 0)
+    .sort((a, b) => new Date(a.From_Date ?? a.Month ?? 0).getTime() - new Date(b.From_Date ?? b.Month ?? 0).getTime())
+  const payById = new Map<string, number>()
+  let leftI = interest
+  for (const r of pendingRows) {
+    if (leftI <= 0) break
+    const pay = Math.min(num(r.Interest_Pending), leftI); leftI -= pay
+    payById.set(r.ID, pay)
+  }
+  const changed: InterestRow[] = []
+  db.Interest_Details = (db.Interest_Details ?? []).map(i => {
+    const pay = payById.get(i.ID)
+    if (!pay) return i
+    const pend = num(i.Interest_Pending)
+    const upd = { ...i, Amount_Received: num(i.Amount_Received) + pay, Interest_Pending: pend - pay, Status: pend - pay <= 0 ? 'Paid' : 'Partial' }
+    changed.push(upd)
+    return upd
+  })
+  const paidInterest = interest - leftI
+
+  // 3) Two separate ledger entries.
+  if (paidPrincipal > 0) await recordLedger({
+    Nature_Transaction: 'Customer_Loan_Prin_Repayment', STL_No: stl, Customer_Name: cust.Customer_Name,
+    Description: `Principal repayment — ${cust.Customer_Name}`, Receipt_Amount: paidPrincipal,
+    Payment_Type: payType, Finance_Name: finance, Date_Transaction: date,
+  })
+  if (paidInterest > 0) await recordLedger({
+    Nature_Transaction: 'Customer_Interest', STL_No: stl, Customer_Name: cust.Customer_Name,
+    Description: `Interest received — ${cust.Customer_Name}`, Receipt_Amount: paidInterest, Interest_Amount: paidInterest,
+    Payment_Type: payType, Finance_Name: finance, Date_Transaction: date,
+  })
+  for (const r of changed) await sUpdate('Interest_Details', r.ID, { Amount_Received: r.Amount_Received, Interest_Pending: r.Interest_Pending, Status: r.Status })
+  recomputeCustomer(stl)
+  writeLog({ Action: 'update', Entity: 'Loan_Processing', Entity_Label: `Repay ${cust.Customer_Name} · principal ₹${paidPrincipal.toLocaleString('en-IN')} + interest ₹${paidInterest.toLocaleString('en-IN')}` })
+  persist()
 }
 
 export interface RepayOptions {

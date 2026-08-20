@@ -50,8 +50,7 @@ export default function OtherFinanceDetail() {
                 <Plus size={15} /> Add loan
               </button>
             )}
-            {editable && outstanding > 0 && <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setModal('repay')}><HandCoins size={15} /> Repay</button>}
-            {editable && repo.otherFinanceInterestPending(id) > 0 && <Link to="/other-finance-interest" className="btn-ghost !py-1.5 text-amber-300 ring-1 ring-inset ring-amber-500/30"><Percent size={15} /> Pay interest</Link>}
+            {editable && (outstanding > 0 || repo.otherFinanceInterestPending(id) > 0) && <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setModal('repay')}><HandCoins size={15} /> Repay</button>}
           </div>
         }
       />
@@ -120,11 +119,7 @@ export default function OtherFinanceDetail() {
           name={first.Loan_bought_Finance_Name}
           code={id}
           outstanding={outstanding}
-          interestType={type}
-          perDay={perDay}
-          perMonth={perMonth}
-          sinceDate={since}
-          principalOnly
+          pendingInterest={repo.otherFinanceInterestPending(id)}
           onRepay={(principal, interest, date) => repayOtherFinance({ code: id, principal, interest, date })}
           onClose={() => setModal(null)}
           onSaved={() => { setModal(null); setTick(t => t + 1) }}

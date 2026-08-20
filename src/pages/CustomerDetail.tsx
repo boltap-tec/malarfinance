@@ -3,10 +3,9 @@ import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Phone, Mail, HandCoins, Plus, Percent } from 'lucide-react'
 import { repo } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal } from '../components/ui'
-import RepayModal from '../components/RepayModal'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
+import CustomerRepayModal from '../components/CustomerRepayModal'
 import { inr, phone, fmtDate, num } from '../lib/format'
-import type { Loan } from '../data/types'
 
 export default function CustomerDetail() {
   const { stl = '' } = useParams()
@@ -18,8 +17,7 @@ export default function CustomerDetail() {
   const [sp] = useSearchParams()
   const doParam = sp.get('do')
   const [tick, setTick] = useState(0)
-  const [repay, setRepay] = useState<{ loan: Loan; interestOnly: boolean } | null>(null)
-  const [chooser, setChooser] = useState<{ interestOnly: boolean } | null>(null)
+  const [repayModal, setRepayModal] = useState<'repay' | 'interest' | null>(null)
 
   const { customer, loans, interest, totals } = useMemo(() => {
     const customer = repo.customer(id)
@@ -33,30 +31,16 @@ export default function CustomerDetail() {
     return { customer, loans, interest, totals }
   }, [id, tick])
 
-  // Opened from a row's Repay/Interest icon: auto-open the action for the
-  // outstanding loan so the customer's details are already loaded.
+  // Opened from a row's Repay/Interest icon: auto-open the unified repay.
   useEffect(() => {
-    if (!editable || !doParam) return
-    const outstanding = loans.filter(l => num(l.Outstand_Amount) > 0)
-    if (outstanding.length) setRepay({ loan: outstanding[0], interestOnly: doParam === 'interest' })
+    if (!editable) return
+    if (doParam === 'repay' || doParam === 'interest') setRepayModal(doParam)
   }, [doParam, editable]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!customer) return <EmptyState title="Customer not found" />
 
   // Giving a loan needs a specific finance scope — adopt this customer's finance.
   const giveLoan = () => { setFinance(customer.Finance_Name); navigate(`/loans?new=1&stl=${encodeURIComponent(customer.Customer_STL_NO)}`) }
-
-  // Repay / pay-interest from the header: use the single candidate loan, else
-  // let the user pick which one. Repay = has outstanding principal; interest =
-  // has pending interest.
-  const loanPending = (loanNo: string) => interest.filter(i => i.Loan_No === loanNo).reduce((s, i) => s + num(i.Interest_Pending), 0)
-  const outstandingLoans = loans.filter(l => num(l.Outstand_Amount) > 0)
-  const interestLoans = loans.filter(l => loanPending(l.Loan_No) > 0)
-  const startRepay = (interestOnly: boolean) => {
-    const cands = interestOnly ? interestLoans : outstandingLoans
-    if (cands.length === 1) setRepay({ loan: cands[0], interestOnly })
-    else if (cands.length > 1) setChooser({ interestOnly })
-  }
 
   return (
     <div>
@@ -71,13 +55,13 @@ export default function CustomerDetail() {
               <button className="btn-primary !py-1.5" onClick={giveLoan}>
                 <Plus size={15} /> Give loan
               </button>
-              {outstandingLoans.length > 0 && (
-                <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => startRepay(false)}>
+              {totals.outstanding > 0 && (
+                <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setRepayModal('repay')}>
                   <HandCoins size={15} /> Repay loan
                 </button>
               )}
-              {interestLoans.length > 0 && (
-                <button className="btn-ghost !py-1.5 text-amber-300 ring-1 ring-inset ring-amber-500/30" onClick={() => startRepay(true)}>
+              {totals.interestDue > 0 && (
+                <button className="btn-ghost !py-1.5 text-amber-300 ring-1 ring-inset ring-amber-500/30" onClick={() => setRepayModal('interest')}>
                   <Percent size={15} /> Pay interest
                 </button>
               )}
@@ -104,7 +88,7 @@ export default function CustomerDetail() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Loan no.</Th><Th>Given</Th><Th right>Amount</Th><Th>Rate</Th><Th right>Outstanding</Th><Th>Status</Th>{editable && <Th>Actions</Th>}</tr>
+                <tr><Th>Loan no.</Th><Th>Given</Th><Th right>Amount</Th><Th>Rate</Th><Th right>Outstanding</Th><Th>Status</Th></tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {loans.map(l => (
@@ -115,15 +99,6 @@ export default function CustomerDetail() {
                     <Td className="text-slate-300">{rateLabel(l)}</Td>
                     <Td right className="text-amber-300">{inr(num(l.Outstand_Amount))}</Td>
                     <Td><Badge tone={statusTone(l.Loan_Status)}>{l.Loan_Status ?? '—'}</Badge></Td>
-                    {editable && (
-                      <Td>
-                        <div className="flex gap-1.5">
-                          {num(l.Outstand_Amount) > 0 && <button className="btn-ghost !px-2.5 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setRepay({ loan: l, interestOnly: false })}><HandCoins size={13} /> Repay</button>}
-                          {loanPending(l.Loan_No) > 0 && <button className="btn-ghost !px-2.5 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30" onClick={() => setRepay({ loan: l, interestOnly: true })}><Percent size={13} /> Interest</button>}
-                          {num(l.Outstand_Amount) <= 0 && loanPending(l.Loan_No) <= 0 && <span className="text-xs text-slate-600">—</span>}
-                        </div>
-                      </Td>
-                    )}
                   </tr>
                 ))}
               </tbody>
@@ -157,26 +132,15 @@ export default function CustomerDetail() {
         </Card>
       )}
 
-      {chooser && (
-        <Modal title={chooser.interestOnly ? 'Pay interest — pick a loan' : 'Repay — pick a loan'} onClose={() => setChooser(null)}>
-          <div className="space-y-1.5">
-            {(chooser.interestOnly ? interestLoans : outstandingLoans).map(l => (
-              <button key={l.Loan_No} onClick={() => { setRepay({ loan: l, interestOnly: chooser.interestOnly }); setChooser(null) }}
-                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm ring-1 ring-inset ring-transparent hover:bg-slate-800/60 hover:ring-brand-500/40">
-                <span className="text-slate-100">{l.Loan_No} <span className="text-xs text-slate-500">· {fmtDate(l.Loan_Given_Date)}</span></span>
-                <span className="text-amber-300">{inr(num(l.Outstand_Amount))} out</span>
-              </button>
-            ))}
-          </div>
-        </Modal>
-      )}
-
-      {repay && (
-        <RepayModal
-          loan={repay.loan}
-          interestOnly={repay.interestOnly}
-          onClose={() => setRepay(null)}
-          onSaved={() => { setRepay(null); setTick(t => t + 1) }}
+      {repayModal && (
+        <CustomerRepayModal
+          stl={customer.Customer_STL_NO}
+          name={customer.Customer_Name}
+          outstanding={totals.outstanding}
+          pendingInterest={totals.interestDue}
+          mode={repayModal}
+          onClose={() => setRepayModal(null)}
+          onSaved={() => { setRepayModal(null); setTick(t => t + 1) }}
         />
       )}
     </div>

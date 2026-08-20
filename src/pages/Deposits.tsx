@@ -21,7 +21,7 @@ export default function Deposits() {
   const [del, setDel] = useState<Deposit | null>(null)
 
   const { rows, total, outstanding } = useMemo(() => {
-    const list = repo.deposits(financeFilter(finance))
+    const list = repo.deposits(financeFilter(finance)).slice().sort((a, b) => num(b.Outstand_Amount) - num(a.Outstand_Amount))
     return {
       rows: list,
       total: list.reduce((s, d) => s + num(d.Deposit_Amount), 0),

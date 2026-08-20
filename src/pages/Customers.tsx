@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Search, Plus, HandCoins, Percent, Users } from 'lucide-react'
-import { repo, addCustomer } from '../data/repository'
+import { repo, addCustomer, customerRisk } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
 import { inr, phone, num } from '../lib/format'
@@ -26,7 +26,7 @@ export default function Customers() {
     const filtered = list.filter(c =>
       !s || c.Customer_Name?.toLowerCase().includes(s) || c.Customer_STL_NO?.toLowerCase().includes(s) ||
       String(c.Customer_Phone_No ?? '').includes(s),
-    )
+    ).sort((a, b) => num(b.Outstand_Loan) - num(a.Outstand_Loan))
     return {
       rows: filtered,
       outLoan: filtered.reduce((s2, c) => s2 + num(c.Outstand_Loan), 0),
@@ -64,7 +64,7 @@ export default function Customers() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Customer</Th><Th>STL No.</Th><Th>Phone</Th><Th right>Outstanding loan</Th><Th right>Outstanding interest</Th><Th>Status</Th>{canEdit(role) && <Th>Actions</Th>}</tr>
+                <tr><Th>Customer</Th><Th>STL No.</Th><Th right>Outstanding loan</Th><Th right>Outstanding interest</Th><Th>Risk</Th><Th>Status</Th>{canEdit(role) && <Th>Actions</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map(c => (
@@ -76,9 +76,9 @@ export default function Customers() {
                       <p className="text-xs text-slate-500">{c.Finance_Name}</p>
                     </Td>
                     <Td className="text-slate-300">{c.Customer_STL_NO}</Td>
-                    <Td className="text-slate-400">{phone(c.Customer_Phone_No)}</Td>
                     <Td right className="font-semibold text-white">{inr(num(c.Outstand_Loan))}</Td>
                     <Td right className={num(c.Outstanding_Interest) > 0 ? 'font-semibold text-amber-400' : 'text-slate-400'}>{inr(num(c.Outstanding_Interest))}</Td>
+                    <Td><RiskBadge stl={c.Customer_STL_NO} /></Td>
                     <Td><Badge tone={statusTone(c.Status)}>{c.Status ?? '—'}</Badge></Td>
                     {canEdit(role) && (
                       <Td>
@@ -108,6 +108,14 @@ export default function Customers() {
       )}
     </div>
   )
+}
+
+// Risk from unpaid interest months: <3 = low (green), 3–5 = medium (amber), 6+ = high (red).
+function RiskBadge({ stl }: { stl: string }) {
+  const { level, months } = customerRisk(stl)
+  const tone = level === 'high' ? 'red' : level === 'medium' ? 'amber' : 'green'
+  const label = level === 'high' ? `High · ${months}m` : level === 'medium' ? `Medium · ${months}m` : 'Low'
+  return <Badge tone={tone}>{label}</Badge>
 }
 
 function CustomerForm({ finance, onClose, onSaved }: { finance: string; onClose: () => void; onSaved: () => void }) {

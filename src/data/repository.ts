@@ -153,6 +153,39 @@ export const repo = {
   otherFinanceByCode(code: string): OtherFinanceLoan[] {
     return (db.Other_Finance_Loan ?? []).filter(o => o.Loan_No === code)
   },
+  // Distinct depositors (like customers) — one row per depositor, linked deposits summed.
+  depositors(finance?: string): { code: string; name: string; phone?: number | string; deposited: number; out: number; count: number; finance: string }[] {
+    const map = new Map<string, { code: string; name: string; phone?: number | string; deposited: number; out: number; count: number; finance: string }>()
+    for (const d of db.Deposit_Amount ?? []) {
+      if (finance && d.Finance_Name !== finance) continue
+      const key = `${d.Finance_Name}::${(d.Depositer_Name || '').toLowerCase()}`
+      const cur = map.get(key) ?? { code: d.Deposit_No, name: d.Depositer_Name, phone: d.Depositer_Phone_No, deposited: 0, out: 0, count: 0, finance: d.Finance_Name }
+      cur.deposited += num(d.Deposit_Amount); cur.out += num(d.Outstand_Amount); cur.count++
+      map.set(key, cur)
+    }
+    return [...map.values()]
+  },
+  // Distinct lender finances (like customers) — one row per lender, linked loans summed.
+  otherFinances(finance?: string): { code: string; name: string; phone?: number | string; borrowed: number; out: number; count: number; finance: string }[] {
+    const map = new Map<string, { code: string; name: string; phone?: number | string; borrowed: number; out: number; count: number; finance: string }>()
+    for (const o of db.Other_Finance_Loan ?? []) {
+      if (finance && o.Finance_Name !== finance) continue
+      const key = `${o.Finance_Name}::${(o.Loan_bought_Finance_Name || '').toLowerCase()}`
+      const cur = map.get(key) ?? { code: o.Loan_No, name: o.Loan_bought_Finance_Name, phone: o.Loan_bought_Finance_Phone_No, borrowed: 0, out: 0, count: 0, finance: o.Finance_Name }
+      cur.borrowed += num(o.Loan_Amount); cur.out += num(o.Outstand_Amount); cur.count++
+      map.set(key, cur)
+    }
+    return [...map.values()]
+  },
+  depositInterest(finance?: string): any[] {
+    return (db.Depositer_Interest ?? []).filter((i: any) => !finance || i.Finance_Name === finance)
+  },
+  depositInterestByCode(code: string): any[] {
+    return (db.Depositer_Interest ?? []).filter((i: any) => i.Deposit_No === code)
+  },
+  otherFinanceInterest(finance?: string): LedgerRow[] {
+    return (db.Transaction_Ledger ?? []).filter(t => t.Nature_Transaction === 'Other_Finance_Interest' && (!finance || t.Finance_Name === finance))
+  },
   ledgerByRef(code: string): LedgerRow[] {
     return (db.Transaction_Ledger ?? []).filter(t => String(t.Loan_No) === code)
   },
@@ -534,6 +567,84 @@ export function getSettings(): AppSettings {
 }
 export function setSettings(patch: Partial<AppSettings>): void {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...getSettings(), ...patch }))
+}
+
+// ── One-time renumber: convert legacy deposit / other-finance codes to the
+// DEP / FIN scheme, one code per depositor / lender, updating all references.
+async function sReplaceFinance(table: keyof Dataset, finance: string, rows: any[]): Promise<void> {
+  if (!supabase) return
+  const { error } = await supabase.from(table as string).delete().eq('Finance_Name', finance)
+  noteErr(`delete ${table}`, error?.message)
+  await sInsert(table, rows)
+}
+
+export async function renumberCodes(): Promise<{ deposits: number; other: number }> {
+  const depOldToNew = new Map<string, string>()
+  const finOldToNew = new Map<string, string>()
+
+  // Deposits: <prefix>-DEP<n>, one code per depositor within a finance.
+  {
+    const nameCode = new Map<string, string>()
+    const seq = new Map<string, number>()
+    for (const d of db.Deposit_Amount ?? []) {
+      const prefix = (d.Finance_Name || 'Fin').slice(0, 3)
+      const nameKey = `${d.Finance_Name}::${(d.Depositer_Name || '').toLowerCase()}`
+      let code = nameCode.get(nameKey)
+      if (!code) {
+        const n = (seq.get(d.Finance_Name) ?? 0) + 1
+        seq.set(d.Finance_Name, n)
+        code = `${prefix}-DEP${n}`
+        nameCode.set(nameKey, code)
+      }
+      if (d.Deposit_No !== code) depOldToNew.set(d.Deposit_No, code)
+    }
+    db.Deposit_Amount = (db.Deposit_Amount ?? []).map(d => depOldToNew.has(d.Deposit_No) ? { ...d, Deposit_No: depOldToNew.get(d.Deposit_No)! } : d)
+    db.Depositer_Interest = (db.Depositer_Interest ?? []).map((i: any) => depOldToNew.has(i.Deposit_No) ? { ...i, Deposit_No: depOldToNew.get(i.Deposit_No)! } : i)
+  }
+
+  // Other-finance: <prefix>-FIN<n>, one code per lender within a finance.
+  {
+    const nameCode = new Map<string, string>()
+    const seq = new Map<string, number>()
+    for (const o of db.Other_Finance_Loan ?? []) {
+      const prefix = (o.Finance_Name || 'Fin').slice(0, 3)
+      const nameKey = `${o.Finance_Name}::${(o.Loan_bought_Finance_Name || '').toLowerCase()}`
+      let code = nameCode.get(nameKey)
+      if (!code) {
+        const n = (seq.get(o.Finance_Name) ?? 0) + 1
+        seq.set(o.Finance_Name, n)
+        code = `${prefix}-FIN${n}`
+        nameCode.set(nameKey, code)
+      }
+      if (o.Loan_No !== code) finOldToNew.set(o.Loan_No, code)
+    }
+    db.Other_Finance_Loan = (db.Other_Finance_Loan ?? []).map(o => finOldToNew.has(o.Loan_No) ? { ...o, Loan_No: finOldToNew.get(o.Loan_No)! } : o)
+  }
+
+  // Update ledger references (keyed by the stable Ref_ID).
+  const changedLedger: LedgerRow[] = []
+  db.Transaction_Ledger = (db.Transaction_Ledger ?? []).map(t => {
+    const key = String(t.Loan_No)
+    const nn = depOldToNew.get(key) ?? finOldToNew.get(key)
+    if (!nn) return t
+    const upd = { ...t, Loan_No: nn }
+    changedLedger.push(upd)
+    return upd
+  })
+
+  // Sync to Supabase: replace the two entity tables + interest per finance,
+  // and update the changed ledger rows individually.
+  const finances = [...new Set((db.Finance_Details ?? []).map(f => f.Finance_Name))]
+  for (const f of finances) {
+    await sReplaceFinance('Deposit_Amount', f, (db.Deposit_Amount ?? []).filter(d => d.Finance_Name === f))
+    await sReplaceFinance('Other_Finance_Loan', f, (db.Other_Finance_Loan ?? []).filter(o => o.Finance_Name === f))
+    await sReplaceFinance('Depositer_Interest', f, (db.Depositer_Interest ?? []).filter((i: any) => i.Finance_Name === f))
+  }
+  for (const t of changedLedger) await sUpdate('Transaction_Ledger', String(t.Ref_ID), { Loan_No: t.Loan_No })
+
+  writeLog({ Action: 'update', Entity: 'Deposit_Amount', Entity_Label: `Renumbered ${depOldToNew.size} deposit + ${finOldToNew.size} other-finance codes` })
+  persist()
+  return { deposits: depOldToNew.size, other: finOldToNew.size }
 }
 
 // ── Mandatory-field configuration (which columns each form requires) ──────────

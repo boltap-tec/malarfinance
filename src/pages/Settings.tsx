@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Settings as Cog, RotateCcw, Check, ListChecks } from 'lucide-react'
 import {
-  repo, getSettings, setSettings, revokeInterestForMonth,
+  repo, getSettings, setSettings, revokeInterestForMonth, renumberCodes,
   getMandatory, setMandatory, FORM_FIELDS, type FormKind, type MandatoryConfig,
 } from '../data/repository'
 import { useApp } from '../store/app'
@@ -16,6 +16,12 @@ export default function Settings() {
   const [lastPostedDate, setLastPostedDate] = useState(s0.lastPostedDate)
   const [savedDates, setSavedDates] = useState(false)
   const [mand, setMand] = useState<MandatoryConfig>(getMandatory())
+  const [renumberMsg, setRenumberMsg] = useState<string | null>(null)
+
+  async function runRenumber() {
+    const r = await renumberCodes()
+    setRenumberMsg(`Renumbered ${r.deposits} deposit and ${r.other} other-finance codes to DEP/FIN format.`)
+  }
 
   function toggleMand(kind: FormKind, key: string) {
     setMand(prev => {
@@ -117,6 +123,20 @@ export default function Settings() {
           )}
         </Card>
       </div>
+
+      <Card className="mt-4">
+        <h3 className="mb-1 flex items-center gap-2 font-semibold text-white"><RotateCcw size={16} /> Renumber deposit & other-finance codes</h3>
+        <p className="mb-3 text-xs text-slate-500">
+          Converts legacy codes (e.g. <code>Mal-D-1-Name</code>, <code>Mal-O-1-Name</code>) to the clean
+          <code> DEP / FIN</code> scheme — one code per depositor / lender — and updates every reference.
+        </p>
+        <button className="btn-primary" onClick={runRenumber}>Renumber now</button>
+        {renumberMsg && (
+          <div className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300 ring-1 ring-emerald-500/30">
+            <Check size={15} /> {renumberMsg}
+          </div>
+        )}
+      </Card>
 
       <Card className="mt-4">
         <h3 className="mb-1 flex items-center gap-2 font-semibold text-white"><ListChecks size={16} /> Mandatory fields</h3>

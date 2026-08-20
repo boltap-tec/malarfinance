@@ -12,8 +12,12 @@ import Interest from './pages/Interest'
 import Ledger from './pages/Ledger'
 import Deposits from './pages/Deposits'
 import DepositDetail from './pages/DepositDetail'
+import Depositors from './pages/Depositors'
+import DepositInterest from './pages/DepositInterest'
 import OtherFinance from './pages/OtherFinance'
 import OtherFinanceDetail from './pages/OtherFinanceDetail'
+import OtherFinances from './pages/OtherFinances'
+import OtherFinanceInterest from './pages/OtherFinanceInterest'
 import Partners from './pages/Partners'
 import Workers from './pages/Workers'
 import Logs from './pages/Logs'
@@ -56,10 +60,14 @@ export default function App() {
         <Route path="/loans/:loanNo" element={<LoanDetail />} />
         <Route path="/interest" element={<Interest />} />
         <Route path="/ledger" element={<Ledger />} />
+        <Route path="/depositors" element={<Depositors />} />
         <Route path="/deposits" element={<Deposits />} />
         <Route path="/deposits/:code" element={<DepositDetail />} />
+        <Route path="/deposit-interest" element={<DepositInterest />} />
+        <Route path="/other-finances" element={<OtherFinances />} />
         <Route path="/other-finance" element={<OtherFinance />} />
         <Route path="/other-finance/:code" element={<OtherFinanceDetail />} />
+        <Route path="/other-finance-interest" element={<OtherFinanceInterest />} />
         <Route path="/partners" element={<Partners />} />
         <Route path="/workers" element={<Workers />} />
         <Route path="/logs" element={<Logs />} />

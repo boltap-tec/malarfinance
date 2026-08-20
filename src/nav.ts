@@ -3,7 +3,8 @@
 // of one long flat list.
 import {
   LayoutDashboard, Users, HandCoins, Percent, BookOpenText, PiggyBank,
-  Boxes, Gem, Building2, Users2, UserCog, History, Settings, MessageSquare, type LucideIcon,
+  Boxes, Gem, Building2, Users2, UserCog, History, Settings, MessageSquare,
+  Landmark, Wallet, ReceiptText, Banknote, type LucideIcon,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -36,11 +37,25 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
+    title: 'Deposit',
+    items: [
+      { to: '/depositors', label: 'Depositors', icon: Users2, desc: 'People who deposit with you' },
+      { to: '/deposits', label: 'Deposits', icon: PiggyBank, desc: 'Deposits taken & repaid' },
+      { to: '/deposit-interest', label: 'Deposit Interest', icon: Percent, desc: 'Interest you owe depositors' },
+    ],
+  },
+  {
+    title: 'Other Finance',
+    items: [
+      { to: '/other-finances', label: 'Other Finances', icon: Landmark, desc: 'Finances you borrow from' },
+      { to: '/other-finance', label: 'Other Finance Loans', icon: Banknote, desc: 'Money you borrowed' },
+      { to: '/other-finance-interest', label: 'Other Finance Interest', icon: ReceiptText, desc: 'Interest you owe them' },
+    ],
+  },
+  {
     title: 'Money',
     items: [
       { to: '/ledger', label: 'Ledger', icon: BookOpenText, desc: 'All receipts & payments' },
-      { to: '/deposits', label: 'Deposits', icon: PiggyBank, desc: 'Money from depositors' },
-      { to: '/other-finance', label: 'Other Finance', icon: Building2, desc: 'Money you borrowed' },
     ],
   },
   {

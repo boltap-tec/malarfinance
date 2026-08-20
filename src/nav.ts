@@ -26,7 +26,6 @@ export const navGroups: NavGroup[] = [
     items: [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, desc: 'KPIs & recent activity' },
       { to: '/ledger', label: 'Ledger', icon: BookOpenText, desc: 'All receipts & payments' },
-      { to: '/interest', label: 'Interest Posting', icon: Percent, desc: 'Post all interest in one click' },
     ],
   },
   {
@@ -70,6 +69,7 @@ export const navGroups: NavGroup[] = [
   {
     title: 'Admin',
     items: [
+      { to: '/interest', label: 'Interest Posting', icon: Percent, desc: 'Post all interest in one click' },
       { to: '/logs', label: 'Activity Log', icon: History, desc: 'Changes & restore' },
       { to: '/settings', label: 'Settings', icon: Settings, desc: 'Interest & corrections' },
     ],

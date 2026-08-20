@@ -8,7 +8,7 @@ import { phone } from '../lib/format'
 import type { Worker } from '../data/types'
 
 // Menus an MD can grant a worker (everything except the launcher & MD-only pages).
-const adminOnly = ['/', '/menu', '/messages', '/workers', '/logs', '/settings']
+const adminOnly = ['/', '/menu', '/messages', '/workers', '/logs', '/settings', '/interest']
 const grantable = navItems.filter(n => !adminOnly.includes(n.to))
 
 export default function Workers() {

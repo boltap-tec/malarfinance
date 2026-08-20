@@ -10,24 +10,32 @@ import { PageHeader, Card, StatCard, Badge, Th, Td, EmptyState } from '../compon
 import { inr, num } from '../lib/format'
 import type { Loan } from '../data/types'
 
+const monthStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+
 export default function Interest() {
   const finance = useApp(s => s.finance)
   const role = useApp(s => s.user?.role)
-  const editable = canEdit(role)
   const f = financeFilter(finance)
 
-  const today = new Date()
-  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10)
-  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10)
+  const now = new Date()
+  const todayStr = now.toISOString().slice(0, 10)
   const lastPosted = getSettings().lastPostedDate
-  const defaultFrom = lastPosted ? new Date(new Date(lastPosted).getTime() + 86400000).toISOString().slice(0, 10) : firstOfMonth
+  // Default to the month after the last posted one, else last month.
+  const defaultMonth = lastPosted
+    ? monthStr(new Date(new Date(lastPosted).getFullYear(), new Date(lastPosted).getMonth() + 1, 1))
+    : monthStr(new Date(now.getFullYear(), now.getMonth() - 1, 1))
 
-  const [from, setFrom] = useState(defaultFrom)
-  const [to, setTo] = useState(endOfMonth)
+  const [month, setMonth] = useState(defaultMonth)
   const [posted, setPosted] = useState<string | null>(null)
 
+  // Posting is per whole month: From = 1st, To = month end.
+  const [my, mm] = month.split('-').map(Number)
+  const from = `${month}-01`
+  const to = new Date(my, mm, 0).toISOString().slice(0, 10) // last day of the month
+
   const settings = getSettings()
-  const monthEndOk = settings.postingAnyDate || isMonthEnd(to)
+  // Month end is enforced by construction; the To date must not be in the future.
+  const monthEndOk = settings.postingAnyDate || new Date(to) <= new Date(todayStr)
 
   // Customer loan interest.
   const custPreview = useMemo(
@@ -84,9 +92,11 @@ export default function Interest() {
     setPosted(`Posted ${custPreview.length} customer, ${depPreview.length} deposit and ${othPreview.length} other-finance interest lines.`)
   }
 
+  if (role !== 'md') return <EmptyState title="Only the MD can post interest" />
+
   return (
     <div>
-      <PageHeader title="Interest posting" subtitle="Run customer, deposit and other-finance interest for a period — in one click." />
+      <PageHeader title="Interest posting" subtitle="Run customer, deposit and other-finance interest for a whole month — in one click." />
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Customer interest" value={inr(custTotal)} tone="green" sub={`${custPreview.length} loans`} icon={<Percent size={18} />} />
@@ -98,23 +108,21 @@ export default function Interest() {
       <Card className="mb-4">
         <div className="flex flex-wrap items-end gap-4">
           <div>
-            <label className="label">From date</label>
-            <input type="date" className="input mt-1" value={from} onChange={e => { setFrom(e.target.value); setPosted(null) }} />
+            <label className="label">Month to post</label>
+            <input type="month" max={monthStr(now)} className="input mt-1" value={month} onChange={e => { setMonth(e.target.value); setPosted(null) }} />
           </div>
-          <div>
-            <label className="label">To date</label>
-            <input type="date" className="input mt-1" value={to} onChange={e => { setTo(e.target.value); setPosted(null) }} />
+          <div className="text-sm text-slate-400">
+            <p className="label">Period</p>
+            <p className="mt-1">{from} → {to}</p>
           </div>
           <div className="flex-1" />
-          {editable && (
-            <button className="btn-primary" onClick={postAll} disabled={count === 0 || !monthEndOk}>
-              <Zap size={16} /> Post all interest
-            </button>
-          )}
+          <button className="btn-primary" onClick={postAll} disabled={count === 0 || !monthEndOk}>
+            <Zap size={16} /> Post all interest
+          </button>
         </div>
         {!monthEndOk && (
           <div className="mt-3 rounded-xl bg-amber-500/10 px-4 py-2.5 text-sm text-amber-300 ring-1 ring-amber-500/30">
-            Posting runs at <b>month end</b> — set “To date” to the last day of a month. (Admins can allow any date in Settings.)
+            This month hasn’t ended — interest posts only for a <b>completed month</b> (the To date can’t be after today).
           </div>
         )}
         {posted && (

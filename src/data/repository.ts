@@ -483,47 +483,54 @@ export async function appendOtherFinanceInterest(rows: any[]): Promise<void> {
   persist()
 }
 
-// Pay a single pending interest line (from any of the three interest tables).
-export async function payCustomerInterest(id: string, date?: string, payType?: string): Promise<void> {
+// Pay a single interest line — a specific amount (defaults to the full pending),
+// capped at what's pending. Records the ledger entry.
+export async function payCustomerInterest(id: string, amount?: number, date?: string, payType?: string): Promise<void> {
   const row = (db.Interest_Details ?? []).find(i => i.ID === id)
   if (!row) return
   const pending = num(row.Interest_Pending); if (pending <= 0) return
-  await updateInterestRow(id, { Amount_Received: num(row.Amount_Received) + pending, Interest_Pending: 0, Status: 'Paid' })
+  const pay = Math.min(num(amount) > 0 ? num(amount) : pending, pending)
+  const left = pending - pay
+  await updateInterestRow(id, { Amount_Received: num(row.Amount_Received) + pay, Interest_Pending: left, Status: left <= 0 ? 'Paid' : 'Partial' })
   await recordLedger({
     Nature_Transaction: 'Customer_Interest', STL_No: row.Customer_STL_NO, Loan_No: row.Loan_No,
     Customer_Name: row.Customer_Name, Description: `Interest received — ${row.Loan_No}`,
-    Receipt_Amount: pending, Interest_Amount: pending, Payment_Type: payType,
+    Receipt_Amount: pay, Interest_Amount: pay, Payment_Type: payType,
     Finance_Name: row.Finance_Name, Date_Transaction: date,
   })
   persist()
 }
 
-export async function payDepositInterest(id: string, date?: string, payType?: string): Promise<void> {
+export async function payDepositInterest(id: string, amount?: number, date?: string, payType?: string): Promise<void> {
   const row: any = (db.Depositer_Interest ?? []).find((i: any) => i.ID === id)
   if (!row) return
   const pending = num(row.Interest_Pending); if (pending <= 0) return
-  const patch = { Amount_Received: num(row.Amount_Received) + pending, Interest_Pending: 0, Status: 'Paid' }
+  const pay = Math.min(num(amount) > 0 ? num(amount) : pending, pending)
+  const left = pending - pay
+  const patch = { Amount_Received: num(row.Amount_Received) + pay, Interest_Pending: left, Status: left <= 0 ? 'Paid' : 'Partial' }
   db.Depositer_Interest = (db.Depositer_Interest ?? []).map((i: any) => i.ID === id ? { ...i, ...patch } : i)
   await sUpdate('Depositer_Interest', id, patch)
   await recordLedger({
     Nature_Transaction: 'Depositer_Interest', Loan_No: row.Deposit_No, Customer_Name: row.Depositer_Name,
-    Description: `Deposit interest — ${row.Deposit_No}`, Payment_Amount: pending, Interest_Amount: pending,
+    Description: `Deposit interest — ${row.Deposit_No}`, Payment_Amount: pay, Interest_Amount: pay,
     Payment_Type: payType, Finance_Name: row.Finance_Name, Date_Transaction: date,
   })
   writeLog({ Action: 'update', Entity: 'Depositer_Interest', Entity_Label: `Pay deposit interest ${row.Deposit_No} · ${row.Month}`, Before: row })
   persist()
 }
 
-export async function payOtherFinanceInterest(id: string, date?: string, payType?: string): Promise<void> {
+export async function payOtherFinanceInterest(id: string, amount?: number, date?: string, payType?: string): Promise<void> {
   const row: any = (db.Other_Finance_Interest ?? []).find((i: any) => i.ID === id)
   if (!row) return
   const pending = num(row.Interest_Pending); if (pending <= 0) return
-  const patch = { Amount_Received: num(row.Amount_Received) + pending, Interest_Pending: 0, Status: 'Paid' }
+  const pay = Math.min(num(amount) > 0 ? num(amount) : pending, pending)
+  const left = pending - pay
+  const patch = { Amount_Received: num(row.Amount_Received) + pay, Interest_Pending: left, Status: left <= 0 ? 'Paid' : 'Partial' }
   db.Other_Finance_Interest = (db.Other_Finance_Interest ?? []).map((i: any) => i.ID === id ? { ...i, ...patch } : i)
   await sUpdate('Other_Finance_Interest', id, patch)
   await recordLedger({
     Nature_Transaction: 'Other_Finance_Interest', Loan_No: row.Loan_No, Customer_Name: row.Loan_bought_Finance_Name,
-    Description: `Other-finance interest — ${row.Loan_No}`, Payment_Amount: pending, Interest_Amount: pending,
+    Description: `Other-finance interest — ${row.Loan_No}`, Payment_Amount: pay, Interest_Amount: pay,
     Payment_Type: payType, Finance_Name: row.Finance_Name, Date_Transaction: date,
   })
   writeLog({ Action: 'update', Entity: 'Other_Finance_Interest', Entity_Label: `Pay other-finance interest ${row.Loan_No} · ${row.Month}`, Before: row })

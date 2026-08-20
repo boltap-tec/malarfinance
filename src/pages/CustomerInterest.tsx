@@ -3,6 +3,7 @@ import { Percent, IndianRupee } from 'lucide-react'
 import { repo, payCustomerInterest } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
+import InterestPayModal from '../components/InterestPayModal'
 import { inr, fmtDate, num, monthKey } from '../lib/format'
 
 // Customer loan interest details, with a per-line "pay interest" action.
@@ -12,6 +13,7 @@ export default function CustomerInterest() {
   const editable = canEdit(role)
   const [q, setQ] = useState('')
   const [tick, setTick] = useState(0)
+  const [pay, setPay] = useState<any | null>(null)
 
   const { rows, billed, paid, pending } = useMemo(() => {
     let list = repo.interest(financeFilter(finance))
@@ -65,7 +67,7 @@ export default function CustomerInterest() {
                       <Td>
                         {num(i.Interest_Pending) > 0
                           ? <button className="btn-ghost !px-2.5 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"
-                              onClick={async () => { await payCustomerInterest(i.ID); setTick(t => t + 1) }}><IndianRupee size={13} /> Pay</button>
+                              onClick={() => setPay(i)}><IndianRupee size={13} /> Pay</button>
                           : <span className="text-xs text-slate-600">—</span>}
                       </Td>
                     )}
@@ -75,6 +77,19 @@ export default function CustomerInterest() {
             </table>
           </div>
         </Card>
+      )}
+
+      {pay && (
+        <InterestPayModal
+          title="Collect customer interest"
+          name={pay.Customer_Name}
+          code={pay.Loan_No}
+          month={pay.Month}
+          pending={num(pay.Interest_Pending)}
+          onPay={(amount, date, payType) => payCustomerInterest(pay.ID, amount, date, payType)}
+          onClose={() => setPay(null)}
+          onSaved={() => { setPay(null); setTick(t => t + 1) }}
+        />
       )}
     </div>
   )

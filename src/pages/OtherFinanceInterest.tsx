@@ -3,6 +3,7 @@ import { ReceiptText, IndianRupee } from 'lucide-react'
 import { repo, payOtherFinanceInterest } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
+import InterestPayModal from '../components/InterestPayModal'
 import { inr, fmtDate, num, monthKey } from '../lib/format'
 
 // Interest the finance OWES the finances it borrowed from, from the schedule.
@@ -12,6 +13,7 @@ export default function OtherFinanceInterest() {
   const editable = canEdit(role)
   const [q, setQ] = useState('')
   const [tick, setTick] = useState(0)
+  const [pay, setPay] = useState<any | null>(null)
 
   const { rows, billed, paid, pending } = useMemo(() => {
     let list = repo.otherFinanceInterest(financeFilter(finance))
@@ -65,7 +67,7 @@ export default function OtherFinanceInterest() {
                       <Td>
                         {num(i.Interest_Pending) > 0
                           ? <button className="btn-ghost !px-2.5 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30"
-                              onClick={async () => { await payOtherFinanceInterest(i.ID); setTick(t => t + 1) }}><IndianRupee size={13} /> Pay</button>
+                              onClick={() => setPay(i)}><IndianRupee size={13} /> Pay</button>
                           : <span className="text-xs text-slate-600">—</span>}
                       </Td>
                     )}
@@ -75,6 +77,19 @@ export default function OtherFinanceInterest() {
             </table>
           </div>
         </Card>
+      )}
+
+      {pay && (
+        <InterestPayModal
+          title="Pay other-finance interest"
+          name={pay.Loan_bought_Finance_Name}
+          code={pay.Loan_No}
+          month={pay.Month}
+          pending={num(pay.Interest_Pending)}
+          onPay={(amount, date, payType) => payOtherFinanceInterest(pay.ID, amount, date, payType)}
+          onClose={() => setPay(null)}
+          onSaved={() => { setPay(null); setTick(t => t + 1) }}
+        />
       )}
     </div>
   )

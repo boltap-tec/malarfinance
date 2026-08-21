@@ -16,6 +16,11 @@ export default {
       colors: {
         brand: ramp('brand'),
         slate: ramp('slate'),
+        // Status / accent colours are themed too, so badges and amounts stay
+        // readable and attractive on the light themes (see src/index.css).
+        emerald: ramp('emerald'),
+        amber: ramp('amber'),
+        rose: ramp('rose'),
         hd: v('hd'), // primary heading/foreground text (white on dark, ink on light)
       },
       fontFamily: {

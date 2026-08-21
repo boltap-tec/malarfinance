@@ -17,6 +17,16 @@
   --brand-300: 142 181 255; --brand-400: 89 140 255;  --brand-500: 53 99 245;
   --brand-600: 31 69 224;   --brand-700: 26 55 189;   --brand-800: 27 49 152;
   --brand-900: 28 47 120;   --brand-950: 21 29 71;
+  /* status / accent ramps (Tailwind defaults for dark) */
+  --emerald-50: 236 253 245; --emerald-100: 209 250 229; --emerald-200: 167 243 208; --emerald-300: 110 231 183;
+  --emerald-400: 52 211 153; --emerald-500: 16 185 129;  --emerald-600: 5 150 105;   --emerald-700: 4 120 87;
+  --emerald-800: 6 95 70;    --emerald-900: 6 78 59;     --emerald-950: 2 44 34;
+  --amber-50: 255 251 235;   --amber-100: 254 243 199;   --amber-200: 253 230 138;   --amber-300: 252 211 77;
+  --amber-400: 251 191 36;   --amber-500: 245 158 11;    --amber-600: 217 119 6;     --amber-700: 180 83 9;
+  --amber-800: 146 64 14;    --amber-900: 120 53 15;     --amber-950: 69 26 3;
+  --rose-50: 255 241 242;    --rose-100: 255 228 230;    --rose-200: 254 205 211;    --rose-300: 253 164 175;
+  --rose-400: 251 113 133;   --rose-500: 244 63 94;      --rose-600: 225 29 72;      --rose-700: 190 18 60;
+  --rose-800: 159 18 57;     --rose-900: 136 19 55;      --rose-950: 76 5 25;
   --hd: 255 255 255;
 }
 
@@ -29,6 +39,11 @@
   --slate-300: 51 65 85;  --slate-400: 60 74 94;  --slate-500: 78 92 112;
   --slate-600: 92 106 126;
   --hd: 15 23 42;
+  /* Darken the text shades (200/300/400) of the status colours so badges and
+     amounts read strongly on light surfaces; the 500+ fills/rings stay vivid. */
+  --emerald-200: 6 78 59;   --emerald-300: 4 120 87;   --emerald-400: 5 150 105;
+  --amber-200: 120 53 15;   --amber-300: 146 64 14;    --amber-400: 180 83 9;
+  --rose-200: 159 18 57;    --rose-300: 190 18 60;     --rose-400: 225 29 72;
 }
 
 :root[data-theme="light-blue"] {

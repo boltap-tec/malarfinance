@@ -9,7 +9,7 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-white">{title}</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-hd">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-slate-400">{subtitle}</p>}
       </div>
       {action}
@@ -50,7 +50,7 @@ export function StatCard({
         <p className="label min-w-0">{label}</p>
         {icon && <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl sm:h-9 sm:w-9 ${toneMap[tone]}`}>{icon}</span>}
       </div>
-      <p className="mt-1.5 break-words text-lg font-bold leading-tight tabular-nums text-white sm:mt-2 sm:text-2xl">{value}</p>
+      <p className="mt-1.5 break-words text-lg font-bold leading-tight tabular-nums text-hd sm:mt-2 sm:text-2xl">{value}</p>
       {sub && <p className="mt-1 text-xs text-slate-400">{sub}</p>}
     </div>
   )
@@ -74,7 +74,7 @@ export function Modal({
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="card relative z-10 w-full max-w-lg p-5">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-white">{title}</h3>
+          <h3 className="text-lg font-bold text-hd">{title}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-200"><X size={18} /></button>
         </div>
         <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-1">{children}</div>

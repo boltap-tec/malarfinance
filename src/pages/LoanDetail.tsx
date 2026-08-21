@@ -55,7 +55,7 @@ export default function LoanDetail() {
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Card>
-          <h3 className="mb-3 font-semibold text-white">Loan details</h3>
+          <h3 className="mb-3 font-semibold text-hd">Loan details</h3>
           <dl className="space-y-2 text-sm">
             <Row k="Given date" v={fmtDate(loan.Loan_Given_Date)} />
             <Row k="Interest type" v={loan.Interest_Type ?? '—'} />
@@ -68,7 +68,7 @@ export default function LoanDetail() {
 
         {/* Interest calculator — uses the exact engine ported from Apps Script */}
         <Card className="lg:col-span-2">
-          <h3 className="mb-3 flex items-center gap-2 font-semibold text-white"><Calculator size={16} /> Interest calculator</h3>
+          <h3 className="mb-3 flex items-center gap-2 font-semibold text-hd"><Calculator size={16} /> Interest calculator</h3>
           <div className="flex flex-wrap gap-3">
             <div>
               <label className="label">From</label>
@@ -93,7 +93,7 @@ export default function LoanDetail() {
         </Card>
       </div>
 
-      <h3 className="mb-2 mt-6 font-semibold text-white">Interest schedule</h3>
+      <h3 className="mb-2 mt-6 font-semibold text-hd">Interest schedule</h3>
       {interest.length === 0 ? <EmptyState title="No interest posted for this loan yet" /> : (
         <Card className="!p-0 overflow-hidden">
           <div className="overflow-x-auto">
@@ -107,7 +107,7 @@ export default function LoanDetail() {
                     <Td className="text-slate-300">{i.Month}</Td>
                     <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>
                     <Td right className="text-slate-400">{num(i.No_Days)}</Td>
-                    <Td right className="text-white">{inr(num(i.Interest_Amount))}</Td>
+                    <Td right className="text-hd">{inr(num(i.Interest_Amount))}</Td>
                     <Td right className="text-emerald-400">{inr(num(i.Amount_Received))}</Td>
                     <Td right className="text-amber-400">{inr(num(i.Interest_Pending))}</Td>
                     <Td><Badge tone={statusTone(i.Status)}>{i.Status ?? '—'}</Badge></Td>
@@ -137,7 +137,7 @@ function MiniStat({ k, v, accent }: { k: string; v: string; accent?: boolean }) 
   return (
     <div className="rounded-xl bg-slate-800/40 p-3">
       <p className="label">{k}</p>
-      <p className={`mt-1 text-lg font-bold ${accent ? 'text-brand-300' : 'text-white'}`}>{v}</p>
+      <p className={`mt-1 text-lg font-bold ${accent ? 'text-brand-300' : 'text-hd'}`}>{v}</p>
     </div>
   )
 }

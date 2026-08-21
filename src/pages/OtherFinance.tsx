@@ -68,7 +68,7 @@ export default function OtherFinance() {
                     <Td className="text-slate-200">{o.Loan_bought_Finance_Name}</Td>
                     <Td className="text-slate-400">{phone(o.Loan_bought_Finance_Phone_No)}</Td>
                     <Td className="text-slate-400">{fmtDate(o.Loan_Bought_Date)}</Td>
-                    <Td right className="text-white">{inr(num(o.Loan_Amount))}</Td>
+                    <Td right className="text-hd">{inr(num(o.Loan_Amount))}</Td>
                     <Td className="whitespace-nowrap text-slate-300">
                       {o.Interest_Type === 'Per_Month'
                         ? `₹${num(o.Interest_Per_Month_Per_Lakh)}/L·mo`
@@ -105,7 +105,7 @@ export default function OtherFinance() {
       {del && (
         <ConfirmModal
           title="Delete other-finance loan"
-          message={<>Delete <b className="text-white">{del.Loan_No}</b> ({del.Loan_bought_Finance_Name}, {inr(num(del.Loan_Amount))})?</>}
+          message={<>Delete <b className="text-hd">{del.Loan_No}</b> ({del.Loan_bought_Finance_Name}, {inr(num(del.Loan_Amount))})?</>}
           onConfirm={async () => { await deleteOtherFinance(del); setDel(null); setTick(t => t + 1) }}
           onClose={() => setDel(null)}
         />
@@ -210,7 +210,7 @@ function BorrowForm({ finance, initialCode, onClose, onSaved }: { finance: strin
           <div className="rounded-xl bg-slate-800/40 p-3">
             <div className="flex items-start justify-between">
               <div>
-                <p className="font-semibold text-white">{sel.name}</p>
+                <p className="font-semibold text-hd">{sel.name}</p>
                 <p className="text-xs text-slate-500">{sel.code} · {phone(sel.phone)} · {sel.count} loan(s)</p>
               </div>
               <button onClick={() => setSel(null)} className="btn-ghost !py-1 text-xs">Change</button>

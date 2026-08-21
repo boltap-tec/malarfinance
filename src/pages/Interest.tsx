@@ -150,7 +150,7 @@ function Section({ title, total, rows }: { title: string; total: number; rows: {
   return (
     <Card className="!p-0 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2.5">
-        <h3 className="font-semibold text-white">{title}</h3>
+        <h3 className="font-semibold text-hd">{title}</h3>
         <Badge tone="blue">{inr(total)} · {rows.length}</Badge>
       </div>
       <div className="overflow-x-auto">
@@ -164,7 +164,7 @@ function Section({ title, total, rows }: { title: string; total: number; rows: {
                 <Td className="font-medium text-brand-300">{r.a}</Td>
                 <Td className="text-slate-200">{r.b}</Td>
                 <Td right className="text-slate-400">{r.days}</Td>
-                <Td right className="font-semibold text-white">{inr(r.amt)}</Td>
+                <Td right className="font-semibold text-hd">{inr(r.amt)}</Td>
               </tr>
             ))}
           </tbody>

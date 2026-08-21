@@ -3,13 +3,49 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LogOut, Menu, X, Wallet, ChevronDown, LayoutGrid, Search,
   PanelLeftClose, PanelLeftOpen, Bell, RefreshCw, KeyRound, MessageSquare, Volume2, VolumeX,
+  Palette, Check,
 } from 'lucide-react'
 import { useApp, canSeeRoute } from '../store/app'
 import { repo, source, refresh, markNotificationsRead } from '../data/repository'
 import { navGroups, bottomNav } from '../nav'
 import { Modal, Field } from './ui'
 import { playClick, playAction, isMuted, setMuted } from '../lib/sound'
+import { THEMES, getTheme, setTheme, type ThemeId } from '../lib/theme'
 import CommandPalette from './CommandPalette'
+
+// Pick and persist the colour theme (saved until the user changes it).
+function ThemePicker() {
+  const [open, setOpen] = useState(false)
+  const [theme, setThemeState] = useState<ThemeId>(getTheme())
+  return (
+    <div className="relative">
+      <button title="Theme" onClick={() => setOpen(o => !o)} className="grid h-9 w-9 place-items-center rounded-xl text-slate-300 hover:bg-slate-800/60">
+        <Palette size={18} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 z-40 mt-2 w-52 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-1.5 shadow-xl">
+            <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Theme</p>
+            {THEMES.map(t => (
+              <button
+                key={t.id}
+                onClick={() => { setTheme(t.id); setThemeState(t.id); setOpen(false) }}
+                className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-sm hover:bg-slate-800/70 ${t.id === theme ? 'text-hd' : 'text-slate-300'}`}
+              >
+                <span className="h-5 w-5 shrink-0 rounded-full border border-black/10" style={{ background: t.surface }}>
+                  <span className="block h-2 w-2 translate-x-1.5 translate-y-1.5 rounded-full" style={{ background: t.swatch }} />
+                </span>
+                {t.label}
+                {t.id === theme && <Check size={15} className="ml-auto text-brand-400" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 function NavList({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
   const user = useApp(s => s.user)
@@ -173,7 +209,7 @@ function NotificationBell() {
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="absolute right-0 z-40 mt-2 w-80 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-xl" data-tick={tick}>
-            <div className="border-b border-slate-800 px-4 py-2.5 text-sm font-semibold text-white">Notifications</div>
+            <div className="border-b border-slate-800 px-4 py-2.5 text-sm font-semibold text-hd">Notifications</div>
             <div className="max-h-80 overflow-y-auto">
               {items.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-500">No notifications.</p>}
               {items.map(n => (
@@ -278,7 +314,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     <div className="flex items-center gap-2.5 px-1">
       <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-700 font-black text-white">₹</div>
       <div>
-        <p className="text-sm font-bold leading-tight text-white">Arul Finance</p>
+        <p className="text-sm font-bold leading-tight text-hd">Arul Finance</p>
         <p className="text-[11px] leading-tight text-slate-400">Management Suite</p>
       </div>
     </div>
@@ -341,6 +377,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-1.5 sm:gap-2">
             <button onClick={() => setPaletteOpen(true)} className="grid h-9 w-9 place-items-center text-slate-300 lg:hidden"><Search size={20} /></button>
             <RefreshButton />
+            <ThemePicker />
             <SoundToggle />
             <NavLink to="/messages" title="Messages" className={({ isActive }) => `grid h-9 w-9 place-items-center rounded-lg ${isActive ? 'text-brand-400' : 'text-slate-300 hover:bg-slate-800/60'}`}><MessageSquare size={20} /></NavLink>
             <NotificationBell />
@@ -352,7 +389,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                 {user?.name?.[0]?.toUpperCase() ?? 'U'}
               </div>
               <div className="hidden sm:block">
-                <p className="text-xs font-semibold text-white">{user?.name}</p>
+                <p className="text-xs font-semibold text-hd">{user?.name}</p>
                 <p className="text-[11px] capitalize text-slate-400">{user?.role}</p>
               </div>
             </div>

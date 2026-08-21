@@ -58,7 +58,7 @@ export default function Messages() {
 
         {/* Conversation */}
         <Card className="flex h-[60vh] flex-col !p-0">
-          <div className="border-b border-slate-800 px-4 py-2.5 text-sm font-semibold text-white">
+          <div className="border-b border-slate-800 px-4 py-2.5 text-sm font-semibold text-hd">
             {thread === 'group' ? 'Group' : contact?.name ?? 'Direct'}
           </div>
           <div className="flex-1 space-y-2 overflow-y-auto p-4">

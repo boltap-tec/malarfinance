@@ -62,7 +62,7 @@ export default function Deposits() {
                     <Td><Link to={`/deposits/${encodeURIComponent(d.Deposit_No)}`} className="font-medium text-brand-300">{d.Deposit_No}</Link></Td>
                     <Td className="text-slate-200">{d.Depositer_Name}</Td>
                     <Td className="text-slate-400">{phone(d.Depositer_Phone_No)}</Td>
-                    <Td right className="text-white">{inr(num(d.Deposit_Amount))}</Td>
+                    <Td right className="text-hd">{inr(num(d.Deposit_Amount))}</Td>
                     <Td className="text-slate-300">₹{num(d.Interest_Per_Month_Per_Lakh)}</Td>
                     <Td right className="text-rose-300">{inr(num(d.Outstand_Amount))}</Td>
                     <Td><Badge tone={statusTone(d.Deposit_Status)}>{d.Deposit_Status ?? '—'}</Badge></Td>
@@ -95,7 +95,7 @@ export default function Deposits() {
       {del && (
         <ConfirmModal
           title="Delete deposit"
-          message={<>Delete deposit <b className="text-white">{del.Deposit_No}</b> ({del.Depositer_Name}, {inr(num(del.Deposit_Amount))})?</>}
+          message={<>Delete deposit <b className="text-hd">{del.Deposit_No}</b> ({del.Depositer_Name}, {inr(num(del.Deposit_Amount))})?</>}
           onConfirm={async () => { await deleteDeposit(del); setDel(null); setTick(t => t + 1) }}
           onClose={() => setDel(null)}
         />
@@ -205,7 +205,7 @@ function DepositForm({ finance, initialCode, onClose, onSaved }: { finance: stri
           <div className="rounded-xl bg-slate-800/40 p-3">
             <div className="flex items-start justify-between">
               <div>
-                <p className="font-semibold text-white">{sel.name}</p>
+                <p className="font-semibold text-hd">{sel.name}</p>
                 <p className="text-xs text-slate-500">{sel.code} · {phone(sel.phone)} · {sel.count} deposit(s)</p>
               </div>
               <button onClick={() => setSel(null)} className="btn-ghost !py-1 text-xs">Change</button>

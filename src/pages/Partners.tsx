@@ -65,7 +65,7 @@ export default function Partners() {
                     <Td className="text-slate-400">{p.Partner_ID}</Td>
                     <Td className="text-slate-300">{p.Finance_Name}</Td>
                     <Td className="text-slate-400">{phone(p.Phone_Number)}</Td>
-                    <Td right className="font-semibold text-white">{inr(totals[p.Partner_ID]?.loan ?? 0)}</Td>
+                    <Td right className="font-semibold text-hd">{inr(totals[p.Partner_ID]?.loan ?? 0)}</Td>
                     <Td right className={num(totals[p.Partner_ID]?.interest) > 0 ? 'font-semibold text-amber-400' : 'text-slate-400'}>{inr(totals[p.Partner_ID]?.interest ?? 0)}</Td>
                     {isMd && (
                       <Td>
@@ -102,7 +102,7 @@ export default function Partners() {
             <button className="btn-primary !bg-rose-600 hover:!bg-rose-500" onClick={async () => { await deletePartner(confirm.Partner_ID); setConfirm(null); setTick(t => t + 1) }}>Delete</button>
           </>}
         >
-          <p className="text-sm text-slate-300">Delete <b className="text-white">{confirm.Partner_Name}</b> ({confirm.Partner_ID})?</p>
+          <p className="text-sm text-slate-300">Delete <b className="text-hd">{confirm.Partner_Name}</b> ({confirm.Partner_ID})?</p>
           <p className="mt-2 text-xs text-slate-500">This is recorded in the Log and can be restored from there.</p>
         </Modal>
       )}

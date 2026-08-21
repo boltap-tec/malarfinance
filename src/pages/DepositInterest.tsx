@@ -65,7 +65,7 @@ export default function DepositInterest() {
                       <tr className="bg-slate-900/80"><td colSpan={editable ? 8 : 7} className="px-3 py-1.5">
                         <div className="flex flex-wrap items-center gap-3">
                           <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">{i.Month}</span>
-                          <span className="text-xs text-slate-400">Interest <b className="text-white">{inr(monthTotals[i.Month ?? '—']?.interest ?? 0)}</b> · Pending <b className="text-amber-300">{inr(monthTotals[i.Month ?? '—']?.pending ?? 0)}</b></span>
+                          <span className="text-xs text-slate-400">Interest <b className="text-hd">{inr(monthTotals[i.Month ?? '—']?.interest ?? 0)}</b> · Pending <b className="text-amber-300">{inr(monthTotals[i.Month ?? '—']?.pending ?? 0)}</b></span>
                         </div>
                       </td></tr>
                     )}
@@ -73,7 +73,7 @@ export default function DepositInterest() {
                       <Td className="text-slate-200">{i.Depositer_Name}</Td>
                       <Td className="text-slate-400">{i.Deposit_No}</Td>
                       <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>
-                      <Td right className="text-white">{inr(num(i.Interest_Amount))}</Td>
+                      <Td right className="text-hd">{inr(num(i.Interest_Amount))}</Td>
                       <Td right className="text-emerald-400">{inr(num(i.Amount_Received))}</Td>
                       <Td right className="text-amber-400">{inr(num(i.Interest_Pending))}</Td>
                       <Td><Badge tone={statusTone(i.Status)}>{i.Status ?? '—'}</Badge></Td>

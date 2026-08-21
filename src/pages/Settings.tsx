@@ -65,7 +65,7 @@ export default function Settings() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <h3 className="mb-3 flex items-center gap-2 font-semibold text-white"><Cog size={16} /> Interest posting</h3>
+          <h3 className="mb-3 flex items-center gap-2 font-semibold text-hd"><Cog size={16} /> Interest posting</h3>
           <label className="flex cursor-pointer items-start gap-3">
             <input type="checkbox" className="mt-0.5 accent-brand-500" checked={anyDate}
               onChange={e => { setAnyDate(e.target.checked); setSettings({ postingAnyDate: e.target.checked }) }} />
@@ -96,7 +96,7 @@ export default function Settings() {
         </Card>
 
         <Card>
-          <h3 className="mb-3 flex items-center gap-2 font-semibold text-white"><RotateCcw size={16} /> Revoke a posted period</h3>
+          <h3 className="mb-3 flex items-center gap-2 font-semibold text-hd"><RotateCcw size={16} /> Revoke a posted period</h3>
           <p className="mb-3 text-xs text-slate-500">Removes all interest rows for a finance + month. Fully reversible from the Log.</p>
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
@@ -125,7 +125,7 @@ export default function Settings() {
       </div>
 
       <Card className="mt-4">
-        <h3 className="mb-1 flex items-center gap-2 font-semibold text-white"><RotateCcw size={16} /> Renumber deposit & other-finance codes</h3>
+        <h3 className="mb-1 flex items-center gap-2 font-semibold text-hd"><RotateCcw size={16} /> Renumber deposit & other-finance codes</h3>
         <p className="mb-3 text-xs text-slate-500">
           Converts legacy codes (e.g. <code>Mal-D-1-Name</code>, <code>Mal-O-1-Name</code>) to the clean
           <code> DEP / FIN</code> scheme — one code per depositor / lender — and updates every reference.
@@ -139,7 +139,7 @@ export default function Settings() {
       </Card>
 
       <Card className="mt-4">
-        <h3 className="mb-1 flex items-center gap-2 font-semibold text-white"><ListChecks size={16} /> Mandatory fields</h3>
+        <h3 className="mb-1 flex items-center gap-2 font-semibold text-hd"><ListChecks size={16} /> Mandatory fields</h3>
         <p className="mb-3 text-xs text-slate-500">Tick the columns that must be filled before a loan, deposit or other-finance entry can be saved.</p>
         <div className="grid gap-4 sm:grid-cols-3">
           {(['loan', 'deposit', 'other'] as FormKind[]).map(kind => (

@@ -55,6 +55,7 @@ export const navGroups: NavGroup[] = [
   {
     title: 'Organisation',
     items: [
+      { to: '/finances', label: 'Finances', icon: Landmark, desc: 'Your finance companies' },
       { to: '/partners', label: 'Partners', icon: Users2, desc: 'Owners & partners' },
       { to: '/workers', label: 'Workers', icon: UserCog, desc: 'Staff & their menus' },
     ],

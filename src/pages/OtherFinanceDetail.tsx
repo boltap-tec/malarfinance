@@ -67,7 +67,7 @@ export default function OtherFinanceDetail() {
         <StatCard label="Loans" value={rows.length} tone="slate" />
       </div>
 
-      <h3 className="mb-2 mt-6 font-semibold text-white">Borrowings under {id}</h3>
+      <h3 className="mb-2 mt-6 font-semibold text-hd">Borrowings under {id}</h3>
       <Card className="!p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -78,7 +78,7 @@ export default function OtherFinanceDetail() {
               {rows.map((o, i) => (
                 <tr key={i} className="hover:bg-slate-800/40">
                   <Td className="text-slate-400">{fmtDate(o.Loan_Bought_Date)}</Td>
-                  <Td right className="text-white">{inr(num(o.Loan_Amount))}</Td>
+                  <Td right className="text-hd">{inr(num(o.Loan_Amount))}</Td>
                   <Td right className="text-emerald-400">{inr(num(o.Repaid_Amount))}</Td>
                   <Td right className="text-rose-300">{inr(num(o.Outstand_Amount))}</Td>
                   <Td><Badge tone={statusTone(o.Loan_Status)}>{o.Loan_Status ?? '—'}</Badge></Td>
@@ -89,7 +89,7 @@ export default function OtherFinanceDetail() {
         </div>
       </Card>
 
-      <h3 className="mb-2 mt-6 font-semibold text-white">Ledger</h3>
+      <h3 className="mb-2 mt-6 font-semibold text-hd">Ledger</h3>
       {ledger.length === 0 ? <EmptyState title="No ledger entries yet" /> : (
         <Card className="!p-0 overflow-hidden">
           <div className="overflow-x-auto">

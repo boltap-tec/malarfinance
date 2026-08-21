@@ -21,7 +21,7 @@ export default function Menu() {
                   <span className="grid h-11 w-11 place-items-center rounded-xl bg-brand-500/15 text-brand-300 ring-1 ring-inset ring-brand-500/30">
                     <Icon size={20} />
                   </span>
-                  <span className="text-sm font-semibold text-white">{label}</span>
+                  <span className="text-sm font-semibold text-hd">{label}</span>
                   {desc && <span className="text-xs text-slate-500">{desc}</span>}
                 </Link>
               ))}

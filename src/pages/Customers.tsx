@@ -76,7 +76,7 @@ export default function Customers() {
                       <p className="text-xs text-slate-500">{c.Finance_Name}</p>
                     </Td>
                     <Td className="text-slate-300">{c.Customer_STL_NO}</Td>
-                    <Td right className="font-semibold text-white">{inr(num(c.Outstand_Loan))}</Td>
+                    <Td right className="font-semibold text-hd">{inr(num(c.Outstand_Loan))}</Td>
                     <Td right className={num(c.Outstanding_Interest) > 0 ? 'font-semibold text-amber-400' : 'text-slate-400'}>{inr(num(c.Outstanding_Interest))}</Td>
                     <Td><RiskBadge stl={c.Customer_STL_NO} /></Td>
                     <Td><Badge tone={statusTone(c.Status)}>{c.Status ?? '—'}</Badge></Td>

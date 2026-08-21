@@ -42,8 +42,8 @@ export default function LiabilityRepayModal({
       </>}
     >
       <div className="rounded-xl bg-slate-800/40 p-3 text-sm">
-        <p className="font-semibold text-white">{name} <span className="text-xs font-normal text-slate-500">· {code}</span></p>
-        <div className="mt-1 flex justify-between"><span className="text-slate-400">Outstanding</span><span className="font-semibold text-white">{inr(outstanding)}</span></div>
+        <p className="font-semibold text-hd">{name} <span className="text-xs font-normal text-slate-500">· {code}</span></p>
+        <div className="mt-1 flex justify-between"><span className="text-slate-400">Outstanding</span><span className="font-semibold text-hd">{inr(outstanding)}</span></div>
         <div className="mt-1 flex justify-between"><span className="text-slate-400">Pending interest</span><span className="font-semibold text-amber-300">{inr(pendingInterest)}</span></div>
       </div>
 

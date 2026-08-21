@@ -66,7 +66,7 @@ export default function DepositDetail() {
         <StatCard label="Deposits" value={rows.length} tone="slate" />
       </div>
 
-      <h3 className="mb-2 mt-6 font-semibold text-white">Deposits under {id}</h3>
+      <h3 className="mb-2 mt-6 font-semibold text-hd">Deposits under {id}</h3>
       <Card className="!p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -77,7 +77,7 @@ export default function DepositDetail() {
               {rows.map((d, i) => (
                 <tr key={i} className="hover:bg-slate-800/40">
                   <Td className="text-slate-400">{fmtDate(d.Deposit_Bought_Date)}</Td>
-                  <Td right className="text-white">{inr(num(d.Deposit_Amount))}</Td>
+                  <Td right className="text-hd">{inr(num(d.Deposit_Amount))}</Td>
                   <Td right className="text-emerald-400">{inr(num(d.Repaid_Amount))}</Td>
                   <Td right className="text-rose-300">{inr(num(d.Outstand_Amount))}</Td>
                   <Td><Badge tone={statusTone(d.Deposit_Status)}>{d.Deposit_Status ?? '—'}</Badge></Td>
@@ -88,7 +88,7 @@ export default function DepositDetail() {
         </div>
       </Card>
 
-      <h3 className="mb-2 mt-6 font-semibold text-white">Ledger</h3>
+      <h3 className="mb-2 mt-6 font-semibold text-hd">Ledger</h3>
       {ledger.length === 0 ? <EmptyState title="No ledger entries yet" /> : (
         <Card className="!p-0 overflow-hidden">
           <div className="overflow-x-auto">

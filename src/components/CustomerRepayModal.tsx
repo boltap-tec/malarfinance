@@ -40,7 +40,7 @@ export default function CustomerRepayModal({
       </>}
     >
       <div className="rounded-xl bg-slate-800/40 p-3 text-sm">
-        <div className="flex justify-between"><span className="text-slate-400">Total outstanding loan</span><span className="font-semibold text-white">{inr(outstanding)}</span></div>
+        <div className="flex justify-between"><span className="text-slate-400">Total outstanding loan</span><span className="font-semibold text-hd">{inr(outstanding)}</span></div>
         <div className="mt-1 flex justify-between"><span className="text-slate-400">Total pending interest</span><span className="font-semibold text-amber-300">{inr(pendingInterest)}</span></div>
       </div>
 

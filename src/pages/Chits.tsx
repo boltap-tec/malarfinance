@@ -37,7 +37,7 @@ export default function Chits() {
                     </Td>
                     <Td className="text-slate-300"><span className="flex items-center gap-1.5"><Building2 size={14} className="text-slate-500" />{c.Chit_Invested_Company}</span></Td>
                     <Td className="text-slate-400">{fmtDate(c.Chit_Started_Date)}</Td>
-                    <Td right className="text-white">{inr(num(c.Total_Amount_Chit))}</Td>
+                    <Td right className="text-hd">{inr(num(c.Total_Amount_Chit))}</Td>
                     <Td right className="text-slate-300">{num(c.No_Months_Completed)}/{num(c.No_Months)}</Td>
                     <Td><Badge tone={statusTone(c.Chit_Status)}>{c.Chit_Status ?? '—'}</Badge></Td>
                   </tr>

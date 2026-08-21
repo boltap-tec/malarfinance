@@ -59,7 +59,7 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
       </>}
     >
       <div className="rounded-xl bg-slate-800/40 p-3 text-sm">
-        <div className="flex justify-between"><span className="text-slate-400">Outstanding principal</span><span className="font-semibold text-white">{inr(outstanding)}</span></div>
+        <div className="flex justify-between"><span className="text-slate-400">Outstanding principal</span><span className="font-semibold text-hd">{inr(outstanding)}</span></div>
         <div className="mt-1 flex justify-between"><span className="text-slate-400">Pending interest</span><span className="font-semibold text-amber-300">{inr(pendingInterest)}</span></div>
         <div className="mt-1 flex justify-between">
           <span className="text-slate-400">Interest up to {fmtDate(calcTo)}{lastTo ? ` (since ${fmtDate(lastTo)})` : ''}</span>
@@ -80,7 +80,7 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
       <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-slate-800/40 px-3 py-2.5 text-sm">
         <input type="checkbox" className="accent-brand-500" checked={payInterest} onChange={e => setPayInterest(e.target.checked)} />
         <span className="text-slate-200">Customer pays the interest now</span>
-        <span className="ml-auto font-semibold text-white">{inr(totalInterest)}</span>
+        <span className="ml-auto font-semibold text-hd">{inr(totalInterest)}</span>
       </label>
       {!payInterest && totalInterest > 0 && (
         <p className="text-xs text-amber-300/80">{inr(totalInterest)} interest will be left as <b>Pending</b> against this loan.</p>

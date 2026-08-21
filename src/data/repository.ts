@@ -707,6 +707,13 @@ export async function addPartner(p: Partner): Promise<void> {
   persist()
 }
 
+export async function addFinance(fin: Finance): Promise<void> {
+  db.Finance_Details = [...(db.Finance_Details ?? []), fin]
+  await sInsert('Finance_Details', fin)
+  writeLog({ Action: 'create', Entity: 'Finance_Details', Entity_Label: `${fin.Finance_Name} (MD ${fin.MD_Name ?? '—'})`, After: fin })
+  persist()
+}
+
 export async function addWorker(w: Worker): Promise<void> {
   db.Worker = [w, ...(db.Worker ?? [])]
   await sInsert('Worker', w)

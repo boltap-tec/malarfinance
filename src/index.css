@@ -2,13 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* ── Theme palettes ───────────────────────────────────────────────────────────
+   Colours are space-separated RGB triplets consumed by tailwind.config.js as
+   rgb(var(--x) / <alpha-value>). :root is the default (dark). Each [data-theme]
+   overrides the surfaces + accent; the text ramp (slate-50..600) stays dark ink
+   on the light themes so it reads on the light surfaces. */
+:root, :root[data-theme="dark"] {
   color-scheme: dark;
+  --slate-50: 248 250 252;  --slate-100: 241 245 249; --slate-200: 226 232 240;
+  --slate-300: 203 213 225; --slate-400: 148 163 184; --slate-500: 100 116 139;
+  --slate-600: 71 85 105;   --slate-700: 51 65 85;    --slate-800: 30 41 59;
+  --slate-900: 15 23 42;    --slate-950: 2 6 23;
+  --brand-50: 238 244 255;  --brand-100: 217 230 255; --brand-200: 188 211 255;
+  --brand-300: 142 181 255; --brand-400: 89 140 255;  --brand-500: 53 99 245;
+  --brand-600: 31 69 224;   --brand-700: 26 55 189;   --brand-800: 27 49 152;
+  --brand-900: 28 47 120;   --brand-950: 21 29 71;
+  --hd: 255 255 255;
 }
 
-html, body, #root {
-  height: 100%;
+/* Shared light text ramp — dark ink for readable text on light surfaces. */
+:root[data-theme^="light"] {
+  color-scheme: light;
+  --slate-50: 15 23 42;   --slate-100: 22 30 48;  --slate-200: 30 41 59;
+  --slate-300: 51 65 85;  --slate-400: 71 85 105; --slate-500: 100 116 139;
+  --slate-600: 120 134 156;
+  --hd: 15 23 42;
 }
+
+:root[data-theme="light-blue"] {
+  --slate-700: 191 205 226; --slate-800: 214 224 238; --slate-900: 255 255 255; --slate-950: 238 243 250;
+  --brand-50: 239 246 255;  --brand-100: 219 234 254; --brand-200: 191 219 254; --brand-300: 147 197 253;
+  --brand-400: 96 165 250;  --brand-500: 59 130 246;  --brand-600: 37 99 235;   --brand-700: 29 78 216;
+  --brand-800: 30 64 175;   --brand-900: 30 58 138;   --brand-950: 23 37 84;
+}
+
+:root[data-theme="light-green"] {
+  --slate-700: 190 214 199; --slate-800: 214 233 221; --slate-900: 255 255 255; --slate-950: 237 247 240;
+  --brand-50: 236 253 245;  --brand-100: 209 250 229; --brand-200: 167 243 208; --brand-300: 110 231 183;
+  --brand-400: 52 211 153;  --brand-500: 16 185 129;  --brand-600: 5 150 105;   --brand-700: 4 120 87;
+  --brand-800: 6 95 70;     --brand-900: 6 78 59;     --brand-950: 2 44 34;
+}
+
+:root[data-theme="light-rose"] {
+  --slate-700: 226 197 205; --slate-800: 240 220 226; --slate-900: 255 255 255; --slate-950: 250 240 243;
+  --brand-50: 255 241 242;  --brand-100: 255 228 230; --brand-200: 254 205 211; --brand-300: 253 164 175;
+  --brand-400: 251 113 133; --brand-500: 244 63 94;   --brand-600: 225 29 72;   --brand-700: 190 18 60;
+  --brand-800: 159 18 57;   --brand-900: 136 19 55;   --brand-950: 76 5 25;
+}
+
+html, body, #root { height: 100%; }
 
 body {
   @apply bg-slate-950 text-slate-100 antialiased;
@@ -18,10 +60,10 @@ body {
 /* thin scrollbars */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #334155 transparent;
+  scrollbar-color: rgb(var(--slate-700)) transparent;
 }
 *::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-thumb { background: #334155; border-radius: 8px; }
+*::-webkit-scrollbar-thumb { background: rgb(var(--slate-700)); border-radius: 8px; }
 
 @layer components {
   .card {
@@ -31,10 +73,11 @@ body {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition
            focus:outline-none focus:ring-2 focus:ring-brand-500/60 disabled:opacity-50;
   }
+  /* text-white here is intentional: white ink always reads on the saturated brand fill */
   .btn-primary { @apply btn bg-brand-600 hover:bg-brand-500 text-white; }
   .btn-ghost   { @apply btn bg-slate-800/60 hover:bg-slate-800 text-slate-200; }
   .input {
-    @apply w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm
+    @apply w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100
            placeholder:text-slate-500 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40;
   }
   .label { @apply text-xs font-medium uppercase tracking-wide text-slate-400; }

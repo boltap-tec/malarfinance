@@ -19,8 +19,8 @@ export default function Login() {
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
-      {/* Brand panel */}
-      <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-brand-800 via-brand-900 to-slate-950 p-10 lg:flex">
+      {/* Brand panel — fixed dark gradient in every theme so the white text always reads */}
+      <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-[#1b3198] via-[#151d47] to-[#020617] p-10 lg:flex">
         <div className="flex items-center gap-3">
           <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10 text-2xl font-black text-white">₹</div>
           <span className="text-lg font-bold text-white">Arul Finance</span>
@@ -46,7 +46,7 @@ export default function Login() {
           <div className="mb-8 lg:hidden">
             <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-brand-400 to-brand-700 text-2xl font-black text-white">₹</div>
           </div>
-          <h2 className="text-2xl font-bold text-white">Sign in</h2>
+          <h2 className="text-2xl font-bold text-hd">Sign in</h2>
           <p className="mt-1 text-sm text-slate-400">Use your registered phone number.</p>
 
           <div className="mt-6">

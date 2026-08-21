@@ -1,12 +1,15 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell,
 } from 'recharts'
-import { HandCoins, Percent, Users, PiggyBank, TrendingUp, ArrowRight, UserPlus, Building2 } from 'lucide-react'
+import {
+  HandCoins, Percent, Users, PiggyBank, TrendingUp, ArrowRight, Building2,
+  Boxes, Landmark, ChevronDown, Plus, type LucideIcon,
+} from 'lucide-react'
 import { repo } from '../data/repository'
-import { useApp, financeFilter } from '../store/app'
+import { useApp, financeFilter, canEdit, canSeeRoute, type AppUser } from '../store/app'
 import { PageHeader, StatCard, Card, Badge } from '../components/ui'
 import { inr, inrShort, fmtDate, num } from '../lib/format'
 
@@ -16,6 +19,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function Dashboard() {
   const finance = useApp(s => s.finance)
+  const user = useApp(s => s.user)
   const f = financeFilter(finance)
 
   const data = useMemo(() => {
@@ -76,14 +80,8 @@ export default function Dashboard() {
         subtitle={finance === 'ALL' ? 'All finances combined' : finance}
       />
 
-      {/* Quick actions */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <QuickAction to="/loans?new=1" icon={<HandCoins size={18} />} label="New loan" />
-        <QuickAction to="/customers?new=1" icon={<UserPlus size={18} />} label="New customer" />
-        <QuickAction to="/deposits?new=1" icon={<PiggyBank size={18} />} label="New deposit" />
-        <QuickAction to="/other-finance?new=1" icon={<Building2 size={18} />} label="Borrow" />
-        <QuickAction to="/interest" icon={<Percent size={18} />} label="Post interest" />
-      </div>
+      {/* Grouped action hub — each box opens its sub-actions */}
+      <ActionHub user={user} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Outstanding loans" value={inrShort(data.outstandingLoan)} tone="blue"
@@ -99,7 +97,7 @@ export default function Dashboard() {
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-semibold text-white">Interest — billed vs collected</h3>
+            <h3 className="font-semibold text-hd">Interest — billed vs collected</h3>
             <Badge tone="blue"><TrendingUp size={12} className="mr-1" /> last 8 months</Badge>
           </div>
           <div className="h-64">
@@ -127,7 +125,7 @@ export default function Dashboard() {
         </Card>
 
         <Card>
-          <h3 className="mb-3 font-semibold text-white">Loan status</h3>
+          <h3 className="mb-3 font-semibold text-hd">Loan status</h3>
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -144,7 +142,7 @@ export default function Dashboard() {
                 <span className="flex items-center gap-2 text-slate-300">
                   <span className="h-2.5 w-2.5 rounded-full" style={{ background: STATUS_COLORS[s.name] ?? '#64748b' }} />{s.name}
                 </span>
-                <span className="font-semibold text-white">{s.value}</span>
+                <span className="font-semibold text-hd">{s.value}</span>
               </div>
             ))}
           </div>
@@ -153,7 +151,7 @@ export default function Dashboard() {
 
       <Card className="mt-4">
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="font-semibold text-white">Recent transactions</h3>
+          <h3 className="font-semibold text-hd">Recent transactions</h3>
           <Link to="/ledger" className="flex items-center gap-1 text-sm text-brand-400 hover:text-brand-300">View ledger <ArrowRight size={14} /></Link>
         </div>
         <div className="overflow-x-auto">
@@ -183,15 +181,107 @@ export default function Dashboard() {
   )
 }
 
-function QuickAction({ to, icon, label }: { to: string; icon: ReactNode; label: string }) {
+// ── Grouped action hub ───────────────────────────────────────────────────────
+interface SubAction { label: string; to: string; create?: boolean }
+interface Group { title: string; icon: LucideIcon; tone: string; items: SubAction[] }
+
+const GROUPS: Group[] = [
+  {
+    title: 'Loan Lending', icon: HandCoins, tone: 'text-brand-300 bg-brand-500/15 ring-brand-500/30',
+    items: [
+      { label: 'New loan', to: '/loans?new=1', create: true },
+      { label: 'New customer', to: '/customers?new=1', create: true },
+      { label: 'Collect interest', to: '/customer-interest' },
+      { label: 'Post interest', to: '/interest' },
+      { label: 'All loans', to: '/loans' },
+    ],
+  },
+  {
+    title: 'Deposits', icon: PiggyBank, tone: 'text-emerald-300 bg-emerald-500/15 ring-emerald-500/30',
+    items: [
+      { label: 'New deposit', to: '/deposits?new=1', create: true },
+      { label: 'New depositor', to: '/depositors?new=1', create: true },
+      { label: 'Deposit interest', to: '/deposit-interest' },
+      { label: 'All deposits', to: '/deposits' },
+    ],
+  },
+  {
+    title: 'Other Finance', icon: Landmark, tone: 'text-amber-300 bg-amber-500/15 ring-amber-500/30',
+    items: [
+      { label: 'Borrow money', to: '/other-finance?new=1', create: true },
+      { label: 'Add lender', to: '/other-finances?new=1', create: true },
+      { label: 'Their interest', to: '/other-finance-interest' },
+    ],
+  },
+  {
+    title: 'Organisation', icon: Users, tone: 'text-brand-300 bg-brand-500/15 ring-brand-500/30',
+    items: [
+      { label: 'Add finance', to: '/finances?new=1', create: true },
+      { label: 'Partners', to: '/partners' },
+      { label: 'Workers', to: '/workers' },
+      { label: 'Messages', to: '/messages' },
+    ],
+  },
+  {
+    title: 'More', icon: Boxes, tone: 'text-slate-300 bg-slate-500/15 ring-slate-500/30',
+    items: [
+      { label: 'Chits', to: '/chits' },
+      { label: 'Ledger', to: '/ledger' },
+      { label: 'Activity log', to: '/logs' },
+      { label: 'Settings', to: '/settings' },
+    ],
+  },
+]
+
+function ActionHub({ user }: { user: AppUser | null }) {
+  const editor = canEdit(user?.role)
+  const groups = GROUPS
+    .map(g => ({
+      ...g,
+      items: g.items.filter(it => {
+        const base = it.to.split('?')[0]
+        if (it.create && !editor) return false
+        return canSeeRoute(user, base)
+      }),
+    }))
+    .filter(g => g.items.length > 0)
+
+  if (groups.length === 0) return null
   return (
-    <Link
-      to={to}
-      className="card flex items-center gap-3 p-3 transition hover:border-brand-600/50 hover:bg-slate-800/60"
-    >
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-500/15 text-brand-300 ring-1 ring-inset ring-brand-500/30">{icon}</span>
-      <span className="text-sm font-semibold text-white">{label}</span>
-    </Link>
+    <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {groups.map((g, i) => <ActionGroup key={g.title} group={g} defaultOpen={i === 0} />)}
+    </div>
+  )
+}
+
+function ActionGroup({ group, defaultOpen }: { group: Group; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(!!defaultOpen)
+  const Icon = group.icon
+  return (
+    <div className="card overflow-hidden">
+      <button onClick={() => setOpen(o => !o)} className="flex w-full items-center gap-3 p-4 text-left hover:bg-slate-800/40">
+        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ring-1 ring-inset ${group.tone}`}><Icon size={18} /></span>
+        <span className="flex-1">
+          <span className="block text-sm font-semibold text-hd">{group.title}</span>
+          <span className="block text-xs text-slate-500">{group.items.length} action{group.items.length > 1 ? 's' : ''}</span>
+        </span>
+        <ChevronDown size={18} className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="grid gap-1.5 border-t border-slate-800 p-2">
+          {group.items.map(it => (
+            <Link
+              key={it.to}
+              to={it.to}
+              className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/70 hover:text-hd"
+            >
+              {it.create ? <Plus size={15} className="text-brand-400" /> : <ArrowRight size={15} className="text-slate-500" />}
+              {it.label}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 

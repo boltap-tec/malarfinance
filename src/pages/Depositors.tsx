@@ -65,7 +65,7 @@ export default function Depositors() {
                     <Td className="text-slate-400">{d.code}</Td>
                     <Td className="text-slate-400">{phone(d.phone)}</Td>
                     <Td right className="text-slate-300">{d.count}</Td>
-                    <Td right className="text-white">{inr(d.deposited)}</Td>
+                    <Td right className="text-hd">{inr(d.deposited)}</Td>
                     <Td right className={num(d.out) > 0 ? 'font-semibold text-rose-300' : 'text-slate-400'}>{inr(d.out)}</Td>
                   </tr>
                 ))}

@@ -20,6 +20,7 @@ import OtherFinanceDetail from './pages/OtherFinanceDetail'
 import OtherFinances from './pages/OtherFinances'
 import OtherFinanceInterest from './pages/OtherFinanceInterest'
 import Partners from './pages/Partners'
+import Finances from './pages/Finances'
 import Workers from './pages/Workers'
 import Logs from './pages/Logs'
 import Settings from './pages/Settings'
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="/other-finance" element={<OtherFinance />} />
         <Route path="/other-finance/:code" element={<OtherFinanceDetail />} />
         <Route path="/other-finance-interest" element={<OtherFinanceInterest />} />
+        <Route path="/finances" element={<Finances />} />
         <Route path="/partners" element={<Partners />} />
         <Route path="/workers" element={<Workers />} />
         <Route path="/logs" element={<Logs />} />

@@ -64,7 +64,7 @@ export default function OtherFinances() {
                     <Td className="text-slate-400">{l.code}</Td>
                     <Td className="text-slate-400">{phone(l.phone)}</Td>
                     <Td right className="text-slate-300">{l.count}</Td>
-                    <Td right className="text-white">{inr(l.borrowed)}</Td>
+                    <Td right className="text-hd">{inr(l.borrowed)}</Td>
                     <Td right className={num(l.out) > 0 ? 'font-semibold text-rose-300' : 'text-slate-400'}>{inr(l.out)}</Td>
                   </tr>
                 ))}

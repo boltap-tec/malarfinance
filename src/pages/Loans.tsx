@@ -79,7 +79,7 @@ export default function Loans() {
                       <p className="text-xs text-slate-500">{l.Customer_STL_NO}</p>
                     </Td>
                     <Td className="text-slate-400">{fmtDate(l.Loan_Given_Date)}</Td>
-                    <Td right className="text-white">{inr(num(l.Loan_Amount))}</Td>
+                    <Td right className="text-hd">{inr(num(l.Loan_Amount))}</Td>
                     <Td className="text-slate-300 whitespace-nowrap">
                       {l.Interest_Type === 'Per_Month' ? `₹${num(l.Interest_Per_Month_Per_Lakh)}/L·mo` : `₹${num(l.Interest_Per_day_Per_Lakh)}/L·day`}
                     </Td>
@@ -110,7 +110,7 @@ export default function Loans() {
       {del && (
         <ConfirmModal
           title="Delete loan"
-          message={<>Delete loan <b className="text-white">{del.Loan_No}</b> ({del.Customer_Name})?</>}
+          message={<>Delete loan <b className="text-hd">{del.Loan_No}</b> ({del.Customer_Name})?</>}
           onConfirm={async () => { await deleteLoan(del.Loan_No); setDel(null); setTick(t => t + 1) }}
           onClose={() => setDel(null)}
         />
@@ -253,7 +253,7 @@ function LoanForm({ finance, initialStl, onClose, onSaved }: { finance: string; 
           <div className="rounded-xl bg-slate-800/40 p-3">
             <div className="flex items-start justify-between">
               <div>
-                <p className="font-semibold text-white">{cust.Customer_Name}</p>
+                <p className="font-semibold text-hd">{cust.Customer_Name}</p>
                 <p className="text-xs text-slate-500">{cust.Customer_STL_NO} · {phone(cust.Customer_Phone_No)}</p>
               </div>
               <button onClick={() => setStl('')} className="btn-ghost !py-1 text-xs">Change</button>
@@ -261,7 +261,7 @@ function LoanForm({ finance, initialStl, onClose, onSaved }: { finance: string; 
             <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
               <div>
                 <p className="label">Outstanding loan</p>
-                <p className="mt-0.5 font-semibold text-white">{inr(num(cust.Outstand_Loan))}</p>
+                <p className="mt-0.5 font-semibold text-hd">{inr(num(cust.Outstand_Loan))}</p>
               </div>
               <div>
                 <p className="label">Outstanding interest</p>

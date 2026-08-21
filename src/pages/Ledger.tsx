@@ -101,7 +101,7 @@ export default function Ledger() {
       {del && (
         <ConfirmModal
           title="Delete ledger entry"
-          message={<>Delete <b className="text-white">{del.Description ?? del.Nature_Transaction}</b> (Ref {del.Ref_ID})? The finance balance will recompute.</>}
+          message={<>Delete <b className="text-hd">{del.Description ?? del.Nature_Transaction}</b> (Ref {del.Ref_ID})? The finance balance will recompute.</>}
           onConfirm={async () => { await deleteLedgerEntry(String(del.Ref_ID)); setDel(null); setTick(t => t + 1) }}
           onClose={() => setDel(null)}
         />
@@ -144,7 +144,7 @@ function BalanceCorrection({ defaultFinance, onClose, onSaved }: { defaultFinanc
         <Field label="As of date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
       </div>
       <div className="rounded-xl bg-slate-800/40 p-3 text-sm">
-        <div className="flex justify-between"><span className="text-slate-400">Current balance</span><span className="font-semibold text-white">{inr(current)}</span></div>
+        <div className="flex justify-between"><span className="text-slate-400">Current balance</span><span className="font-semibold text-hd">{inr(current)}</span></div>
       </div>
       <Field label="Correct balance should be (₹)"><input className="input" inputMode="numeric" value={target} onChange={e => setTarget(e.target.value)} /></Field>
       {target.trim() !== '' && (

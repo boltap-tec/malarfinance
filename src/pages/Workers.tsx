@@ -115,7 +115,7 @@ function WorkerForm({ mdName, onClose, onSaved }: { mdName: string; onClose: () 
         <p className="label mb-1">Allowed menus</p>
         <div className="grid grid-cols-2 gap-2">
           {grantable.map(g => (
-            <label key={g.to} className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm ring-1 ring-inset ${menus.includes(g.to) ? 'bg-brand-600/20 ring-brand-500/40 text-white' : 'ring-slate-800 text-slate-300 hover:bg-slate-800/50'}`}>
+            <label key={g.to} className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm ring-1 ring-inset ${menus.includes(g.to) ? 'bg-brand-600/20 ring-brand-500/40 text-hd' : 'ring-slate-800 text-slate-300 hover:bg-slate-800/50'}`}>
               <input type="checkbox" className="accent-brand-500" checked={menus.includes(g.to)} onChange={() => toggle(g.to)} />
               {g.label}
             </label>

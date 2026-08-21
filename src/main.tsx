@@ -4,7 +4,10 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { hydrate } from './data/repository'
 import { isSupabaseConfigured } from './data/supabase'
+import { initTheme } from './lib/theme'
 import './index.css'
+
+initTheme() // apply the saved theme before first paint
 
 const root = ReactDOM.createRoot(document.getElementById('root')!)
 

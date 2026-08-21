@@ -82,7 +82,7 @@ export default function CustomerDetail() {
         <StatCard label="Interest due" value={inr(totals.interestDue)} tone="red" />
       </div>
 
-      <h3 className="mb-2 mt-6 flex items-center gap-2 font-semibold text-white"><HandCoins size={16} /> Loans</h3>
+      <h3 className="mb-2 mt-6 flex items-center gap-2 font-semibold text-hd"><HandCoins size={16} /> Loans</h3>
       {loans.length === 0 ? <EmptyState title="No loans for this customer" /> : (
         <Card className="!p-0 overflow-hidden">
           <div className="overflow-x-auto">
@@ -95,7 +95,7 @@ export default function CustomerDetail() {
                   <tr key={l.Loan_No} className="hover:bg-slate-800/40">
                     <Td><Link to={`/loans/${encodeURIComponent(l.Loan_No)}`} className="font-medium text-brand-300">{l.Loan_No}</Link></Td>
                     <Td className="text-slate-400">{fmtDate(l.Loan_Given_Date)}</Td>
-                    <Td right className="text-white">{inr(num(l.Loan_Amount))}</Td>
+                    <Td right className="text-hd">{inr(num(l.Loan_Amount))}</Td>
                     <Td className="text-slate-300">{rateLabel(l)}</Td>
                     <Td right className="text-amber-300">{inr(num(l.Outstand_Amount))}</Td>
                     <Td><Badge tone={statusTone(l.Loan_Status)}>{l.Loan_Status ?? '—'}</Badge></Td>
@@ -107,7 +107,7 @@ export default function CustomerDetail() {
         </Card>
       )}
 
-      <h3 className="mb-2 mt-6 font-semibold text-white">Interest history</h3>
+      <h3 className="mb-2 mt-6 font-semibold text-hd">Interest history</h3>
       {interest.length === 0 ? <EmptyState title="No interest postings yet" /> : (
         <Card className="!p-0 overflow-hidden">
           <div className="overflow-x-auto">
@@ -120,7 +120,7 @@ export default function CustomerDetail() {
                   <tr key={k} className="hover:bg-slate-800/40">
                     <Td className="text-slate-300">{i.Month}</Td>
                     <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>
-                    <Td right className="text-white">{inr(num(i.Interest_Amount))}</Td>
+                    <Td right className="text-hd">{inr(num(i.Interest_Amount))}</Td>
                     <Td right className="text-emerald-400">{inr(num(i.Amount_Received))}</Td>
                     <Td right className="text-amber-400">{inr(num(i.Interest_Pending))}</Td>
                     <Td><Badge tone={statusTone(i.Status)}>{i.Status ?? '—'}</Badge></Td>

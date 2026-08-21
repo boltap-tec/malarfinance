@@ -1,15 +1,22 @@
 /** @type {import('tailwindcss').Config} */
+
+// Every themeable colour resolves to a CSS variable (space-separated RGB), so
+// switching the `data-theme` on <html> re-skins the whole app with no per-file
+// changes. See src/index.css for the palettes and src/lib/theme.ts for switching.
+const v = (name) => `rgb(var(--${name}) / <alpha-value>)`
+const ramp = (prefix) => Object.fromEntries(
+  [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950].map((n) => [n, v(`${prefix}-${n}`)]),
+)
+
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        brand: {
-          50: '#eef4ff', 100: '#d9e6ff', 200: '#bcd3ff', 300: '#8eb5ff',
-          400: '#598cff', 500: '#3563f5', 600: '#1f45e0', 700: '#1a37bd',
-          800: '#1b3198', 900: '#1c2f78', 950: '#151d47',
-        },
+        brand: ramp('brand'),
+        slate: ramp('slate'),
+        hd: v('hd'), // primary heading/foreground text (white on dark, ink on light)
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

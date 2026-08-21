@@ -21,7 +21,7 @@
 }
 
 /* Shared light text ramp — dark ink for readable text on light surfaces. */
-:root[data-theme^="light"] {
+:root[data-theme^="light"], :root[data-theme="white"] {
   color-scheme: light;
   --slate-50: 15 23 42;   --slate-100: 22 30 48;  --slate-200: 30 41 59;
   --slate-300: 51 65 85;  --slate-400: 71 85 105; --slate-500: 100 116 139;
@@ -36,19 +36,29 @@
   --brand-800: 30 64 175;   --brand-900: 30 58 138;   --brand-950: 23 37 84;
 }
 
+/* Light Green — thick green headings + green accent. */
 :root[data-theme="light-green"] {
   --slate-700: 190 214 199; --slate-800: 214 233 221; --slate-900: 255 255 255; --slate-950: 237 247 240;
+  --slate-200: 6 78 59;     --slate-300: 6 95 70; /* body text leans green */
   --brand-50: 236 253 245;  --brand-100: 209 250 229; --brand-200: 167 243 208; --brand-300: 110 231 183;
   --brand-400: 52 211 153;  --brand-500: 16 185 129;  --brand-600: 5 150 105;   --brand-700: 4 120 87;
   --brand-800: 6 95 70;     --brand-900: 6 78 59;     --brand-950: 2 44 34;
+  --hd: 4 108 78; /* thick green */
 }
 
-:root[data-theme="light-rose"] {
-  --slate-700: 226 197 205; --slate-800: 240 220 226; --slate-900: 255 255 255; --slate-950: 250 240 243;
-  --brand-50: 255 241 242;  --brand-100: 255 228 230; --brand-200: 254 205 211; --brand-300: 253 164 175;
-  --brand-400: 251 113 133; --brand-500: 244 63 94;   --brand-600: 225 29 72;   --brand-700: 190 18 60;
-  --brand-800: 159 18 57;   --brand-900: 136 19 55;   --brand-950: 76 5 25;
+/* White & Blue — pure white surfaces, thick blue headings + blue accent. */
+:root[data-theme="white"] {
+  --slate-700: 203 213 225; --slate-800: 226 232 240; --slate-900: 255 255 255; --slate-950: 255 255 255;
+  --slate-200: 30 58 138;   --slate-300: 30 64 175; /* body text leans blue */
+  --brand-50: 239 246 255;  --brand-100: 219 234 254; --brand-200: 191 219 254; --brand-300: 147 197 253;
+  --brand-400: 96 165 250;  --brand-500: 59 130 246;  --brand-600: 37 99 235;   --brand-700: 29 78 216;
+  --brand-800: 30 64 175;   --brand-900: 30 58 138;   --brand-950: 23 37 84;
+  --hd: 29 78 216; /* thick blue */
 }
+
+/* Make headings genuinely "thick" on the coloured light themes. */
+:root[data-theme="light-green"] .text-hd,
+:root[data-theme="white"] .text-hd { font-weight: 800; }
 
 html, body, #root { height: 100%; }
 

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
@@ -7,9 +7,7 @@ import { isSupabaseConfigured } from './data/supabase'
 import { initTheme } from './lib/theme'
 import './index.css'
 
-initTheme() // apply the saved theme before first paint
-
-const root = ReactDOM.createRoot(document.getElementById('root')!)
+initTheme() // apply the saved theme + font size before first paint
 
 function Splash() {
   return (
@@ -23,15 +21,20 @@ function Splash() {
   )
 }
 
-root.render(<Splash />)
-
-// Pull live data (if Supabase is configured) before showing the app.
-hydrate().finally(() => {
-  root.render(
-    <React.StrictMode>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </React.StrictMode>,
+// One consistent React tree: show the splash while data hydrates, then the app.
+function Root() {
+  const [ready, setReady] = useState(false)
+  useEffect(() => { let live = true; hydrate().finally(() => { if (live) setReady(true) }); return () => { live = false } }, [])
+  if (!ready) return <Splash />
+  return (
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
   )
-})
+}
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <Root />
+  </React.StrictMode>,
+)

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Phone, Lock } from 'lucide-react'
-import { useApp } from '../store/app'
+import { Phone, Lock, ShieldCheck, Users } from 'lucide-react'
+import { useApp, CHOOSE_ROLE, type Role } from '../store/app'
 
 export default function Login() {
   const login = useApp(s => s.login)
@@ -9,13 +9,15 @@ export default function Login() {
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [choose, setChoose] = useState(false) // phone is both MD and partner
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault()
-    const err = login(phone, password)
+  const attempt = (prefer?: Role) => {
+    const err = login(phone, password, prefer)
+    if (err === CHOOSE_ROLE) { setChoose(true); setError(null); return }
     if (err) { setError(err); return }
     navigate('/')
   }
+  const submit = (e: React.FormEvent) => { e.preventDefault(); attempt() }
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
@@ -49,7 +51,23 @@ export default function Login() {
           <h2 className="text-2xl font-bold text-hd">Sign in</h2>
           <p className="mt-1 text-sm text-slate-400">Use your registered phone number.</p>
 
-          <div className="mt-6">
+          {choose && (
+            <div className="mt-5 rounded-2xl border border-brand-500/40 bg-brand-500/10 p-4">
+              <p className="text-sm font-semibold text-hd">This number is both an MD and a partner.</p>
+              <p className="mt-0.5 text-xs text-slate-400">How do you want to sign in?</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => attempt('md')} className="flex flex-col items-center gap-1 rounded-xl border border-slate-700 bg-slate-900 py-3 text-sm font-semibold text-hd hover:border-brand-500">
+                  <ShieldCheck size={20} /> As MD
+                </button>
+                <button type="button" onClick={() => attempt('partner')} className="flex flex-col items-center gap-1 rounded-xl border border-slate-700 bg-slate-900 py-3 text-sm font-semibold text-hd hover:border-brand-500">
+                  <Users size={20} /> As Partner
+                </button>
+              </div>
+              <button type="button" onClick={() => setChoose(false)} className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-300">Back</button>
+            </div>
+          )}
+
+          <div className={`mt-6 ${choose ? 'pointer-events-none opacity-40' : ''}`}>
             <label className="label">Phone number</label>
             <div className="relative mt-1.5">
               <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />

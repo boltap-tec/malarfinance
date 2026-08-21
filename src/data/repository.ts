@@ -216,6 +216,10 @@ export const repo = {
   financeByMdPhone(phone: string): Finance | undefined {
     return (db.Finance_Details ?? []).find(f => f.Phone_Number != null && String(f.Phone_Number) === phone)
   },
+  // Every finance whose MD phone matches — an MD may run more than one finance.
+  financesByMdPhone(phone: string): Finance[] {
+    return (db.Finance_Details ?? []).filter(f => f.Phone_Number != null && String(f.Phone_Number) === phone)
+  },
   notifications(phone?: string): AppNotification[] {
     return (db.Notification ?? [])
       .filter(n => !phone || n.To_Phone === phone)
@@ -714,6 +718,14 @@ export async function addFinance(fin: Finance): Promise<void> {
   persist()
 }
 
+export async function updateFinance(name: string, patch: Partial<Finance>): Promise<void> {
+  const before = (db.Finance_Details ?? []).find(f => f.Finance_Name === name)
+  db.Finance_Details = (db.Finance_Details ?? []).map(f => f.Finance_Name === name ? { ...f, ...patch } : f)
+  await sUpdate('Finance_Details', name, patch)
+  writeLog({ Action: 'update', Entity: 'Finance_Details', Entity_Label: `Edit ${name}`, Before: before, After: { ...before, ...patch } })
+  persist()
+}
+
 export async function addWorker(w: Worker): Promise<void> {
   db.Worker = [w, ...(db.Worker ?? [])]
   await sInsert('Worker', w)
@@ -1087,6 +1099,10 @@ export interface RepayOptions {
   // true = customer pays all pending interest (incl. the accrual) now;
   // false = it is left as pending interest.
   payInterest: boolean
+  // Optional exact interest amount the customer is paying now. When given it
+  // overrides `payInterest`: pending interest is settled oldest-first up to this
+  // amount, and anything left over stays as pending interest.
+  interestPaid?: number
 }
 
 export async function repayLoan(opts: RepayOptions): Promise<void> {
@@ -1127,20 +1143,28 @@ export async function repayLoan(opts: RepayOptions): Promise<void> {
     })
   }
 
-  // 3) If paying interest now, settle every pending interest row for this loan.
-  if (payInterest) {
+  // 3) Settle pending interest, oldest first, up to the amount being paid.
+  //    interestPaid (if given) wins; otherwise payInterest means "pay all".
+  let target = opts.interestPaid !== undefined
+    ? Math.max(0, opts.interestPaid)
+    : (payInterest ? Infinity : 0)
+  if (target > 0) {
     let settled = 0
     const changed: InterestRow[] = []
-    db.Interest_Details = (db.Interest_Details ?? []).map(r => {
-      if (r.Loan_No !== loanNo) return r
+    const pendingRows = (db.Interest_Details ?? [])
+      .filter(r => r.Loan_No === loanNo && num(r.Interest_Pending) > 0)
+      .sort((a, b) => String(a.To_Date ?? '').localeCompare(String(b.To_Date ?? '')))
+    for (const r of pendingRows) {
+      if (target <= 0) break
       const pending = num(r.Interest_Pending)
-      if (pending <= 0) return r
-      settled += pending
-      const upd = { ...r, Amount_Received: num(r.Amount_Received) + pending, Interest_Pending: 0, Status: 'Paid' }
-      changed.push(upd)
-      return upd
-    })
-    for (const r of changed) await sUpdate('Interest_Details', r.ID, { Amount_Received: r.Amount_Received, Interest_Pending: 0, Status: 'Paid' })
+      const pay = Math.min(pending, target)
+      target -= pay; settled += pay
+      r.Amount_Received = num(r.Amount_Received) + pay
+      r.Interest_Pending = pending - pay
+      r.Status = r.Interest_Pending <= 0 ? 'Paid' : 'Pending'
+      changed.push(r)
+    }
+    for (const r of changed) await sUpdate('Interest_Details', r.ID, { Amount_Received: r.Amount_Received, Interest_Pending: r.Interest_Pending, Status: r.Status })
     if (settled > 0) {
       await recordLedger({
         Nature_Transaction: 'Customer_Interest',

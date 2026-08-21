@@ -10,27 +10,31 @@ import { repo, source, refresh, markNotificationsRead } from '../data/repository
 import { navGroups, bottomNav } from '../nav'
 import { Modal, Field } from './ui'
 import { playClick, playAction, isMuted, setMuted } from '../lib/sound'
-import { THEMES, getTheme, setTheme, type ThemeId } from '../lib/theme'
+import {
+  THEMES, getTheme, setTheme, FONT_SIZES, getFontSize, setFontSize,
+  type ThemeId, type FontSize,
+} from '../lib/theme'
 import CommandPalette from './CommandPalette'
 
-// Pick and persist the colour theme (saved until the user changes it).
+// Pick and persist the colour theme + font size (saved per device until changed).
 function ThemePicker() {
   const [open, setOpen] = useState(false)
   const [theme, setThemeState] = useState<ThemeId>(getTheme())
+  const [font, setFontState] = useState<FontSize>(getFontSize())
   return (
     <div className="relative">
-      <button title="Theme" onClick={() => setOpen(o => !o)} className="grid h-9 w-9 place-items-center rounded-xl text-slate-300 hover:bg-slate-800/60">
+      <button title="Appearance" onClick={() => setOpen(o => !o)} className="grid h-9 w-9 place-items-center rounded-xl text-slate-300 hover:bg-slate-800/60">
         <Palette size={18} />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-40 mt-2 w-52 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-1.5 shadow-xl">
+          <div className="absolute right-0 z-40 mt-2 w-56 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-1.5 shadow-xl">
             <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Theme</p>
             {THEMES.map(t => (
               <button
                 key={t.id}
-                onClick={() => { setTheme(t.id); setThemeState(t.id); setOpen(false) }}
+                onClick={() => { setTheme(t.id); setThemeState(t.id) }}
                 className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-sm hover:bg-slate-800/70 ${t.id === theme ? 'text-hd' : 'text-slate-300'}`}
               >
                 <span className="h-5 w-5 shrink-0 rounded-full border border-black/10" style={{ background: t.surface }}>
@@ -40,6 +44,18 @@ function ThemePicker() {
                 {t.id === theme && <Check size={15} className="ml-auto text-brand-400" />}
               </button>
             ))}
+            <p className="mt-1 border-t border-slate-800 px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Font size</p>
+            <div className="flex gap-1 p-1">
+              {FONT_SIZES.map(fs => (
+                <button
+                  key={fs.id}
+                  title={fs.label}
+                  onClick={() => { setFontSize(fs.id); setFontState(fs.id) }}
+                  className={`flex-1 rounded-lg py-1.5 font-semibold ${font === fs.id ? 'bg-brand-600 text-white' : 'bg-slate-800/60 text-slate-300'}`}
+                  style={{ fontSize: Math.max(11, fs.px - 4) }}
+                >A</button>
+              ))}
+            </div>
           </div>
         </>
       )}
@@ -85,8 +101,11 @@ function NavList({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed
 function FinanceSwitcher() {
   const { finance, setFinance, user } = useApp()
   const [open, setOpen] = useState(false)
-  const finances = repo.finances()
   if (user?.role !== 'md') return <span className="hidden text-sm text-slate-400 sm:inline">{finance}</span>
+  // Super MD may pick any finance or "All"; every other MD only their own.
+  const options = user.isSuper ? ['ALL', ...(user.finances ?? [])] : (user.finances ?? [])
+  // A single-finance MD has nothing to switch — just show the name.
+  if (options.length <= 1) return <span className="hidden text-sm text-slate-400 sm:inline">{finance}</span>
   return (
     <div className="relative">
       <button onClick={() => setOpen(o => !o)} className="btn-ghost !py-1.5 text-xs">
@@ -95,7 +114,7 @@ function FinanceSwitcher() {
       </button>
       {open && (
         <div className="absolute right-0 z-30 mt-1 w-52 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-xl">
-          {['ALL', ...finances.map(f => f.Finance_Name)].map(f => (
+          {options.map(f => (
             <button
               key={f}
               onClick={() => { setFinance(f); setOpen(false) }}

@@ -19,7 +19,8 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
   const outstanding = num(loan.Outstand_Amount)
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [principal, setPrincipal] = useState(interestOnly ? '0' : String(outstanding))
-  const [payInterest, setPayInterest] = useState(true)
+  const [interestStr, setInterestStr] = useState('')     // interest amount being paid now
+  const [touched, setTouched] = useState(false)           // user edited the interest amount
   const [includeToday, setIncludeToday] = useState(true)
   const [payType, setPayType] = useState('Cash')
 
@@ -39,12 +40,15 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
 
   const accrued = accrue?.amount ?? 0
   const totalInterest = pendingInterest + accrued
-  const valid = (p > 0 || (payInterest && totalInterest > 0)) && p <= outstanding
+  // Default the interest paid to the full total; the user can lower it.
+  const interestPaid = touched ? Math.max(0, num(interestStr)) : totalInterest
+  const remainingInterest = Math.max(0, totalInterest - interestPaid)
+  const valid = (p > 0 || interestPaid > 0) && p <= outstanding && interestPaid <= totalInterest
 
   async function save() {
     await repayLoan({
       loanNo: loan.Loan_No, principal: p, date, paymentType: payType,
-      accrue: accrue ?? undefined, payInterest,
+      accrue: accrue ?? undefined, payInterest: interestPaid > 0, interestPaid,
     })
     onSaved()
   }
@@ -74,17 +78,30 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
 
       <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
         <input type="checkbox" className="accent-brand-500" checked={includeToday} onChange={e => setIncludeToday(e.target.checked)} />
-        Include the repay date in interest (else calculated up to the previous day)
+        Include today in the interest (calculate up to {fmtDate(date)}, else the previous day)
       </label>
 
-      <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-slate-800/40 px-3 py-2.5 text-sm">
-        <input type="checkbox" className="accent-brand-500" checked={payInterest} onChange={e => setPayInterest(e.target.checked)} />
-        <span className="text-slate-200">Customer pays the interest now</span>
-        <span className="ml-auto font-semibold text-hd">{inr(totalInterest)}</span>
-      </label>
-      {!payInterest && totalInterest > 0 && (
-        <p className="text-xs text-amber-300/80">{inr(totalInterest)} interest will be left as <b>Pending</b> against this loan.</p>
-      )}
+      {/* Interest breakdown: previous pending + this closure's interest = total */}
+      <div className="rounded-xl border border-slate-800 bg-slate-800/30 p-3 text-sm">
+        <div className="flex justify-between"><span className="text-slate-400">Previous pending interest</span><span className="text-slate-200">{inr(pendingInterest)}</span></div>
+        <div className="mt-1 flex justify-between"><span className="text-slate-400">This closure's interest</span><span className="text-slate-200">{inr(accrued)}</span></div>
+        <div className="mt-1.5 flex justify-between border-t border-slate-700 pt-1.5 font-semibold"><span className="text-hd">Total interest due</span><span className="text-hd">{inr(totalInterest)}</span></div>
+        <div className="mt-3">
+          <span className="label">Interest paid now (₹)</span>
+          <input
+            className="input mt-1" inputMode="numeric"
+            value={touched ? interestStr : String(totalInterest)}
+            onChange={e => { setTouched(true); setInterestStr(e.target.value) }}
+          />
+        </div>
+        {interestPaid > totalInterest && <p className="mt-1 text-xs text-rose-300">Cannot pay more than the total interest due.</p>}
+        {remainingInterest > 0 && interestPaid <= totalInterest && (
+          <p className="mt-1.5 text-xs text-amber-300/90">{inr(remainingInterest)} will remain as <b>pending interest</b> on this loan.</p>
+        )}
+        {totalInterest > 0 && remainingInterest === 0 && interestPaid > 0 && (
+          <p className="mt-1.5 text-xs text-emerald-300/90">All interest cleared.</p>
+        )}
+      </div>
 
       <Field label="Payment type">
         <select className="input" value={payType} onChange={e => setPayType(e.target.value)}>

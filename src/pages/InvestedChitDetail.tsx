@@ -27,6 +27,7 @@ export default function InvestedChitDetail() {
   const paymentCount = trans.filter(t => t.Kind !== 'Receipt').length
   const monthsDone = num(chit.No_Months_Completed) || paymentCount
   const remainingMonths = Math.max(0, num(chit.No_Months) - monthsDone)
+  const completed = remainingMonths === 0 || (chit.Chit_Status ?? '').toLowerCase() === 'completed'
 
   return (
     <div>
@@ -39,7 +40,7 @@ export default function InvestedChitDetail() {
             {chit.Chit_Taken === 'Yes' && <Badge tone="green">Taken</Badge>}
             <Badge tone={statusTone(chit.Chit_Status)}>{chit.Chit_Status ?? '—'}</Badge>
             {editable && <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setTaking(true)}><HandCoins size={15} /> Record take</button>}
-            {editable && <button className="btn-primary !py-1.5" onClick={() => setRecording(true)}><Plus size={15} /> Record month</button>}
+            {editable && !completed && <button className="btn-primary !py-1.5" onClick={() => setRecording(true)}><Plus size={15} /> Record month</button>}
           </div>
         }
       />

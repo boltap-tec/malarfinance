@@ -29,7 +29,7 @@ function ThemePicker() {
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-40 mt-2 w-56 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-1.5 shadow-xl">
+          <div className="absolute left-0 sm:left-auto sm:right-0 z-40 mt-2 w-56 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-1.5 shadow-xl">
             <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Theme</p>
             {THEMES.map(t => (
               <button

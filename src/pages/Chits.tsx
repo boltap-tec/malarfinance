@@ -5,41 +5,28 @@ import { repo, addInvestedChit } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
 import { inr, fmtDate, num } from '../lib/format'
+import type { InvestedChit } from '../data/types'
 
-export default function Chits() {
-  const role = useApp(s => s.user?.role)
-  const editable = canEdit(role)
-  const [tick, setTick] = useState(0)
-  const [creating, setCreating] = useState(false)
+// A chit counts as completed when its status says so, or every month is paid.
+function isChitCompleted(c: InvestedChit): boolean {
+  if ((c.Chit_Status ?? '').toLowerCase() === 'completed') return true
+  const total = Number(c.No_Months) || 0
+  return total > 0 && (Number(c.No_Months_Completed) || 0) >= total
+}
 
-  const invested = useMemo(() => repo.investedChits(), [tick])
-  const inv = useMemo(() => {
-    let contributed = 0, active = 0
-    for (const c of invested) {
-      contributed += repo.investedChitSummary(c.Chit_ID).invested
-      if ((c.Chit_Status ?? '').toLowerCase() === 'active') active++
-    }
-    return { contributed, active }
-  }, [invested])
-
+// One titled group (Running / Completed) of invested chits.
+function InvestedSection({ title, tone, rows, empty, className }: {
+  title: string; tone: string; rows: InvestedChit[]; empty?: string; className?: string
+}) {
   return (
-    <div>
-      <PageHeader
-        title="My Invested Chits"
-        subtitle="Chits your finance has joined with other companies."
-        action={editable && (
-          <button className="btn-primary !py-1.5" onClick={() => setCreating(true)}><Plus size={15} /> New invested chit</button>
-        )}
-      />
-
-      <div className="mb-4 grid grid-cols-3 gap-3">
-        <StatCard label="Invested chits" value={invested.length} tone="blue" icon={<Boxes size={18} />} />
-        <StatCard label="Active" value={inv.active} tone="green" />
-        <StatCard label="Contributed so far" value={inr(inv.contributed)} tone="amber" />
+    <div className={className}>
+      <div className="mb-2 flex items-center gap-2">
+        <Boxes size={16} className={tone} />
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">{title}</h2>
+        <span className="rounded-full bg-slate-800/70 px-2 py-0.5 text-xs text-slate-400">{rows.length}</span>
       </div>
-
-      {invested.length === 0 ? (
-        <EmptyState title="No invested chits" hint={editable ? 'Use “New invested chit” to add one.' : undefined} />
+      {rows.length === 0 ? (
+        <EmptyState title={empty ?? 'Nothing here.'} />
       ) : (
         <Card className="!p-0 overflow-hidden">
           <div className="overflow-x-auto">
@@ -48,7 +35,7 @@ export default function Chits() {
                 <tr><Th>Chit</Th><Th>Company</Th><Th>Started</Th><Th right>Pot value</Th><Th right>Invested</Th><Th right>Months</Th><Th>Status</Th></tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {invested.map((c) => {
+                {rows.map((c) => {
                   const s = repo.investedChitSummary(c.Chit_ID)
                   return (
                     <tr key={c.Chit_ID} className="hover:bg-slate-800/40">
@@ -71,6 +58,51 @@ export default function Chits() {
             </table>
           </div>
         </Card>
+      )}
+    </div>
+  )
+}
+
+export default function Chits() {
+  const role = useApp(s => s.user?.role)
+  const editable = canEdit(role)
+  const [tick, setTick] = useState(0)
+  const [creating, setCreating] = useState(false)
+
+  const invested = useMemo(() => repo.investedChits(), [tick])
+  const { running, completed, contributed } = useMemo(() => {
+    let contributed = 0
+    const running: typeof invested = [], completed: typeof invested = []
+    for (const c of invested) {
+      contributed += repo.investedChitSummary(c.Chit_ID).invested
+      ;(isChitCompleted(c) ? completed : running).push(c)
+    }
+    return { running, completed, contributed }
+  }, [invested])
+
+  return (
+    <div>
+      <PageHeader
+        title="My Invested Chits"
+        subtitle="Chits your finance has joined with other companies."
+        action={editable && (
+          <button className="btn-primary !py-1.5" onClick={() => setCreating(true)}><Plus size={15} /> New invested chit</button>
+        )}
+      />
+
+      <div className="mb-4 grid grid-cols-3 gap-3">
+        <StatCard label="Invested chits" value={invested.length} tone="blue" icon={<Boxes size={18} />} />
+        <StatCard label="Running" value={running.length} tone="green" />
+        <StatCard label="Contributed so far" value={inr(contributed)} tone="amber" />
+      </div>
+
+      {invested.length === 0 ? (
+        <EmptyState title="No invested chits" hint={editable ? 'Use “New invested chit” to add one.' : undefined} />
+      ) : (
+        <>
+          <InvestedSection title="Running" tone="text-emerald-400" rows={running} empty="No running chits." />
+          {completed.length > 0 && <InvestedSection title="Completed" tone="text-slate-400" rows={completed} className="mt-8" />}
+        </>
       )}
 
       {creating && (

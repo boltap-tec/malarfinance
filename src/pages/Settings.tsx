@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Settings as Cog, RotateCcw, Check, ListChecks } from 'lucide-react'
+import { Settings as Cog, RotateCcw, Check, ListChecks, Tags, X, Plus } from 'lucide-react'
 import {
   repo, getSettings, setSettings, revokeInterestForMonth, renumberCodes,
   getMandatory, setMandatory, FORM_FIELDS, type FormKind, type MandatoryConfig,
+  getLedgerCategories, setLedgerCategories, type LedgerCategories,
 } from '../data/repository'
 import { useApp } from '../store/app'
 import { PageHeader, Card, EmptyState } from '../components/ui'
@@ -17,6 +18,12 @@ export default function Settings() {
   const [savedDates, setSavedDates] = useState(false)
   const [mand, setMand] = useState<MandatoryConfig>(getMandatory())
   const [renumberMsg, setRenumberMsg] = useState<string | null>(null)
+  const [cats, setCats] = useState<LedgerCategories>(getLedgerCategories())
+
+  function updateCats(kind: keyof LedgerCategories, next: string[]) {
+    const updated = { ...cats, [kind]: next }
+    setCats(updated); setLedgerCategories(updated)
+  }
 
   async function runRenumber() {
     const r = await renumberCodes()
@@ -139,6 +146,15 @@ export default function Settings() {
       </Card>
 
       <Card className="mt-4">
+        <h3 className="mb-1 flex items-center gap-2 font-semibold text-hd"><Tags size={16} /> Expense & other-income categories</h3>
+        <p className="mb-3 text-xs text-slate-500">Used by “Add expense” and “Add other income” on the Ledger, and grouped in the Profit summary.</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <CategoryEditor title="Expense categories" items={cats.expense} onChange={next => updateCats('expense', next)} />
+          <CategoryEditor title="Other-income categories" items={cats.income} onChange={next => updateCats('income', next)} />
+        </div>
+      </Card>
+
+      <Card className="mt-4">
         <h3 className="mb-1 flex items-center gap-2 font-semibold text-hd"><ListChecks size={16} /> Mandatory fields</h3>
         <p className="mb-3 text-xs text-slate-500">Tick the columns that must be filled before a loan, deposit or other-finance entry can be saved.</p>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -157,6 +173,33 @@ export default function Settings() {
           ))}
         </div>
       </Card>
+    </div>
+  )
+}
+
+function CategoryEditor({ title, items, onChange }: { title: string; items: string[]; onChange: (next: string[]) => void }) {
+  const [val, setVal] = useState('')
+  const add = () => {
+    const v = val.trim()
+    if (!v || items.some(i => i.toLowerCase() === v.toLowerCase())) { setVal(''); return }
+    onChange([...items, v]); setVal('')
+  }
+  return (
+    <div>
+      <p className="mb-2 text-sm font-semibold text-slate-300">{title}</p>
+      <div className="mb-2 flex flex-wrap gap-1.5">
+        {items.map(c => (
+          <span key={c} className="inline-flex items-center gap-1 rounded-full bg-slate-800/70 px-2.5 py-1 text-xs text-slate-200 ring-1 ring-inset ring-slate-700">
+            {c}
+            <button className="text-slate-500 hover:text-rose-300" onClick={() => onChange(items.filter(i => i !== c))}><X size={12} /></button>
+          </span>
+        ))}
+        {items.length === 0 && <span className="text-xs text-slate-500">No categories yet.</span>}
+      </div>
+      <div className="flex gap-2">
+        <input className="input" value={val} placeholder="Add category…" onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add() }} />
+        <button className="btn-ghost shrink-0" onClick={add}><Plus size={15} /></button>
+      </div>
     </div>
   )
 }

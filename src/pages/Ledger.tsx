@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Search, ArrowDownLeft, ArrowUpRight, Scale, Trash2 } from 'lucide-react'
-import { repo, addBalanceCorrection, balanceForFinance, deleteLedgerEntry } from '../data/repository'
+import { Link } from 'react-router-dom'
+import { Search, ArrowDownLeft, ArrowUpRight, Scale, Trash2, TrendingDown, TrendingUp, HandCoins, Percent, PiggyBank, Landmark } from 'lucide-react'
+import { repo, addBalanceCorrection, balanceForFinance, deleteLedgerEntry, addExpense, addOtherIncome, getLedgerCategories } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Th, Td, EmptyState, Badge, Modal, Field, ConfirmModal } from '../components/ui'
 import { inr, fmtDate, num } from '../lib/format'
@@ -13,6 +14,7 @@ export default function Ledger() {
   const isMd = role === 'md'
   const [q, setQ] = useState('')
   const [correct, setCorrect] = useState(false)
+  const [entry, setEntry] = useState<'expense' | 'income' | null>(null)
   const [del, setDel] = useState<LedgerRow | null>(null)
   const [tick, setTick] = useState(0)
 
@@ -59,8 +61,20 @@ export default function Ledger() {
       <PageHeader
         title="Transaction ledger"
         subtitle="Every receipt and payment across the business."
-        action={editable && <button className="btn-ghost" onClick={() => setCorrect(true)}><Scale size={15} /> Balance correction</button>}
       />
+
+      {/* Quick actions — record money here, or jump to a related screen. */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {editable && <button className="btn-primary !py-1.5" onClick={() => setEntry('expense')} disabled={!singleFinance}><TrendingDown size={15} /> Add expense</button>}
+        {editable && <button className="btn-primary !py-1.5 !bg-emerald-600 hover:!bg-emerald-500" onClick={() => setEntry('income')} disabled={!singleFinance}><TrendingUp size={15} /> Add other income</button>}
+        {editable && <button className="btn-ghost !py-1.5" onClick={() => setCorrect(true)}><Scale size={15} /> Balance correction</button>}
+        <span className="mx-1 hidden w-px self-stretch bg-slate-700 sm:block" />
+        <Link className="btn-ghost !py-1.5" to="/customer-interest"><HandCoins size={15} /> Loan interest</Link>
+        <Link className="btn-ghost !py-1.5" to="/deposit-interest"><PiggyBank size={15} /> Deposit interest</Link>
+        <Link className="btn-ghost !py-1.5" to="/other-finance-interest"><Landmark size={15} /> Other finance</Link>
+        <Link className="btn-ghost !py-1.5" to="/profit"><Percent size={15} /> Profit</Link>
+      </div>
+      {editable && !singleFinance && <p className="-mt-2 mb-3 text-xs text-amber-300/80">Pick a single finance to add an expense or income.</p>}
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Total receipts" value={inr(receipts)} tone="green" icon={<ArrowDownLeft size={18} />} />
@@ -106,6 +120,15 @@ export default function Ledger() {
       )}
       {!singleFinance && <p className="mt-3 text-xs text-slate-500">Pick a single finance in the switcher to see the running balance column.</p>}
 
+      {entry && singleFinance && (
+        <ManualEntryModal
+          kind={entry}
+          finance={finance}
+          onClose={() => setEntry(null)}
+          onSaved={() => { setEntry(null); setTick(t => t + 1) }}
+        />
+      )}
+
       {correct && (
         <BalanceCorrection
           defaultFinance={singleFinance ? finance : undefined}
@@ -123,6 +146,59 @@ export default function Ledger() {
         />
       )}
     </div>
+  )
+}
+
+// Record an expense (money out) or other income (money in), tagged with a
+// category from Settings. Both are ordinary ledger entries.
+function ManualEntryModal({ kind, finance, onClose, onSaved }: { kind: 'expense' | 'income'; finance: string; onClose: () => void; onSaved: () => void }) {
+  const cats = getLedgerCategories()
+  const list = kind === 'expense' ? cats.expense : cats.income
+  const [category, setCategory] = useState(list[0] ?? '')
+  const [amount, setAmount] = useState('')
+  const [note, setNote] = useState('')
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [payType, setPayType] = useState('Cash')
+  const [busy, setBusy] = useState(false)
+  const valid = category && num(amount) > 0
+
+  async function save() {
+    if (!valid || busy) return
+    setBusy(true)
+    const input = { finance, amount: num(amount), category, note: note.trim() || undefined, date, payType }
+    if (kind === 'expense') await addExpense(input); else await addOtherIncome(input)
+    onSaved()
+  }
+
+  const isExp = kind === 'expense'
+  return (
+    <Modal
+      title={isExp ? 'Add expense' : 'Add other income'}
+      onClose={onClose}
+      footer={<>
+        <button className="btn-ghost" onClick={onClose}>Cancel</button>
+        <button className={`btn-primary ${isExp ? '' : '!bg-emerald-600 hover:!bg-emerald-500'}`} disabled={!valid || busy} onClick={save}>{isExp ? 'Record expense' : 'Record income'}</button>
+      </>}
+    >
+      <p className="text-sm text-slate-400">{isExp ? 'Money going out' : 'Money coming in'} — {finance}. Manage categories in Settings.</p>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Category">
+          <select className="input" value={category} onChange={e => setCategory(e.target.value)}>
+            {list.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </Field>
+        <Field label="Amount (₹)"><input className="input" inputMode="numeric" autoFocus value={amount} onChange={e => setAmount(e.target.value)} /></Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
+        <Field label="Payment type">
+          <select className="input" value={payType} onChange={e => setPayType(e.target.value)}>
+            <option>Cash</option><option>Bank</option><option>UPI</option><option>Cheque</option>
+          </select>
+        </Field>
+      </div>
+      <Field label="Note (optional)"><input className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="Reference / remark" /></Field>
+    </Modal>
   )
 }
 

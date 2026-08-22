@@ -4,7 +4,7 @@
 import {
   LayoutDashboard, Users, HandCoins, Percent, BookOpenText, PiggyBank,
   Boxes, Gem, Building2, Users2, UserCog, History, Settings, MessageSquare,
-  Landmark, Wallet, ReceiptText, Banknote, Coins, Gavel, type LucideIcon,
+  Landmark, Wallet, ReceiptText, Banknote, Coins, Gavel, TrendingUp, type LucideIcon,
 } from 'lucide-react'
 import { SHOW_OWN_CHIT_FUND } from './store/app'
 
@@ -39,6 +39,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, desc: 'KPIs & recent activity' },
       { to: '/ledger', label: 'Ledger', icon: BookOpenText, desc: 'All receipts & payments' },
+      { to: '/profit', label: 'Profit', icon: TrendingUp, desc: 'Profit by month & year' },
     ],
   },
   {

@@ -957,6 +957,47 @@ export function getMandatory(): MandatoryConfig {
 }
 export function setMandatory(c: MandatoryConfig): void { localStorage.setItem(MAND_KEY, JSON.stringify(c)) }
 
+// ── Expense / Other-income categories (configurable in Settings) ─────────────
+export interface LedgerCategories { expense: string[]; income: string[] }
+const CAT_DEFAULT: LedgerCategories = {
+  expense: ['Salary', 'Rent', 'Office', 'Travel', 'Interest paid', 'Commission', 'Printing', 'Miscellaneous'],
+  income: ['Commission', 'Document charge', 'Penalty', 'Processing fee', 'Interest income', 'Miscellaneous'],
+}
+const CAT_KEY = 'arul-finance:ledger-cats:v1'
+export function getLedgerCategories(): LedgerCategories {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CAT_KEY) || '{}')
+    return { expense: saved.expense ?? CAT_DEFAULT.expense, income: saved.income ?? CAT_DEFAULT.income }
+  } catch { return { ...CAT_DEFAULT } }
+}
+export function setLedgerCategories(c: LedgerCategories): void { localStorage.setItem(CAT_KEY, JSON.stringify(c)) }
+
+// Nature strings for the two manual ledger entries; the profit summary keys off these.
+export const EXPENSE_NATURE = 'Expense'
+export const OTHER_INCOME_NATURE = 'Other_Income'
+
+export interface ManualEntryInput { finance: string; amount: number; category: string; note?: string; date: string; payType?: string }
+
+export async function addExpense(e: ManualEntryInput): Promise<void> {
+  const desc = e.note ? `${e.category} — ${e.note}` : e.category
+  await recordLedger({
+    Nature_Transaction: EXPENSE_NATURE, Description: desc, Customer_Name: e.category,
+    Payment_Amount: num(e.amount), Payment_Type: e.payType, Finance_Name: e.finance, Date_Transaction: e.date,
+  })
+  writeLog({ Action: 'create', Entity: 'Transaction_Ledger', Entity_Label: `Expense · ${e.category} · ${inrFmt(num(e.amount))}` })
+  persist()
+}
+
+export async function addOtherIncome(e: ManualEntryInput): Promise<void> {
+  const desc = e.note ? `${e.category} — ${e.note}` : e.category
+  await recordLedger({
+    Nature_Transaction: OTHER_INCOME_NATURE, Description: desc, Customer_Name: e.category,
+    Receipt_Amount: num(e.amount), Payment_Type: e.payType, Finance_Name: e.finance, Date_Transaction: e.date,
+  })
+  writeLog({ Action: 'create', Entity: 'Transaction_Ledger', Entity_Label: `Other income · ${e.category} · ${inrFmt(num(e.amount))}` })
+  persist()
+}
+
 // Given a form's values, return the list of required fields that are still empty.
 export function missingRequired(kind: FormKind, values: Record<string, unknown>): string[] {
   const req = getMandatory()[kind] ?? []

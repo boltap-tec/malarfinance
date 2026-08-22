@@ -19,11 +19,13 @@ export default function OtherFinanceDetail() {
   const [tick, setTick] = useState(0)
   const [modal, setModal] = useState<'repay' | null>(editable && doParam === 'repay' ? 'repay' : null)
 
-  const { rows, ledger, outstanding, borrowed, first } = useMemo(() => {
+  const { rows, ledger, interest, interestPending, outstanding, borrowed, first } = useMemo(() => {
     const rows = repo.otherFinanceByCode(id)
     const ledger = repo.ledgerByRef(id)
+    const interest = repo.otherFinanceInterestByCode(id)
     return {
-      rows, ledger,
+      rows, ledger, interest,
+      interestPending: interest.reduce((s: number, i: any) => s + num(i.Interest_Pending), 0),
       outstanding: rows.reduce((s, o) => s + num(o.Outstand_Amount), 0),
       borrowed: rows.reduce((s, o) => s + num(o.Loan_Amount), 0),
       first: rows[0],
@@ -63,8 +65,8 @@ export default function OtherFinanceDetail() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Total borrowed" value={inr(borrowed)} tone="blue" icon={<Building2 size={18} />} />
         <StatCard label="Outstanding payable" value={inr(outstanding)} tone="red" />
+        <StatCard label="Interest payable" value={inr(interestPending)} tone="amber" />
         <StatCard label="Rate" value={type === 'Per_Month' ? `₹${perMonth}/L·mo` : `₹${perDay}/L·day`} tone="slate" />
-        <StatCard label="Loans" value={rows.length} tone="slate" />
       </div>
 
       <h3 className="mb-2 mt-6 font-semibold text-hd">Borrowings under {id}</h3>
@@ -88,6 +90,31 @@ export default function OtherFinanceDetail() {
           </table>
         </div>
       </Card>
+
+      <h3 className="mb-2 mt-6 font-semibold text-hd">Interest history</h3>
+      {interest.length === 0 ? <EmptyState title="No interest postings yet" /> : (
+        <Card className="!p-0 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="border-b border-slate-800 bg-slate-900/60">
+                <tr><Th>Month</Th><Th>Period</Th><Th right>Interest</Th><Th right>Paid</Th><Th right>Pending</Th><Th>Status</Th></tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {interest.slice().sort((a: any, b: any) => String(b.Month ?? '').localeCompare(String(a.Month ?? ''))).map((i: any, k: number) => (
+                  <tr key={k} className="hover:bg-slate-800/40">
+                    <Td className="text-slate-300">{i.Month}</Td>
+                    <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>
+                    <Td right className="text-hd">{inr(num(i.Interest_Amount))}</Td>
+                    <Td right className="text-emerald-400">{inr(num(i.Amount_Received))}</Td>
+                    <Td right className="text-amber-400">{inr(num(i.Interest_Pending))}</Td>
+                    <Td><Badge tone={statusTone(i.Status)}>{i.Status ?? '—'}</Badge></Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       <h3 className="mb-2 mt-6 font-semibold text-hd">Ledger</h3>
       {ledger.length === 0 ? <EmptyState title="No ledger entries yet" /> : (

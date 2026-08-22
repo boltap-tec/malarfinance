@@ -34,7 +34,7 @@ function ThemePicker() {
             {THEMES.map(t => (
               <button
                 key={t.id}
-                onClick={() => { setTheme(t.id); setThemeState(t.id) }}
+                onClick={() => { setTheme(t.id); setThemeState(t.id); setOpen(false) }}
                 className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-sm hover:bg-slate-800/70 ${t.id === theme ? 'text-hd' : 'text-slate-300'}`}
               >
                 <span className="h-5 w-5 shrink-0 rounded-full border border-black/10" style={{ background: t.surface }}>
@@ -377,7 +377,14 @@ export default function Layout({ children }: { children: ReactNode }) {
           <div className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-slate-800 bg-slate-900 p-4">
             <div className="flex items-center justify-between">{brand}<button onClick={() => setMobileOpen(false)}><X className="text-slate-400" /></button></div>
             <div className="mt-6 flex-1 overflow-y-auto"><NavList onNavigate={() => setMobileOpen(false)} /></div>
-            <button onClick={() => { logout(); navigate('/login') }} className="btn-ghost justify-start"><LogOut size={18} /> Sign out</button>
+            {/* Secondary controls, kept off the top bar on phones. */}
+            <div className="mt-2 flex items-center gap-1 border-t border-slate-800 pt-3 sm:hidden">
+              <RefreshButton />
+              <SoundToggle />
+              <ChangePasswordButton />
+              <DataSourceBadge />
+            </div>
+            <button onClick={() => { logout(); navigate('/login') }} className="btn-ghost mt-2 justify-start"><LogOut size={18} /> Sign out</button>
           </div>
         </div>
       )}
@@ -395,13 +402,14 @@ export default function Layout({ children }: { children: ReactNode }) {
           </button>
           <div className="flex items-center gap-1.5 sm:gap-2">
             <button onClick={() => setPaletteOpen(true)} className="grid h-9 w-9 place-items-center text-slate-300 lg:hidden"><Search size={20} /></button>
-            <RefreshButton />
+            {/* Secondary controls: on phones these live in the drawer to keep the bar uncluttered. */}
+            <span className="hidden sm:contents"><RefreshButton /></span>
             <ThemePicker />
-            <SoundToggle />
+            <span className="hidden sm:contents"><SoundToggle /></span>
             <NavLink to="/messages" title="Messages" className={({ isActive }) => `grid h-9 w-9 place-items-center rounded-lg ${isActive ? 'text-brand-400' : 'text-slate-300 hover:bg-slate-800/60'}`}><MessageSquare size={20} /></NavLink>
             <NotificationBell />
-            <ChangePasswordButton />
-            <DataSourceBadge />
+            <span className="hidden sm:contents"><ChangePasswordButton /></span>
+            <span className="hidden sm:contents"><DataSourceBadge /></span>
             <FinanceSwitcher />
             <div className="flex items-center gap-2">
               <div className="grid h-8 w-8 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white">

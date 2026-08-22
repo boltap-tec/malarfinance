@@ -70,6 +70,13 @@ export function resetToSeed() {
   persist()
 }
 
+// A full snapshot of every table as pretty JSON — used by the in-app
+// "Download backup" button. (The daily Google Drive backup is a separate
+// Apps Script; see scripts/GoogleDriveBackup.gs.)
+export function datasetSnapshot(): string {
+  return JSON.stringify(db, null, 2)
+}
+
 // Pull every table from Supabase into memory once at startup. If a table is
 // missing or the request fails, that table keeps its seeded values — so the app
 // works both before and after migrate.sql has been run.
@@ -324,9 +331,11 @@ export const repo = {
   },
   investedChitSummary(chitId: string) {
     const trans = (db.Invested_Chit_Trans ?? []).filter(t => t.Chit_ID === chitId)
+    const payments = trans.filter(t => t.Kind !== 'Receipt')
     return {
-      invested: trans.reduce((s, t) => s + num(t.Chit_This_Month_Amount), 0),
-      months: trans.length,
+      invested: payments.reduce((s, t) => s + num(t.Chit_This_Month_Amount), 0),
+      received: trans.filter(t => t.Kind === 'Receipt').reduce((s, t) => s + num(t.Chit_This_Month_Amount), 0),
+      months: payments.length,
     }
   },
 
@@ -633,7 +642,7 @@ export async function payCustomerInterest(id: string, amount?: number, date?: st
   persist()
 }
 
-export async function payDepositInterest(id: string, amount?: number, date?: string, payType?: string): Promise<void> {
+export async function payDepositInterest(id: string, amount?: number, date?: string, payType?: string, note?: string): Promise<void> {
   const row: any = (db.Depositer_Interest ?? []).find((i: any) => i.ID === id)
   if (!row) return
   const pending = num(row.Interest_Pending); if (pending <= 0) return
@@ -644,14 +653,14 @@ export async function payDepositInterest(id: string, amount?: number, date?: str
   await sUpdate('Depositer_Interest', id, patch)
   await recordLedger({
     Nature_Transaction: 'Depositer_Interest', Loan_No: row.Deposit_No, Customer_Name: row.Depositer_Name,
-    Description: `Deposit interest — ${row.Deposit_No}`, Payment_Amount: pay, Interest_Amount: pay,
+    Description: `Deposit interest — ${row.Deposit_No}${note ? ` · ${note}` : ''}`, Payment_Amount: pay, Interest_Amount: pay,
     Payment_Type: payType, Finance_Name: row.Finance_Name, Date_Transaction: date,
   })
   writeLog({ Action: 'update', Entity: 'Depositer_Interest', Entity_Label: `Pay deposit interest ${row.Deposit_No} · ${row.Month}`, Before: row })
   persist()
 }
 
-export async function payOtherFinanceInterest(id: string, amount?: number, date?: string, payType?: string): Promise<void> {
+export async function payOtherFinanceInterest(id: string, amount?: number, date?: string, payType?: string, note?: string): Promise<void> {
   const row: any = (db.Other_Finance_Interest ?? []).find((i: any) => i.ID === id)
   if (!row) return
   const pending = num(row.Interest_Pending); if (pending <= 0) return
@@ -662,7 +671,7 @@ export async function payOtherFinanceInterest(id: string, amount?: number, date?
   await sUpdate('Other_Finance_Interest', id, patch)
   await recordLedger({
     Nature_Transaction: 'Other_Finance_Interest', Loan_No: row.Loan_No, Customer_Name: row.Loan_bought_Finance_Name,
-    Description: `Other-finance interest — ${row.Loan_No}`, Payment_Amount: pay, Interest_Amount: pay,
+    Description: `Other-finance interest — ${row.Loan_No}${note ? ` · ${note}` : ''}`, Payment_Amount: pay, Interest_Amount: pay,
     Payment_Type: payType, Finance_Name: row.Finance_Name, Date_Transaction: date,
   })
   writeLog({ Action: 'update', Entity: 'Other_Finance_Interest', Entity_Label: `Pay other-finance interest ${row.Loan_No} · ${row.Month}`, Before: row })
@@ -707,7 +716,7 @@ export async function addBalanceCorrection(finance: string, date: string, target
 
 // Firm repays a depositor (principal refund and/or interest) — both are payments
 // out. Reduces outstanding across that depositor's linked deposit rows.
-export interface LiabilityRepay { code: string; principal: number; interest: number; date: string; payType?: string }
+export interface LiabilityRepay { code: string; principal: number; interest: number; date: string; payType?: string; note?: string }
 
 export async function repayDeposit(o: LiabilityRepay): Promise<void> {
   const rows = (db.Deposit_Amount ?? []).filter(d => d.Deposit_No === o.code)
@@ -747,8 +756,8 @@ export async function repayDeposit(o: LiabilityRepay): Promise<void> {
   })
   const paidI = o.interest - leftI
 
-  if (paidP > 0) await recordLedger({ Nature_Transaction: 'Deposit_Prin_Refund', Loan_No: o.code, Customer_Name: name, Description: `Deposit refund — ${o.code}`, Payment_Amount: paidP, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
-  if (paidI > 0) await recordLedger({ Nature_Transaction: 'Depositer_Interest', Loan_No: o.code, Customer_Name: name, Description: `Deposit interest — ${o.code}`, Payment_Amount: paidI, Interest_Amount: paidI, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
+  if (paidP > 0) await recordLedger({ Nature_Transaction: 'Deposit_Prin_Refund', Loan_No: o.code, Customer_Name: name, Description: `Deposit refund — ${o.code}${o.note ? ` · ${o.note}` : ''}`, Payment_Amount: paidP, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
+  if (paidI > 0) await recordLedger({ Nature_Transaction: 'Depositer_Interest', Loan_No: o.code, Customer_Name: name, Description: `Deposit interest — ${o.code}${o.note ? ` · ${o.note}` : ''}`, Payment_Amount: paidI, Interest_Amount: paidI, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
   for (const r of changed) await sUpdate('Depositer_Interest', r.ID, { Amount_Received: r.Amount_Received, Interest_Pending: r.Interest_Pending, Status: r.Status })
   writeLog({ Action: 'update', Entity: 'Deposit_Amount', Entity_Label: `Repay deposit ${o.code} · prin ₹${paidP.toLocaleString('en-IN')} + int ₹${paidI.toLocaleString('en-IN')}`, Before: rows })
   persist()
@@ -793,8 +802,8 @@ export async function repayOtherFinance(o: LiabilityRepay): Promise<void> {
   })
   const paidI = o.interest - leftI
 
-  if (paidP > 0) await recordLedger({ Nature_Transaction: 'Other_Finance_Loan_Refund', Loan_No: o.code, Customer_Name: name, Description: `Other-finance refund — ${o.code}`, Payment_Amount: paidP, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
-  if (paidI > 0) await recordLedger({ Nature_Transaction: 'Other_Finance_Interest', Loan_No: o.code, Customer_Name: name, Description: `Other-finance interest — ${o.code}`, Payment_Amount: paidI, Interest_Amount: paidI, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
+  if (paidP > 0) await recordLedger({ Nature_Transaction: 'Other_Finance_Loan_Refund', Loan_No: o.code, Customer_Name: name, Description: `Other-finance refund — ${o.code}${o.note ? ` · ${o.note}` : ''}`, Payment_Amount: paidP, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
+  if (paidI > 0) await recordLedger({ Nature_Transaction: 'Other_Finance_Interest', Loan_No: o.code, Customer_Name: name, Description: `Other-finance interest — ${o.code}${o.note ? ` · ${o.note}` : ''}`, Payment_Amount: paidI, Interest_Amount: paidI, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
   for (const r of changed) await sUpdate('Other_Finance_Interest', r.ID, { Amount_Received: r.Amount_Received, Interest_Pending: r.Interest_Pending, Status: r.Status })
   writeLog({ Action: 'update', Entity: 'Other_Finance_Loan', Entity_Label: `Repay other-finance ${o.code} · prin ₹${paidP.toLocaleString('en-IN')} + int ₹${paidI.toLocaleString('en-IN')}`, Before: rows })
   persist()
@@ -890,8 +899,13 @@ export interface AppSettings {
   postingAnyDate: boolean
   dataLoadedDate: string       // date the data was imported into the app
   lastPostedDate: string       // interest already posted up to this date (migration)
+  chitMultipleTakersPerMonth: boolean  // allow more than one member to take a chit in the same month
+  chitPerMemberCommission: boolean     // use each member's own commission % when they take (instead of the chit-wide %)
 }
-const SETTINGS_DEFAULTS: AppSettings = { postingAnyDate: false, dataLoadedDate: '', lastPostedDate: '' }
+const SETTINGS_DEFAULTS: AppSettings = {
+  postingAnyDate: false, dataLoadedDate: '', lastPostedDate: '',
+  chitMultipleTakersPerMonth: false, chitPerMemberCommission: false,
+}
 const SETTINGS_KEY = 'arul-finance:settings:v1'
 export function getSettings(): AppSettings {
   try { return { ...SETTINGS_DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') } }
@@ -1199,8 +1213,9 @@ export function customerRisk(stl: string): { level: 'low' | 'medium' | 'high'; m
 // One-shot customer repayment — no loan picker. Principal is applied to the
 // customer's outstanding loans oldest-first; interest settles pending interest
 // oldest-first. The ledger gets TWO separate entries (principal + interest).
-export async function repayCustomer(opts: { stl: string; principal: number; interest: number; date: string; payType?: string }): Promise<void> {
-  const { stl, principal, interest, date, payType } = opts
+export async function repayCustomer(opts: { stl: string; principal: number; interest: number; date: string; payType?: string; note?: string }): Promise<void> {
+  const { stl, principal, interest, date, payType, note } = opts
+  const noteSuffix = note ? ` · ${note}` : ''
   const cust = (db.STL_CRM ?? []).find(c => c.Customer_STL_NO === stl)
   if (!cust) return
   const finance = cust.Finance_Name
@@ -1244,12 +1259,12 @@ export async function repayCustomer(opts: { stl: string; principal: number; inte
   // 3) Two separate ledger entries.
   if (paidPrincipal > 0) await recordLedger({
     Nature_Transaction: 'Customer_Loan_Prin_Repayment', STL_No: stl, Customer_Name: cust.Customer_Name,
-    Description: `Principal repayment — ${cust.Customer_Name}`, Receipt_Amount: paidPrincipal,
+    Description: `Principal repayment — ${cust.Customer_Name}${noteSuffix}`, Receipt_Amount: paidPrincipal,
     Payment_Type: payType, Finance_Name: finance, Date_Transaction: date,
   })
   if (paidInterest > 0) await recordLedger({
     Nature_Transaction: 'Customer_Interest', STL_No: stl, Customer_Name: cust.Customer_Name,
-    Description: `Interest received — ${cust.Customer_Name}`, Receipt_Amount: paidInterest, Interest_Amount: paidInterest,
+    Description: `Interest received — ${cust.Customer_Name}${noteSuffix}`, Receipt_Amount: paidInterest, Interest_Amount: paidInterest,
     Payment_Type: payType, Finance_Name: finance, Date_Transaction: date,
   })
   for (const r of changed) await sUpdate('Interest_Details', r.ID, { Amount_Received: r.Amount_Received, Interest_Pending: r.Interest_Pending, Status: r.Status })
@@ -1272,10 +1287,13 @@ export interface RepayOptions {
   // overrides `payInterest`: pending interest is settled oldest-first up to this
   // amount, and anything left over stays as pending interest.
   interestPaid?: number
+  // Optional free-text note/remark stored on the ledger entries.
+  note?: string
 }
 
 export async function repayLoan(opts: RepayOptions): Promise<void> {
   const { loanNo, principal, date, paymentType, accrue, payInterest } = opts
+  const noteSuffix = opts.note ? ` · ${opts.note}` : ''
   const loan = (db.Loan_Processing ?? []).find(l => l.Loan_No === loanNo)
   if (!loan) return
 
@@ -1307,7 +1325,7 @@ export async function repayLoan(opts: RepayOptions): Promise<void> {
     await recordLedger({
       Nature_Transaction: 'Customer_Loan_Prin_Repayment',
       STL_No: loan.Customer_STL_NO, Loan_No: loanNo, Customer_Name: loan.Customer_Name,
-      Description: `Principal repayment — ${loanNo}`, Receipt_Amount: principal,
+      Description: `Principal repayment — ${loanNo}${noteSuffix}`, Receipt_Amount: principal,
       Payment_Type: paymentType, Finance_Name: loan.Finance_Name, Date_Transaction: date,
     })
   }
@@ -1338,7 +1356,7 @@ export async function repayLoan(opts: RepayOptions): Promise<void> {
       await recordLedger({
         Nature_Transaction: 'Customer_Interest',
         STL_No: loan.Customer_STL_NO, Loan_No: loanNo, Customer_Name: loan.Customer_Name,
-        Description: `Interest received — ${loanNo}`, Receipt_Amount: settled, Interest_Amount: settled,
+        Description: `Interest received — ${loanNo}${noteSuffix}`, Receipt_Amount: settled, Interest_Amount: settled,
         Payment_Type: paymentType, Finance_Name: loan.Finance_Name, Date_Transaction: date,
       })
     }
@@ -1514,7 +1532,14 @@ export async function assignChitTaker(inp: AssignTakerInput): Promise<void> {
   const chit = (db.Chit_Creation ?? []).find(c => c.Chit_ID === auction.Chit_ID)
   const member = (db.Chit_Member ?? []).find(m => m.Member_ID === inp.memberId)
   const pct = num(inp.percentageNeedToTake) || 1
-  const payout = round(num(auction.Total_Auction_Amount_After_Commission) * pct)
+  // Per-member commission (when enabled in Settings and this member has one set):
+  // payout starts from the raw bid and deducts THIS member's own commission %,
+  // replacing the chit-wide commission. A 0.5 share gets 0.5 of that amount.
+  const settings = getSettings()
+  const hasMemberComm = member && member.Member_Commission !== undefined && member.Member_Commission !== null
+  const payout = (settings.chitPerMemberCommission && hasMemberComm)
+    ? round((num(auction.Total_Auction_Amount) - round(num(member!.Member_Commission) / 100 * num(chit?.Total_Amount))) * pct)
+    : round(num(auction.Total_Auction_Amount_After_Commission) * pct)
   const fromCompany = Math.max(0, Math.min(round(num(inp.takeFromCompany)), repo.chitCompanyPool(auction.Chit_ID)))
   const seq = (db.Chit_Taken_Member ?? []).filter(t => t.Chit_Auction_ID === inp.auctionId).length + 1
   const taken: ChitTakenMember = {
@@ -1534,9 +1559,15 @@ export async function assignChitTaker(inp: AssignTakerInput): Promise<void> {
   db.Chit_Taken_Member = [...(db.Chit_Taken_Member ?? []), taken]
   await sInsert('Chit_Taken_Member', taken)
 
-  // Mark the auction closed and reflect the win on the member row.
-  db.Chit_Auction = (db.Chit_Auction ?? []).map(a => a.Chit_Auction_ID === inp.auctionId ? { ...a, Auction_Status: 'Closed' } : a)
-  await sUpdate('Chit_Auction', inp.auctionId, { Auction_Status: 'Closed' })
+  // Mark the auction closed once the month is fully taken (shares total ≥ 1).
+  // With multiple takers a month may be assigned in parts (e.g. ½ + ½).
+  const takenSoFar = (db.Chit_Taken_Member ?? [])
+    .filter(t => t.Chit_Auction_ID === inp.auctionId && t.Member_Type !== 'Company_Topup')
+    .reduce((s, t) => s + num(t.Percentage_Need_to_Take), 0)
+  if (takenSoFar >= 1) {
+    db.Chit_Auction = (db.Chit_Auction ?? []).map(a => a.Chit_Auction_ID === inp.auctionId ? { ...a, Auction_Status: 'Closed' } : a)
+    await sUpdate('Chit_Auction', inp.auctionId, { Auction_Status: 'Closed' })
+  }
   if (member) {
     const patch: Partial<ChitMember> = {
       Chit_Taken: 'Taken',
@@ -1574,7 +1605,7 @@ export async function addChitCompanyTopup(chitId: string, amount: number, date: 
 }
 
 // Member pays (part of) their monthly due — updates the chit ledger row only.
-export async function collectChitDue(ledgerId: string, amount?: number, date?: string, payType?: string): Promise<void> {
+export async function collectChitDue(ledgerId: string, amount?: number, date?: string, payType?: string, remarks?: string): Promise<void> {
   const row = (db.Chit_Ledger ?? []).find(r => r.ID === ledgerId)
   if (!row) return
   const pending = num(row.Pending_Amount)
@@ -1585,6 +1616,7 @@ export async function collectChitDue(ledgerId: string, amount?: number, date?: s
     Received_Amount: recv, Pending_Amount: num(row.Due_Amount) - recv,
     Status: ledgerStatus(num(row.Due_Amount), recv),
     Payment_Type: payType ?? row.Payment_Type, Paid_Date: date ?? new Date().toISOString().slice(0, 10),
+    Remarks: remarks ?? row.Remarks,
   }
   db.Chit_Ledger = (db.Chit_Ledger ?? []).map(r => r.ID === ledgerId ? { ...r, ...patch } : r)
   await sUpdate('Chit_Ledger', ledgerId, patch)
@@ -1593,7 +1625,7 @@ export async function collectChitDue(ledgerId: string, amount?: number, date?: s
 }
 
 // Firm pays out (part of) the amount owed to a member who took a chit.
-export async function payChitTaker(takenId: string, amount?: number, date?: string, payType?: string): Promise<void> {
+export async function payChitTaker(takenId: string, amount?: number, date?: string, payType?: string, remarks?: string): Promise<void> {
   const row = (db.Chit_Taken_Member ?? []).find(t => t.Chit_Taken_ID === takenId)
   if (!row) return
   const pending = num(row.Pending_Amount)
@@ -1601,7 +1633,7 @@ export async function payChitTaker(takenId: string, amount?: number, date?: stri
   const pay = Math.min(num(amount) > 0 ? num(amount) : pending, pending)
   const given = num(row.Amount_Given_to_Member) + pay
   const left = num(row.Total_Amount_to_Member) - given
-  const patch: Partial<ChitTakenMember> = { Amount_Given_to_Member: given, Pending_Amount: left, Status: left <= 0 ? 'Given' : 'Pending' }
+  const patch: Partial<ChitTakenMember> = { Amount_Given_to_Member: given, Pending_Amount: left, Status: left <= 0 ? 'Given' : 'Pending', Remarks: remarks ?? row.Remarks }
   db.Chit_Taken_Member = (db.Chit_Taken_Member ?? []).map(t => t.Chit_Taken_ID === takenId ? { ...t, ...patch } : t)
   await sUpdate('Chit_Taken_Member', takenId, patch)
 
@@ -1677,6 +1709,7 @@ export async function recordInvestedContribution(inp: InvestedContributionInput)
     Chit_This_Month_Amount: num(inp.amount), Date: inp.date, Month_Year: monthYear,
     Chit_Taken: chit.Chit_Taken, Chit_Name: chit.Chit_Name, Paid_Date: inp.date,
     Remarks: inp.remarks, Chit_Status: month >= num(chit.No_Months) ? 'Completed' : 'Active',
+    Kind: 'Payment',
   }
   db.Invested_Chit_Trans = [...(db.Invested_Chit_Trans ?? []), row]
   await sInsert('Invested_Chit_Trans', row)
@@ -1686,6 +1719,43 @@ export async function recordInvestedContribution(inp: InvestedContributionInput)
     Chit_Status: month >= num(chit.No_Months) ? 'Completed' : 'Active',
   })
   writeLog({ Action: 'create', Entity: 'Invested_Chit_Trans', Entity_Label: `${chit.Chit_Name} · month ${month} · ${inrFmt(num(inp.amount))}`, After: row })
+  persist()
+}
+
+export interface InvestedTakeInput {
+  chitId: string
+  amount: number      // amount you received when you took/won the chit
+  date: string
+  remarks?: string
+}
+
+// Record the amount you RECEIVED when you took (won) an invested chit. Adds a
+// receipt row to the chit's transactions and marks the parent chit as taken.
+export async function recordInvestedTake(inp: InvestedTakeInput): Promise<void> {
+  const chit = (db.Invested_Chit ?? []).find(c => c.Chit_ID === inp.chitId)
+  if (!chit) return
+  const d = new Date(inp.date)
+  const monthYear = isNaN(d.getTime())
+    ? undefined
+    : `${d.toLocaleString('en-US', { month: 'short' })}-${d.getFullYear()}`
+  const row: InvestedChitTrans = {
+    ID: `${inp.chitId}-TAKE-${String(inp.date).replace(/-/g, '')}`,
+    Chit_ID: inp.chitId, Chit_Invested_By: chit.Chit_Invested_By,
+    Chit_Invested_Company: chit.Chit_Invested_Company,
+    Chit_Invested_Company_Address: chit.Chit_Invested_Company_Address,
+    Total_Amount_Chit: chit.Total_Amount_Chit, No_Months: chit.No_Months,
+    Chit_Started_Date: chit.Chit_Started_Date,
+    Chit_This_Month_Amount: num(inp.amount), Date: inp.date, Month_Year: monthYear,
+    Chit_Taken: 'Yes', Chit_Name: chit.Chit_Name, Paid_Date: inp.date,
+    Remarks: inp.remarks, Chit_Status: chit.Chit_Status,
+    Kind: 'Receipt',
+  }
+  db.Invested_Chit_Trans = [...(db.Invested_Chit_Trans ?? []), row]
+  await sInsert('Invested_Chit_Trans', row)
+  await updateInvestedChit(inp.chitId, {
+    Chit_Taken: 'Yes', Chit_Taken_Amount: num(inp.amount), Chit_Taken_Date: inp.date,
+  })
+  writeLog({ Action: 'create', Entity: 'Invested_Chit_Trans', Entity_Label: `${chit.Chit_Name} · taken · received ${inrFmt(num(inp.amount))}`, After: row })
   persist()
 }
 

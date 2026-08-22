@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { UserPlus } from 'lucide-react'
 import { repo } from '../data/repository'
 import { useApp, canEdit, financeFilter } from '../store/app'
@@ -57,7 +58,7 @@ export default function ChitMembers() {
                   {members.map(m => (
                     <tr key={m.Member_ID} className="hover:bg-slate-800/40">
                       <Td>
-                        <p className="text-slate-200">{m.Member_Name}</p>
+                        <Link to={`/chit/member/${encodeURIComponent(m.Member_ID)}`} className="text-brand-300 hover:underline">{m.Member_Name}</Link>
                         {m.Member_Type && m.Member_Type !== 'Member' && <p className="text-xs text-slate-500">{m.Member_Type}</p>}
                       </Td>
                       <Td className="text-slate-400">{phone(m.Member_Phone_No)}</Td>

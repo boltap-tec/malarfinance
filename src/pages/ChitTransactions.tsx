@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { Coins, HandCoins } from 'lucide-react'
 import { repo, collectChitDue } from '../data/repository'
 import type { ChitLedgerRow } from '../data/types'
 import { useApp, canEdit, financeFilter } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal } from '../components/ui'
 import { AmountModal } from './ChitDetail'
 import { inr, fmtDate, num } from '../lib/format'
 
@@ -14,6 +15,7 @@ export default function ChitTransactions() {
   const finance = financeFilter(financeSel)
   const [tick, setTick] = useState(0)
   const [collect, setCollect] = useState<ChitLedgerRow | null>(null)
+  const [detail, setDetail] = useState<ChitLedgerRow | null>(null)
 
   const chits = useMemo(() => repo.chits(finance), [finance, tick])
   const [fund, setFund] = useState<string>('')
@@ -61,11 +63,12 @@ export default function ChitTransactions() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="border-b border-slate-800 bg-slate-900/60">
-                  <tr><Th>Member</Th><Th right>Share</Th><Th right>Due</Th><Th right>Received</Th><Th right>Pending</Th><Th>Paid on</Th><Th>Status</Th>{editable && <Th>Action</Th>}</tr>
+                  <tr><Th>ID</Th><Th>Member</Th><Th right>Share</Th><Th right>Due</Th><Th right>Received</Th><Th right>Pending</Th><Th>Paid on</Th><Th>Status</Th>{editable && <Th>Action</Th>}</tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                   {rows.map(r => (
                     <tr key={r.ID} className="hover:bg-slate-800/40">
+                      <Td><button className="text-brand-300 hover:underline" onClick={() => setDetail(r)}>{r.ID}</button></Td>
                       <Td className="text-slate-200">{r.Member_Name}</Td>
                       <Td right className="text-slate-400">{num(r.Member_Percentage)}</Td>
                       <Td right className="text-slate-300">{inr(num(r.Due_Amount))}</Td>
@@ -88,9 +91,44 @@ export default function ChitTransactions() {
           title={`Collect due — ${collect.Member_Name}`}
           max={num(collect.Pending_Amount)}
           onClose={() => setCollect(null)}
-          onSave={(amt, date, pt) => collectChitDue(collect.ID, amt, date, pt).then(() => { setCollect(null); setTick(t => t + 1) })}
+          onSave={(amt, date, pt, remarks) => collectChitDue(collect.ID, amt, date, pt, remarks).then(() => { setCollect(null); setTick(t => t + 1) })}
         />
       )}
+
+      {detail && <TransactionDetailModal row={detail} onClose={() => setDetail(null)} />}
     </div>
+  )
+}
+
+// Full detail for one chit transaction (ledger row), opened by clicking its ID.
+function TransactionDetailModal({ row, onClose }: { row: ChitLedgerRow; onClose: () => void }) {
+  const auction = repo.chitAuction(row.Chit_Auction_ID)
+  const Item = ({ k, v }: { k: string; v: ReactNode }) => (
+    <div className="flex justify-between gap-4 border-b border-slate-800 py-1.5 text-sm last:border-0">
+      <span className="text-slate-400">{k}</span><span className="text-right text-slate-200">{v}</span>
+    </div>
+  )
+  return (
+    <Modal title={`Transaction ${row.ID}`} onClose={onClose} footer={<button className="btn-primary" onClick={onClose}>Close</button>}>
+      <div className="rounded-lg bg-slate-800/40 px-3 py-1">
+        <Item k="Transaction ID" v={row.ID} />
+        <Item k="Member" v={<Link to={`/chit/member/${encodeURIComponent(row.Member_ID)}`} className="text-brand-300 hover:underline">{row.Member_Name}</Link>} />
+        <Item k="Chit" v={`${row.Chit_Name ?? row.Chit_ID}`} />
+        <Item k="Month" v={`#${num(row.Month_Count)} · ${fmtDate(row.Date_Auction)}`} />
+        <Item k="Auction ID" v={row.Chit_Auction_ID} />
+        {auction && <Item k="Auction bid pot" v={inr(num(auction.Total_Auction_Amount))} />}
+        <Item k="Share" v={num(row.Member_Percentage)} />
+        <Item k="One share amount" v={inr(num(row.One_Share_Amount))} />
+        <Item k="Due" v={inr(num(row.Due_Amount))} />
+        <Item k="Received" v={<span className="text-emerald-400">{inr(num(row.Received_Amount))}</span>} />
+        <Item k="Pending" v={<span className="text-rose-300">{inr(num(row.Pending_Amount))}</span>} />
+        <Item k="Payment type" v={row.Payment_Type ?? '—'} />
+        <Item k="Paid on" v={num(row.Received_Amount) ? fmtDate(row.Paid_Date) : '—'} />
+        <Item k="Status" v={<Badge tone={statusTone(row.Status)}>{row.Status ?? '—'}</Badge>} />
+        {row.Recommended_Partner && <Item k="Recommended partner" v={row.Recommended_Partner} />}
+        {row.Remarks && <Item k="Remarks" v={row.Remarks} />}
+      </div>
+      <p className="mt-3 text-xs text-slate-500">Open the member to see their full dues and payout history.</p>
+    </Modal>
   )
 }

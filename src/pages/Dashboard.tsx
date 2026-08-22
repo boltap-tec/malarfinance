@@ -260,7 +260,7 @@ const GROUPS: Group[] = [
     title: 'More', icon: Boxes, tone: 'text-slate-300 bg-slate-500/15 ring-slate-500/30',
     items: [
       { label: 'Hand exchange', to: '/hand' },
-      { label: 'Chits', to: '/chits' },
+      { label: 'My Invested Chits', to: '/chits' },
       { label: 'Ledger', to: '/ledger' },
       { label: 'Activity log', to: '/logs' },
       { label: 'Settings', to: '/settings' },
@@ -284,7 +284,7 @@ function ActionHub({ user }: { user: AppUser | null }) {
   if (groups.length === 0) return null
   return (
     <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {groups.map((g, i) => <ActionGroup key={g.title} group={g} defaultOpen={i === 0} />)}
+      {groups.map((g) => <ActionGroup key={g.title} group={g} />)}
     </div>
   )
 }

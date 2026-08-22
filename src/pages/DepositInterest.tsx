@@ -101,7 +101,7 @@ export default function DepositInterest() {
           code={pay.Deposit_No}
           month={pay.Month}
           pending={num(pay.Interest_Pending)}
-          onPay={(amount, date, payType) => payDepositInterest(pay.ID, amount, date, payType)}
+          onPay={(amount, date, payType, note) => payDepositInterest(pay.ID, amount, date, payType, note)}
           onClose={() => setPay(null)}
           onSaved={() => { setPay(null); setTick(t => t + 1) }}
         />

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Plus, Building2, Check, Pencil } from 'lucide-react'
 import { repo, addFinance, updateFinance } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
@@ -93,7 +94,7 @@ export default function Finances() {
               <tbody className="divide-y divide-slate-800">
                 {finances.map(f => (
                   <tr key={f.Finance_Name} className="hover:bg-slate-800/40">
-                    <Td><span className="flex items-center gap-2 font-medium text-hd"><Building2 size={15} className="text-slate-500" />{f.Finance_Name}</span></Td>
+                    <Td><Link to={`/finances/${encodeURIComponent(f.Finance_Name)}`} className="flex items-center gap-2 font-medium text-brand-300 hover:underline"><Building2 size={15} className="text-slate-500" />{f.Finance_Name}</Link></Td>
                     <Td className="text-slate-300">{f.MD_Name ?? '—'}</Td>
                     <Td className="text-slate-400">{fmtPhone(f.Phone_Number)}</Td>
                     <Td className="text-slate-400">{fmtDate(f.Date_Opened)}</Td>

@@ -11,7 +11,7 @@ export default function CustomerInterestPayModal({
 }: {
   name: string
   rows: InterestRow[]                    // all interest rows for this customer
-  onPay: (amount: number, date: string, payType: string) => Promise<void>
+  onPay: (amount: number, date: string, payType: string, note?: string) => Promise<void>
   onClose: () => void
   onSaved: () => void
 }) {
@@ -26,6 +26,7 @@ export default function CustomerInterestPayModal({
   const [amount, setAmount] = useState(String(total))
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [payType, setPayType] = useState('Cash')
+  const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
 
   const amt = num(amount)
@@ -43,7 +44,7 @@ export default function CustomerInterestPayModal({
   async function save() {
     if (!valid || busy) return
     setBusy(true)
-    await onPay(amt, date, payType)
+    await onPay(amt, date, payType, note.trim() || undefined)
     onSaved()
   }
 
@@ -90,6 +91,7 @@ export default function CustomerInterestPayModal({
           <option>Cash</option><option>Bank</option><option>UPI</option><option>Cheque</option>
         </select>
       </Field>
+      <Field label="Notes / remarks"><input className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="Optional — a note to remind you later" /></Field>
       <div className="flex flex-wrap gap-2">
         <button type="button" className="btn-ghost !py-1 text-xs" onClick={() => setAmount(String(total))}>Full {inr(total)}</button>
         {pending[0] && <button type="button" className="btn-ghost !py-1 text-xs" onClick={() => setAmount(String(num(pending[0].Interest_Pending)))}>Oldest month {inr(num(pending[0].Interest_Pending))}</button>}

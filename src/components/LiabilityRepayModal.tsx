@@ -15,7 +15,7 @@ export default function LiabilityRepayModal({
   outstanding: number
   pendingInterest?: number
   interestOnly?: boolean
-  onRepay: (principal: number, interest: number, date: string) => Promise<void>
+  onRepay: (principal: number, interest: number, date: string, payType: string, note?: string) => Promise<void>
   onClose: () => void
   onSaved: () => void
 }) {
@@ -23,12 +23,13 @@ export default function LiabilityRepayModal({
   const [principal, setPrincipal] = useState(interestOnly ? '0' : String(outstanding))
   const [interest, setInterest] = useState(String(pendingInterest))
   const [payType, setPayType] = useState('Cash')
+  const [note, setNote] = useState('')
 
   const p = num(principal), i = num(interest)
   const valid = (p > 0 || i > 0) && p <= outstanding && i <= pendingInterest
 
   async function save() {
-    await onRepay(p, i, date)
+    await onRepay(p, i, date, payType, note.trim() || undefined)
     onSaved()
   }
 
@@ -59,6 +60,7 @@ export default function LiabilityRepayModal({
           </select>
         </Field>
       </div>
+      <Field label="Notes / remarks"><input className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="Optional — a note to remind you later" /></Field>
       <p className="text-xs text-slate-500">Principal refund and interest post as two separate ledger entries; interest settles the schedule oldest-first.</p>
     </Modal>
   )

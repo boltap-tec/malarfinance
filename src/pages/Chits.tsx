@@ -25,7 +25,7 @@ export default function Chits() {
   return (
     <div>
       <PageHeader
-        title="Invested chits"
+        title="My Invested Chits"
         subtitle="Chits your finance has joined with other companies."
         action={editable && (
           <button className="btn-primary !py-1.5" onClick={() => setCreating(true)}><Plus size={15} /> New invested chit</button>

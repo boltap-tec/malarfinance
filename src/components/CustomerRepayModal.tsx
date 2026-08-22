@@ -21,12 +21,13 @@ export default function CustomerRepayModal({
   const [principal, setPrincipal] = useState(mode === 'interest' ? '0' : String(outstanding))
   const [interest, setInterest] = useState(String(pendingInterest))
   const [payType, setPayType] = useState('Cash')
+  const [note, setNote] = useState('')
 
   const p = num(principal), i = num(interest)
   const valid = (p > 0 || i > 0) && p <= outstanding && i <= pendingInterest
 
   async function save() {
-    await repayCustomer({ stl, principal: p, interest: i, date, payType })
+    await repayCustomer({ stl, principal: p, interest: i, date, payType, note: note.trim() || undefined })
     onSaved()
   }
 
@@ -56,6 +57,7 @@ export default function CustomerRepayModal({
           </select>
         </Field>
       </div>
+      <Field label="Notes / remarks"><input className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="Optional — a note to remind you later" /></Field>
       <p className="text-xs text-slate-500">
         Principal reduces the oldest loan first; interest settles the oldest pending first. The ledger records principal and interest as two separate entries.
       </p>

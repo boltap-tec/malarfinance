@@ -98,7 +98,7 @@ export default function CustomerInterest() {
         <CustomerInterestPayModal
           name={pay.Customer_Name}
           rows={repo.interestByCustomer(pay.Customer_STL_NO)}
-          onPay={(amount, date, payType) => repayCustomer({ stl: pay.Customer_STL_NO, principal: 0, interest: amount, date, payType })}
+          onPay={(amount, date, payType, note) => repayCustomer({ stl: pay.Customer_STL_NO, principal: 0, interest: amount, date, payType, note })}
           onClose={() => setPay(null)}
           onSaved={() => { setPay(null); setTick(t => t + 1) }}
         />

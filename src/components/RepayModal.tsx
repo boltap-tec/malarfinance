@@ -23,6 +23,7 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
   const [touched, setTouched] = useState(false)           // user edited the interest amount
   const [includeToday, setIncludeToday] = useState(true)
   const [payType, setPayType] = useState('Cash')
+  const [note, setNote] = useState('')
 
   const p = num(principal)
   // Interest accrues on the amount being closed (the principal repaid); when
@@ -49,6 +50,7 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
     await repayLoan({
       loanNo: loan.Loan_No, principal: p, date, paymentType: payType,
       accrue: accrue ?? undefined, payInterest: interestPaid > 0, interestPaid,
+      note: note.trim() || undefined,
     })
     onSaved()
   }
@@ -108,6 +110,7 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
           <option>Cash</option><option>Bank</option><option>UPI</option><option>Cheque</option>
         </select>
       </Field>
+      <Field label="Notes / remarks"><input className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="Optional — a note to remind you later" /></Field>
 
       {p >= outstanding && outstanding > 0 && <p className="text-xs text-emerald-300/80">Full principal — this loan will be marked Closed.</p>}
     </Modal>

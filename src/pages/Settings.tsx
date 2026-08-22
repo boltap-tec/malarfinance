@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Settings as Cog, RotateCcw, Check, ListChecks, Tags, X, Plus } from 'lucide-react'
+import { Settings as Cog, RotateCcw, Check, ListChecks, Tags, X, Plus, Boxes, Download, CloudUpload } from 'lucide-react'
 import {
   repo, getSettings, setSettings, revokeInterestForMonth, renumberCodes,
   getMandatory, setMandatory, FORM_FIELDS, type FormKind, type MandatoryConfig,
   getLedgerCategories, setLedgerCategories, type LedgerCategories,
+  datasetSnapshot,
 } from '../data/repository'
 import { useApp } from '../store/app'
 import { PageHeader, Card, EmptyState } from '../components/ui'
@@ -19,10 +20,24 @@ export default function Settings() {
   const [mand, setMand] = useState<MandatoryConfig>(getMandatory())
   const [renumberMsg, setRenumberMsg] = useState<string | null>(null)
   const [cats, setCats] = useState<LedgerCategories>(getLedgerCategories())
+  const [multiTakers, setMultiTakers] = useState(s0.chitMultipleTakersPerMonth)
+  const [perMemberComm, setPerMemberComm] = useState(s0.chitPerMemberCommission)
 
   function updateCats(kind: keyof LedgerCategories, next: string[]) {
     const updated = { ...cats, [kind]: next }
     setCats(updated); setLedgerCategories(updated)
+  }
+
+  // Manual on-demand backup: download every table as one JSON file.
+  function downloadBackup() {
+    const stamp = new Date().toISOString().slice(0, 10)
+    const blob = new Blob([datasetSnapshot()], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `arul-finance-backup-${stamp}.json`
+    document.body.appendChild(a); a.click(); a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   async function runRenumber() {
@@ -143,6 +158,44 @@ export default function Settings() {
             <Check size={15} /> {renumberMsg}
           </div>
         )}
+      </Card>
+
+      <Card className="mt-4">
+        <h3 className="mb-1 flex items-center gap-2 font-semibold text-hd"><CloudUpload size={16} /> Backup</h3>
+        <p className="mb-3 text-xs text-slate-500">
+          Keep a copy of all your data. Download a full backup any time, or set up an automatic <b>daily backup to Google Drive</b> (runs in your Google account — no server needed).
+        </p>
+        <button className="btn-primary" onClick={downloadBackup}><Download size={15} /> Download backup now (JSON)</button>
+        <div className="mt-4 rounded-xl border border-slate-800 bg-slate-800/30 p-3 text-xs text-slate-400">
+          <p className="mb-1 font-semibold text-slate-300">Daily Google Drive backup</p>
+          <p>Uses a Google Apps Script (file <code>scripts/GoogleDriveBackup.gs</code> in your project). Once set up, it saves a single Excel file (<code>.xlsx</code>, one tab per table) to your Drive every day automatically. Setup steps are in that file:</p>
+          <a className="mt-1 inline-block break-all text-brand-300 hover:underline" href="https://drive.google.com/drive/folders/1WzovmeJLP_RxKqXuEVF4e4jAAJ3NFxJF" target="_blank" rel="noreferrer">
+            Backup Drive folder →
+          </a>
+        </div>
+      </Card>
+
+      <Card className="mt-4">
+        <h3 className="mb-1 flex items-center gap-2 font-semibold text-hd"><Boxes size={16} /> Chit fund options</h3>
+        <p className="mb-3 text-xs text-slate-500">Rules for the chit funds you run — auctions, takers and payouts.</p>
+        <div className="space-y-3">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input type="checkbox" className="mt-0.5 accent-brand-500" checked={multiTakers}
+              onChange={e => { setMultiTakers(e.target.checked); setSettings({ chitMultipleTakersPerMonth: e.target.checked }) }} />
+            <span>
+              <span className="text-sm font-medium text-slate-200">Allow multiple members to take one month</span>
+              <span className="mt-0.5 block text-xs text-slate-500">On = more than one member can take the same month's chit (e.g. two half-shares, or several members). Off = one taker per month.</span>
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-3">
+            <input type="checkbox" className="mt-0.5 accent-brand-500" checked={perMemberComm}
+              onChange={e => { setPerMemberComm(e.target.checked); setSettings({ chitPerMemberCommission: e.target.checked }) }} />
+            <span>
+              <span className="text-sm font-medium text-slate-200">Use each member's own commission %</span>
+              <span className="mt-0.5 block text-xs text-slate-500">On = each member can have their own commission (e.g. 2%, 3%, or none). When that member takes the chit, their payout = auction bid − (their % × pot). Off = the chit-wide commission % applies to everyone.</span>
+            </span>
+          </label>
+        </div>
       </Card>
 
       <Card className="mt-4">

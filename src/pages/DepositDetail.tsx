@@ -146,7 +146,7 @@ export default function DepositDetail() {
           code={id}
           outstanding={outstanding}
           pendingInterest={repo.depositInterestPending(id)}
-          onRepay={(principal, interest, date) => repayDeposit({ code: id, principal, interest, date })}
+          onRepay={(principal, interest, date, payType, note) => repayDeposit({ code: id, principal, interest, date, payType, note })}
           onClose={() => setModal(null)}
           onSaved={() => { setModal(null); setTick(t => t + 1) }}
         />

@@ -13,19 +13,20 @@ export default function InterestPayModal({
   code: string
   month?: string
   pending: number
-  onPay: (amount: number, date: string, payType: string) => Promise<void>
+  onPay: (amount: number, date: string, payType: string, note?: string) => Promise<void>
   onClose: () => void
   onSaved: () => void
 }) {
   const [amount, setAmount] = useState(String(pending))
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [payType, setPayType] = useState('Cash')
+  const [note, setNote] = useState('')
 
   const amt = num(amount)
   const valid = amt > 0 && amt <= pending
 
   async function save() {
-    await onPay(amt, date, payType)
+    await onPay(amt, date, payType, note.trim() || undefined)
     onSaved()
   }
 
@@ -52,6 +53,7 @@ export default function InterestPayModal({
           <option>Cash</option><option>Bank</option><option>UPI</option><option>Cheque</option>
         </select>
       </Field>
+      <Field label="Notes / remarks"><input className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="Optional — a note to remind you later" /></Field>
       {amt < pending && amt > 0 && <p className="text-xs text-amber-300/80">Partial payment — {inr(pending - amt)} stays pending.</p>}
     </Modal>
   )

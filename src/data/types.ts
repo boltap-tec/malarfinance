@@ -161,6 +161,8 @@ export interface InvestedChit {
   Total_Amount_Invested_Till_Now?: number
   Chit_Status?: string                  // Active | Completed
   Chit_Taken?: string                   // Yes | No — whether you've won/taken it
+  Chit_Taken_Amount?: number            // amount you received when you took/won the chit
+  Chit_Taken_Date?: string              // date you received the taken amount
   Chit_Name?: string
 }
 
@@ -182,6 +184,7 @@ export interface InvestedChitTrans {
   Paid_Date?: string
   Remarks?: string
   Chit_Status?: string
+  Kind?: 'Payment' | 'Receipt'           // Payment = you paid the company; Receipt = you received the taken amount
 }
 
 // ── Chit fund (a chit your finance RUNS) ─────────────────────────────────────
@@ -216,6 +219,7 @@ export interface ChitMember {
   Member_Photo?: string
   Date_Added?: string
   Member_Percentage?: number     // share size: 1 (full) or 0.5 (half)
+  Member_Commission?: number     // this member's own commission % (used on payout when enabled in Settings)
   Recommended_Partner?: string
   Chit_Taken?: string            // Taken | Not_Taken
   Chit_Taken_Amount?: number
@@ -266,6 +270,7 @@ export interface ChitTakenMember {
   Amount_Taken_From_Company_Chit?: number
   Remaining_Amount_in_Company_Chit?: number
   Status?: string                    // Pending | Given
+  Remarks?: string                   // optional note on the last payout
 }
 
 // One row per member per auction/month — their contribution obligation.
@@ -288,6 +293,7 @@ export interface ChitLedgerRow {
   Payment_Type?: string
   Paid_Date?: string
   Status?: string                    // Paid | Partial | Pending
+  Remarks?: string                   // optional note on the last collection
 }
 
 // ── Hand exchange (personal give & take — NEVER part of finance data) ────────

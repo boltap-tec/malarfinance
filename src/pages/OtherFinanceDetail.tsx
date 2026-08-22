@@ -147,7 +147,7 @@ export default function OtherFinanceDetail() {
           code={id}
           outstanding={outstanding}
           pendingInterest={repo.otherFinanceInterestPending(id)}
-          onRepay={(principal, interest, date) => repayOtherFinance({ code: id, principal, interest, date })}
+          onRepay={(principal, interest, date, payType, note) => repayOtherFinance({ code: id, principal, interest, date, payType, note })}
           onClose={() => setModal(null)}
           onSaved={() => { setModal(null); setTick(t => t + 1) }}
         />

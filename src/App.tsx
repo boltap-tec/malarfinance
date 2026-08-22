@@ -21,6 +21,7 @@ import OtherFinances from './pages/OtherFinances'
 import OtherFinanceInterest from './pages/OtherFinanceInterest'
 import Partners from './pages/Partners'
 import Finances from './pages/Finances'
+import FinanceDetail from './pages/FinanceDetail'
 import Workers from './pages/Workers'
 import Logs from './pages/Logs'
 import Settings from './pages/Settings'
@@ -32,6 +33,7 @@ import ChitDetail from './pages/ChitDetail'
 import InvestedChitDetail from './pages/InvestedChitDetail'
 import ChitFunds from './pages/ChitFunds'
 import ChitMembers from './pages/ChitMembers'
+import ChitMemberDetail from './pages/ChitMemberDetail'
 import ChitAuctions from './pages/ChitAuctions'
 import ChitTransactions from './pages/ChitTransactions'
 import ChitLedger from './pages/ChitLedger'
@@ -81,6 +83,7 @@ export default function App() {
         <Route path="/other-finance/:code" element={<OtherFinanceDetail />} />
         <Route path="/other-finance-interest" element={<OtherFinanceInterest />} />
         <Route path="/finances" element={<Finances />} />
+        <Route path="/finances/:name" element={<FinanceDetail />} />
         <Route path="/partners" element={<Partners />} />
         <Route path="/workers" element={<Workers />} />
         <Route path="/logs" element={<Logs />} />
@@ -96,6 +99,7 @@ export default function App() {
         <Route path="/chit/auctions" element={<ChitAuctions />} />
         <Route path="/chit/transactions" element={<ChitTransactions />} />
         <Route path="/chit/ledger" element={<ChitLedger />} />
+        <Route path="/chit/member/:memberId" element={<ChitMemberDetail />} />
         <Route path="/chit/:chitId" element={<ChitDetail />} />
         <Route path="/jewel" element={<Placeholder title="Jewel Loans" note="Gold/pawn loans with item particulars and photos — module coming next." />} />
         <Route path="/login" element={<Navigate to="/" replace />} />

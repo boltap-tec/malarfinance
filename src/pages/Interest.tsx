@@ -79,13 +79,13 @@ export default function Interest() {
     await appendDepositInterest(depPreview.map(({ d, p, id }) => ({
       ID: id, Finance_Name: d.Finance_Name, Deposit_No: d.Deposit_No, Depositer_Name: d.Depositer_Name,
       From_Date: p.fromDate, To_Date: p.toDate, No_Days: p.noOfDays, Interest_Per_Month_Per_Lakh: num(d.Interest_Per_Month_Per_Lakh),
-      Interest_Amount: p.interest, Deposit_Amount: num(d.Deposit_Amount), Month: p.month, Description: `Interest-${p.month}`,
+      Interest_Amount: p.interest, Deposit_Amount: num(d.Deposit_Amount), Month: p.month, Description: p.description,
       Amount_Received: 0, Status: 'Pending', Interest_Pending: p.interest, Interest_Type: 'Per_Month',
     })))
     await appendOtherFinanceInterest(othPreview.map(({ o, p, id }) => ({
       ID: id, Finance_Name: o.Finance_Name, Loan_No: o.Loan_No, Loan_bought_Finance_Name: o.Loan_bought_Finance_Name,
       From_Date: p.fromDate, To_Date: p.toDate, No_Days: p.noOfDays, Interest_Amount: p.interest, Loan_Amount: num(o.Loan_Amount),
-      Month: p.month, Description: `Interest-${p.month}`, Amount_Received: 0, Status: 'Pending', Interest_Pending: p.interest,
+      Month: p.month, Description: p.description, Amount_Received: 0, Status: 'Pending', Interest_Pending: p.interest,
       Interest_Type: o.Interest_Type || 'Per_Day',
     })))
     setSettings({ lastPostedDate: to })

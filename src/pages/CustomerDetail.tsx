@@ -5,7 +5,7 @@ import { repo } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
 import CustomerRepayModal from '../components/CustomerRepayModal'
-import { inr, phone, fmtDate, num } from '../lib/format'
+import { inr, phone, fmtDate, num, monthName } from '../lib/format'
 
 export default function CustomerDetail() {
   const { stl = '' } = useParams()
@@ -118,7 +118,7 @@ export default function CustomerDetail() {
               <tbody className="divide-y divide-slate-800">
                 {interest.slice().reverse().map((i, k) => (
                   <tr key={k} className="hover:bg-slate-800/40">
-                    <Td className="text-slate-300">{i.Month}</Td>
+                    <Td className="text-slate-300">{monthName(i.Month)}</Td>
                     <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>
                     <Td right className="text-hd">{inr(num(i.Interest_Amount))}</Td>
                     <Td right className="text-emerald-400">{inr(num(i.Amount_Received))}</Td>

@@ -57,7 +57,9 @@ export function computeInterest(
   }
 
   const month = `${String(to.getMonth() + 1).padStart(2, '0')}-${to.getFullYear()}`
-  const description = `Interest-${month}`
+  // Friendly single-month label, e.g. "Interest Jul 2026" (the exact period shows
+  // separately as From – To in the interest tables).
+  const description = `Interest ${to.toLocaleString('en-US', { month: 'short' })} ${to.getFullYear()}`
 
   return {
     loan,

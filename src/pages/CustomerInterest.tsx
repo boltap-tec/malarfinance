@@ -4,7 +4,7 @@ import { repo, repayCustomer } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
 import CustomerInterestPayModal from '../components/CustomerInterestPayModal'
-import { inr, fmtDate, num, monthKey } from '../lib/format'
+import { inr, fmtDate, num, monthKey, monthName } from '../lib/format'
 
 // Customer loan interest details, with a per-line "pay interest" action.
 export default function CustomerInterest() {
@@ -64,7 +64,7 @@ export default function CustomerInterest() {
                     {(k === 0 || arr[k - 1].Month !== i.Month) && (
                       <tr className="bg-slate-900/80"><td colSpan={editable ? 8 : 7} className="px-3 py-1.5">
                         <div className="flex flex-wrap items-center gap-3">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">{i.Month}</span>
+                          <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">{monthName(i.Month)}</span>
                           <span className="text-xs text-slate-400">Interest <b className="text-hd">{inr(monthTotals[i.Month ?? '—']?.interest ?? 0)}</b> · Pending <b className="text-amber-300">{inr(monthTotals[i.Month ?? '—']?.pending ?? 0)}</b></span>
                         </div>
                       </td></tr>

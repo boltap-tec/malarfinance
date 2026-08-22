@@ -23,6 +23,14 @@ export const num = (v: unknown): number => {
   return isNaN(n) ? 0 : n
 }
 
+// Friendly label from a "MM-YYYY" month (e.g. "07-2026" -> "Jul 2026").
+export const monthName = (m?: string): string => {
+  const [mm, yy] = String(m ?? '').split('-')
+  const names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const i = Number(mm)
+  return i >= 1 && i <= 12 && yy ? `${names[i]} ${yy}` : String(m ?? '—')
+}
+
 // Sortable key from a "MM-YYYY" month label (e.g. "08-2025" -> 202508).
 export const monthKey = (m: unknown): number => {
   const [mm, yy] = String(m ?? '').split('-')

@@ -18,14 +18,28 @@ export default function Ledger() {
 
   const singleFinance = finance !== 'ALL'
 
-  const { rows, receipts, payments, balance } = useMemo(() => {
-    let list = repo.ledger(financeFilter(finance))
+  const { rows, receipts, payments, balance, balByRef } = useMemo(() => {
+    const all = repo.ledger(financeFilter(finance))
+
+    // Running balance per entry, computed here from the SAME rows the card totals,
+    // so the newest row's balance always equals the "Balance" card (the seeded
+    // Balance column was imported with a different, global method — hence drift).
+    const balByRef = new Map<string, number>()
+    if (singleFinance) {
+      const asc = all.slice().sort((a, b) => {
+        const d = new Date(a.Date_Transaction ?? 0).getTime() - new Date(b.Date_Transaction ?? 0).getTime()
+        return d !== 0 ? d : Number(String(a.Ref_ID).replace(/\D/g, '')) - Number(String(b.Ref_ID).replace(/\D/g, ''))
+      })
+      let run = 0
+      for (const t of asc) { run += num(t.Receipt_Amount) - num(t.Payment_Amount); balByRef.set(String(t.Ref_ID), run) }
+    }
+
+    let list = all
     const s = q.trim().toLowerCase()
     if (s) list = list.filter(t =>
       [t.Description, t.Customer_Name, t.Nature_Transaction, t.STL_No, t.Loan_No, t.Ref_ID]
         .some(v => String(v ?? '').toLowerCase().includes(s)))
-    // Newest first for display; the stored Balance is already the per-finance,
-    // date-ordered running balance (back-dated entries shift it automatically).
+    // Newest first for display.
     list = list.slice().sort((a, b) => {
       const d = new Date(b.Date_Transaction ?? 0).getTime() - new Date(a.Date_Transaction ?? 0).getTime()
       return d !== 0 ? d : Number(String(b.Ref_ID).replace(/\D/g, '')) - Number(String(a.Ref_ID).replace(/\D/g, ''))
@@ -34,7 +48,9 @@ export default function Ledger() {
       rows: list.slice(0, 300),
       receipts: list.reduce((s2, t) => s2 + num(t.Receipt_Amount), 0),
       payments: list.reduce((s2, t) => s2 + num(t.Payment_Amount), 0),
-      balance: singleFinance ? balanceForFinance(finance) : 0,
+      // Balance card = net of the whole finance ledger = the newest row's balance.
+      balance: singleFinance ? all.reduce((s2, t) => s2 + num(t.Receipt_Amount) - num(t.Payment_Amount), 0) : 0,
+      balByRef,
     }
   }, [finance, q, tick, singleFinance])
 
@@ -78,7 +94,7 @@ export default function Ledger() {
                     </Td>
                     <Td right className="text-emerald-400">{num(t.Receipt_Amount) ? inr(num(t.Receipt_Amount)) : ''}</Td>
                     <Td right className="text-rose-400">{num(t.Payment_Amount) ? inr(num(t.Payment_Amount)) : ''}</Td>
-                    {singleFinance && <Td right className="font-medium text-slate-200">{inr(num(t.Balance))}</Td>}
+                    {singleFinance && <Td right className="font-medium text-slate-200">{inr(balByRef.get(String(t.Ref_ID)) ?? 0)}</Td>}
                     <Td className="text-slate-400">{t.Payment_Type ?? '—'}</Td>
                     {isMd && <Td><button title="Delete entry" className="btn-ghost !px-2 !py-1 text-xs text-rose-300" onClick={() => setDel(t)}><Trash2 size={13} /></button></Td>}
                   </tr>

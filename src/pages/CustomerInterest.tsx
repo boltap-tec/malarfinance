@@ -1,9 +1,9 @@
 import { Fragment, useMemo, useState } from 'react'
 import { Percent, IndianRupee } from 'lucide-react'
-import { repo, payCustomerInterest } from '../data/repository'
+import { repo, repayCustomer } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
-import InterestPayModal from '../components/InterestPayModal'
+import CustomerInterestPayModal from '../components/CustomerInterestPayModal'
 import { inr, fmtDate, num, monthKey } from '../lib/format'
 
 // Customer loan interest details, with a per-line "pay interest" action.
@@ -95,13 +95,10 @@ export default function CustomerInterest() {
       )}
 
       {pay && (
-        <InterestPayModal
-          title="Collect customer interest"
+        <CustomerInterestPayModal
           name={pay.Customer_Name}
-          code={pay.Loan_No}
-          month={pay.Month}
-          pending={num(pay.Interest_Pending)}
-          onPay={(amount, date, payType) => payCustomerInterest(pay.ID, amount, date, payType)}
+          rows={repo.interestByCustomer(pay.Customer_STL_NO)}
+          onPay={(amount, date, payType) => repayCustomer({ stl: pay.Customer_STL_NO, principal: 0, interest: amount, date, payType })}
           onClose={() => setPay(null)}
           onSaved={() => { setPay(null); setTick(t => t + 1) }}
         />

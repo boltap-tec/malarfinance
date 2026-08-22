@@ -4,7 +4,7 @@
 import {
   LayoutDashboard, Users, HandCoins, Percent, BookOpenText, PiggyBank,
   Boxes, Gem, Building2, Users2, UserCog, History, Settings, MessageSquare,
-  Landmark, Wallet, ReceiptText, Banknote, Coins, Gavel, TrendingUp, type LucideIcon,
+  Landmark, Wallet, ReceiptText, Banknote, Coins, Gavel, TrendingUp, Handshake, type LucideIcon,
 } from 'lucide-react'
 import { SHOW_OWN_CHIT_FUND } from './store/app'
 
@@ -79,6 +79,7 @@ export const navGroups: NavGroup[] = [
     title: 'More',
     items: [
       { to: '/chits', label: 'Chits', icon: Boxes, desc: 'Invested chit funds' },
+      { to: '/hand', label: 'Hand Exchange', icon: Handshake, desc: 'Personal give & take (private)' },
       { to: '/jewel', label: 'Jewel Loans', icon: Gem, desc: 'Gold / pawn (soon)' },
     ],
   },

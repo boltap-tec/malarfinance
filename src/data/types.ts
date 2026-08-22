@@ -290,6 +290,23 @@ export interface ChitLedgerRow {
   Status?: string                    // Paid | Partial | Pending
 }
 
+// ── Hand exchange (personal give & take — NEVER part of finance data) ────────
+// A private money tracker: money you hand out or take in with people you know.
+// Direction: 'out' = money left your hand, 'in' = money came to your hand.
+// Net "they owe you" per person = sum(out) − sum(in).
+export interface HandExchange {
+  ID: string
+  Date?: string
+  Person: string
+  Person_Phone?: number | string
+  Amount: number
+  Direction: 'out' | 'in'
+  Type: 'Give' | 'Get' | 'Borrow' | 'Return' | string
+  Mode?: string
+  Note?: string
+  Remarks?: string
+}
+
 export interface NatureTransaction {
   Nature_Transaction: string
   Type: 'Receipt' | 'Payment' | string
@@ -371,5 +388,6 @@ export interface Dataset {
   Log: LogEntry[]
   Given: any[]
   Borrowed: any[]
+  Hand_Exchange: HandExchange[]
   Jewel_Loan: any[]
 }

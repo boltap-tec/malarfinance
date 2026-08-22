@@ -10,7 +10,7 @@ import type {
   Dataset, Loan, Customer, InterestRow, LedgerRow, Partner, Finance, Deposit,
   OtherFinanceLoan, Worker, AppNotification, LogEntry, Message,
   ChitCreation, ChitMember, ChitAuction, ChitTakenMember, ChitLedgerRow,
-  InvestedChit, InvestedChitTrans,
+  InvestedChit, InvestedChitTrans, HandExchange,
 } from './types'
 
 const STORAGE_KEY = 'arul-finance:data:v1'
@@ -307,6 +307,36 @@ export const repo = {
     }
   },
 
+  // ── Hand exchange (personal give & take — outside all finance data) ────────
+  handEntries(): HandExchange[] {
+    return (db.Hand_Exchange ?? []).slice().sort((a, b) => new Date(b.Date ?? 0).getTime() - new Date(a.Date ?? 0).getTime())
+  },
+  handHistory(person: string): HandExchange[] {
+    const key = person.trim().toLowerCase()
+    return (db.Hand_Exchange ?? []).filter(e => (e.Person ?? '').trim().toLowerCase() === key)
+      .sort((a, b) => new Date(b.Date ?? 0).getTime() - new Date(a.Date ?? 0).getTime())
+  },
+  // One row per person, with the net balance (net > 0 → they owe you).
+  handPeople(): { name: string; phone?: number | string; net: number; count: number; last?: string }[] {
+    const map = new Map<string, { name: string; phone?: number | string; net: number; count: number; last?: string }>()
+    for (const e of db.Hand_Exchange ?? []) {
+      const key = (e.Person ?? '').trim().toLowerCase()
+      if (!key) continue
+      const cur = map.get(key) ?? { name: e.Person, phone: e.Person_Phone ?? undefined, net: 0, count: 0, last: e.Date }
+      cur.net += e.Direction === 'out' ? num(e.Amount) : -num(e.Amount)
+      cur.count++
+      if (e.Person_Phone && !cur.phone) cur.phone = e.Person_Phone
+      if (e.Date && (!cur.last || e.Date > cur.last)) cur.last = e.Date
+      map.set(key, cur)
+    }
+    return [...map.values()].sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
+  },
+  handSummary(): { theyOwe: number; youOwe: number } {
+    let theyOwe = 0, youOwe = 0
+    for (const p of this.handPeople()) { if (p.net > 0) theyOwe += p.net; else youOwe += -p.net }
+    return { theyOwe, youOwe }
+  },
+
   raw<K extends keyof Dataset>(key: K): Dataset[K] { return db[key] },
 }
 
@@ -390,6 +420,7 @@ const PK: Partial<Record<keyof Dataset, string>> = {
   Chit_Creation: 'Chit_ID', Chit_Member: 'Member_ID', Chit_Auction: 'Chit_Auction_ID',
   Chit_Taken_Member: 'Chit_Taken_ID', Chit_Ledger: 'ID',
   Invested_Chit: 'Chit_ID', Invested_Chit_Trans: 'ID',
+  Hand_Exchange: 'ID',
 }
 export let lastWriteError = ''
 function noteErr(where: string, msg?: string) {
@@ -1607,5 +1638,19 @@ export async function recordInvestedContribution(inp: InvestedContributionInput)
     Chit_Status: month >= num(chit.No_Months) ? 'Completed' : 'Active',
   })
   writeLog({ Action: 'create', Entity: 'Invested_Chit_Trans', Entity_Label: `${chit.Chit_Name} · month ${month} · ${inrFmt(num(inp.amount))}`, After: row })
+  persist()
+}
+
+// ── Hand exchange writes (personal — never posted to any finance ledger) ─────
+export async function addHandEntry(e: Omit<HandExchange, 'ID'> & { ID?: string }): Promise<void> {
+  const row: HandExchange = { ...e, ID: e.ID || `H-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` }
+  db.Hand_Exchange = [row, ...(db.Hand_Exchange ?? [])]
+  await sInsert('Hand_Exchange', row)
+  persist()
+}
+
+export async function deleteHandEntry(id: string): Promise<void> {
+  db.Hand_Exchange = (db.Hand_Exchange ?? []).filter(e => e.ID !== id)
+  await sDelete('Hand_Exchange', id)
   persist()
 }

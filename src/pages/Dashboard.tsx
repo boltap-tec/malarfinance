@@ -259,6 +259,7 @@ const GROUPS: Group[] = [
   {
     title: 'More', icon: Boxes, tone: 'text-slate-300 bg-slate-500/15 ring-slate-500/30',
     items: [
+      { label: 'Hand exchange', to: '/hand' },
       { label: 'Chits', to: '/chits' },
       { label: 'Ledger', to: '/ledger' },
       { label: 'Activity log', to: '/logs' },

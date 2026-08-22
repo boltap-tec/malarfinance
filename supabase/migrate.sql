@@ -2235,3 +2235,49 @@ insert into "Borrowed" ("Date", "Name", "Description", "Mode", "Status", "Remark
 ('2026-06-19', 'Tharun', 'Cash', 'Other', 'Not_Given', NULL, '75c7280c', 15000);
 alter table "Borrowed" enable row level security;
 create policy "read_all_Borrowed" on "Borrowed" for select using (true);
+
+drop table if exists "Hand_Exchange" cascade;
+create table "Hand_Exchange" ("ID" text, "Date" text, "Person" text, "Person_Phone" text, "Amount" numeric, "Direction" text, "Type" text, "Mode" text, "Note" text, "Remarks" text);
+insert into "Hand_Exchange" ("ID", "Date", "Person", "Person_Phone", "Amount", "Direction", "Type", "Mode", "Note", "Remarks") values
+('b19c2a41', '2026-03-17', 'appa', NULL, 12500.0, 'out', 'Give', 'Other', '7500+5000 advocate fee', NULL),
+('67e76b92', '2026-03-17', 'Chandrasekar', NULL, 20000.0, 'out', 'Give', 'Cash', 'by finance kannan chit amount 1l-80k', NULL),
+('a47e6430', '2026-03-17', 'Chandrasekar', NULL, 25000.0, 'out', 'Give', 'Cash', 'Valarmathi Chit amount', 'Given arun  prakash'),
+('a47e6430-got', '2026-03-17', 'Chandrasekar', NULL, 25000.0, 'in', 'Get', 'Cash', 'Received back — Valarmathi Chit amount', 'Given arun  prakash'),
+('3d801040', '2026-03-17', 'Kannan', NULL, 45000.0, 'out', 'Give', 'Cash', 'Suresh annan loan amount', 'Paid to ravi loan'),
+('3d801040-got', '2026-03-17', 'Kannan', NULL, 45000.0, 'in', 'Get', 'Cash', 'Received back — Suresh annan loan amount', 'Paid to ravi loan'),
+('83586402', '2026-03-17', 'Dinesh Muthusamy', NULL, 1450.0, 'out', 'Give', 'Cash', 'tyre changed for fascino', NULL),
+('83586402-got', '2026-03-17', 'Dinesh Muthusamy', NULL, 1450.0, 'in', 'Get', 'Cash', 'Received back — tyre changed for fascino', NULL),
+('f966b134', '2026-03-14', 'Chandrasekhar', NULL, 50000.0, 'out', 'Give', 'Cash', 'Posb account at Pugalur', 'Given to arun prakash'),
+('f966b134-got', '2026-03-14', 'Chandrasekhar', NULL, 50000.0, 'in', 'Get', 'Cash', 'Received back — Posb account at Pugalur', 'Given to arun prakash'),
+('906d4679', '2026-03-18', 'Arun prakash', NULL, 50000.0, 'out', 'Give', 'Cash', 'Loan', '50k adjusted and 50k pending out of 1l'),
+('63a36117', '2026-03-25', 'Vinoth', NULL, 1000.0, 'out', 'Give', 'Cash', 'kovil vari', 'by gpay'),
+('63a36117-got', '2026-03-25', 'Vinoth', NULL, 1000.0, 'in', 'Get', 'Cash', 'Received back — kovil vari', 'by gpay'),
+('c79cbcd7', '2026-03-25', 'malar app', NULL, 34000.0, 'out', 'Give', 'Cash', 'ac', NULL),
+('c79cbcd7-got', '2026-03-25', 'malar app', NULL, 34000.0, 'in', 'Get', 'Cash', 'Received back — ac', NULL),
+('b7a854ae', '2026-04-16', 'Malar appa', NULL, 50000.0, 'out', 'Give', 'Cash', 'Loan', 'As loan'),
+('b7a854ae-got', '2026-04-16', 'Malar appa', NULL, 50000.0, 'in', 'Get', 'Cash', 'Received back — Loan', 'As loan'),
+('62a95b80', '2026-04-18', 'Nagaraj', NULL, 1500.0, 'out', 'Give', 'Upi', 'By upo', NULL),
+('62a95b80-got', '2026-04-18', 'Nagaraj', NULL, 1500.0, 'in', 'Get', 'Upi', 'Received back — By upo', NULL),
+('cca189cc', '2026-05-17', 'Appa', NULL, 3000.0, 'out', 'Give', 'Cash', 'Given to palkarar mama', 'appa got it'),
+('cca189cc-got', '2026-05-17', 'Appa', NULL, 3000.0, 'in', 'Get', 'Cash', 'Received back — Given to palkarar mama', 'appa got it'),
+('ec77c07f', '2026-05-24', 'SuryaPrasath', NULL, 20000.0, 'out', 'Give', 'Cash', 'given as cash', NULL),
+('ec77c07f-got', '2026-05-24', 'SuryaPrasath', NULL, 20000.0, 'in', 'Get', 'Cash', 'Received back — given as cash', NULL),
+('af552e8f', '2026-06-23', 'Palanisamy', NULL, 14000.0, 'out', 'Give', 'Upi', 'Through vellaiyan', NULL),
+('af552e8f-got', '2026-06-23', 'Palanisamy', NULL, 14000.0, 'in', 'Get', 'Upi', 'Received back — Through vellaiyan', NULL),
+('d57ae31d', '2026-07-06', 'Appa', NULL, 5000.0, 'out', 'Give', 'Cash', 'Appa', 'Adjusted 5k for mohan gpay remin5k, 5k chit adjusted'),
+('d57ae31d-got', '2026-07-06', 'Appa', NULL, 5000.0, 'in', 'Get', 'Cash', 'Received back — Appa', 'Adjusted 5k for mohan gpay remin5k, 5k chit adjusted'),
+('70e45f4a', '2026-07-17', 'Surya', NULL, 6300.0, 'out', 'Give', 'Upi', 'To இளமதி', NULL),
+('70e45f4a-got', '2026-07-17', 'Surya', NULL, 6300.0, 'in', 'Get', 'Upi', 'Received back — To இளமதி', NULL),
+('21185931', '2026-07-24', 'Arun prakash', NULL, 2600.0, 'out', 'Give', 'Other', 'Bottle 800, 800, 1000 by cash', NULL),
+('21185931-got', '2026-07-24', 'Arun prakash', NULL, 2600.0, 'in', 'Get', 'Other', 'Received back — Bottle 800, 800, 1000 by cash', NULL),
+('0cc84c54', '2026-08-01', 'Kaviyarsu', NULL, 5000.0, 'out', 'Give', 'Upi', 'Kavi', NULL),
+('7b623850', '2026-08-06', 'Nagaraj', NULL, 20000.0, 'out', 'Give', 'Upi', 'Upi', NULL),
+('36967f20', '2026-03-25', 'Tharun', NULL, 20000.0, 'in', 'Borrow', 'Cash', 'advance chit for april by tharun', '20000'),
+('36967f20-ret', '2026-03-25', 'Tharun', NULL, 20000.0, 'out', 'Return', 'Cash', 'Returned — advance chit for april by tharun', '20000'),
+('e799bd41', '2026-03-25', 'amuthavel', NULL, 12500.0, 'in', 'Borrow', 'Other', 'for ac', 'for ac'),
+('e799bd41-ret', '2026-03-25', 'amuthavel', NULL, 12500.0, 'out', 'Return', 'Other', 'Returned — for ac', 'for ac'),
+('742b7c3f', '2026-04-21', 'Nagaraj jewel friend', NULL, 22200.0, 'in', 'Borrow', 'Account', '112200 out of which 90k given to ganesh jewellery', NULL),
+('2d1124fe', '2026-05-25', 'Nagaraj', NULL, 490000.0, 'in', 'Borrow', 'Account', '10-6=4l, 20k account, 20k account, 50 account = total 490000', NULL),
+('75c7280c', '2026-06-19', 'Tharun', NULL, 15000.0, 'in', 'Borrow', 'Other', 'Cash', NULL);
+alter table "Hand_Exchange" enable row level security;
+create policy "read_all_Hand_Exchange" on "Hand_Exchange" for select using (true);

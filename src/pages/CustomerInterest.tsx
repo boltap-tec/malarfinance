@@ -1,19 +1,24 @@
 import { Fragment, useMemo, useState } from 'react'
-import { Percent, IndianRupee } from 'lucide-react'
-import { repo, repayCustomer } from '../data/repository'
+import { Percent, IndianRupee, Plus, Pencil, Trash2 } from 'lucide-react'
+import { repo, repayCustomer, updateInterestRow, addInterestRow, deleteInterestRow } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal } from '../components/ui'
 import CustomerInterestPayModal from '../components/CustomerInterestPayModal'
 import { inr, fmtDate, num, monthKey, monthName } from '../lib/format'
+import type { InterestRow } from '../data/types'
 
 // Customer loan interest details, with a per-line "pay interest" action.
 export default function CustomerInterest() {
   const finance = useApp(s => s.finance)
   const role = useApp(s => s.user?.role)
   const editable = canEdit(role)
+  const isMd = role === 'md'
   const [q, setQ] = useState('')
   const [tick, setTick] = useState(0)
   const [pay, setPay] = useState<any | null>(null)
+  const [edit, setEdit] = useState<InterestRow | null>(null)
+  const [del, setDel] = useState<InterestRow | null>(null)
+  const [adding, setAdding] = useState(false)
 
   const { rows, monthTotals, billed, paid, pending } = useMemo(() => {
     let list = repo.interest(financeFilter(finance))
@@ -39,7 +44,11 @@ export default function CustomerInterest() {
 
   return (
     <div>
-      <PageHeader title="Customer Interest" subtitle="Interest billed on customer loans — collect pending interest per line." />
+      <PageHeader
+        title="Customer Interest"
+        subtitle="Interest billed on customer loans — collect pending interest per line."
+        action={isMd && <button className="btn-primary !py-1.5" onClick={() => setAdding(true)}><Plus size={15} /> Add interest</button>}
+      />
 
       <div className="mb-4 grid grid-cols-3 gap-3">
         <StatCard label="Total interest" value={inr(billed)} tone="blue" icon={<Percent size={18} />} />
@@ -56,13 +65,13 @@ export default function CustomerInterest() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Customer</Th><Th>Loan</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Collect</Th>}</tr>
+                <tr><Th>Customer</Th><Th>Loan</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Collect</Th>}{isMd && <Th>Edit</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.slice(0, 300).map((i, k, arr) => (
                   <Fragment key={k}>
                     {(k === 0 || arr[k - 1].Month !== i.Month) && (
-                      <tr className="bg-slate-900/80"><td colSpan={editable ? 8 : 7} className="px-3 py-1.5">
+                      <tr className="bg-slate-900/80"><td colSpan={7 + (editable ? 1 : 0) + (isMd ? 1 : 0)} className="px-3 py-1.5">
                         <div className="flex flex-wrap items-center gap-3">
                           <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">{monthName(i.Month)}</span>
                           <span className="text-xs text-slate-400">Interest <b className="text-hd">{inr(monthTotals[i.Month ?? '—']?.interest ?? 0)}</b> · Received <b className="text-emerald-300">{inr(monthTotals[i.Month ?? '—']?.received ?? 0)}</b> · Pending <b className="text-amber-300">{inr(monthTotals[i.Month ?? '—']?.pending ?? 0)}</b></span>
@@ -85,6 +94,14 @@ export default function CustomerInterest() {
                             : <span className="text-xs text-slate-600">—</span>}
                         </Td>
                       )}
+                      {isMd && (
+                        <Td>
+                          <div className="flex gap-1">
+                            <button title="Edit" className="btn-ghost !px-2 !py-1 text-xs" onClick={() => setEdit(i)}><Pencil size={13} /></button>
+                            <button title="Delete" className="btn-ghost !px-2 !py-1 text-xs text-rose-300" onClick={() => setDel(i)}><Trash2 size={13} /></button>
+                          </div>
+                        </Td>
+                      )}
                     </tr>
                   </Fragment>
                 ))}
@@ -103,6 +120,100 @@ export default function CustomerInterest() {
           onSaved={() => { setPay(null); setTick(t => t + 1) }}
         />
       )}
+
+      {(adding || edit) && (
+        <InterestFormModal
+          finance={financeFilter(finance)}
+          row={edit}
+          onClose={() => { setAdding(false); setEdit(null) }}
+          onSaved={() => { setAdding(false); setEdit(null); setTick(t => t + 1) }}
+        />
+      )}
+
+      {del && (
+        <ConfirmModal
+          title="Delete interest row"
+          message={<>Delete interest for <b className="text-hd">{del.Customer_Name}</b> · {del.Loan_No} · {del.Month} ({inr(num(del.Interest_Amount))})? Restorable from the Log.</>}
+          onConfirm={async () => { await deleteInterestRow(del.ID); setDel(null); setTick(t => t + 1) }}
+          onClose={() => setDel(null)}
+        />
+      )}
     </div>
+  )
+}
+
+// Add a new customer-interest row, or edit an existing one. Recomputes the
+// customer's totals and records the change in the Activity Log.
+function InterestFormModal({ finance, row, onClose, onSaved }: {
+  finance?: string; row: InterestRow | null; onClose: () => void; onSaved: () => void
+}) {
+  const editing = !!row
+  const customers = useMemo(() => repo.customers(finance), [finance])
+  const [stl, setStl] = useState(row?.Customer_STL_NO ?? '')
+  const loans = useMemo(() => stl ? repo.loansByCustomer(stl) : [], [stl])
+  const [loanNo, setLoanNo] = useState(row?.Loan_No ?? '')
+  const [month, setMonth] = useState(row?.Month ?? '')
+  const [from, setFrom] = useState(row?.From_Date ?? '')
+  const [to, setTo] = useState(row?.To_Date ?? '')
+  const [amount, setAmount] = useState(String(num(row?.Interest_Amount) || ''))
+  const [received, setReceived] = useState(String(num(row?.Amount_Received) || ''))
+  const [busy, setBusy] = useState(false)
+
+  const cust = customers.find(c => c.Customer_STL_NO === stl)
+  const pending = Math.max(0, num(amount) - num(received))
+  const valid = stl && loanNo && month.trim() && num(amount) > 0
+
+  async function save() {
+    if (!valid || busy) return
+    setBusy(true)
+    const status = num(received) >= num(amount) ? 'Paid' : num(received) > 0 ? 'Partial' : 'Pending'
+    if (editing && row) {
+      await updateInterestRow(row.ID, {
+        Month: month.trim(), From_Date: from || undefined, To_Date: to || undefined,
+        Interest_Amount: num(amount), Amount_Received: num(received), Interest_Pending: pending, Status: status,
+      })
+    } else {
+      await addInterestRow({
+        Finance_Name: cust?.Finance_Name ?? finance ?? '', Loan_No: loanNo,
+        Customer_STL_NO: stl, Customer_Name: cust?.Customer_Name ?? '',
+        Month: month.trim(), From_Date: from || undefined, To_Date: to || undefined,
+        Interest_Amount: num(amount), Amount_Received: num(received), Interest_Pending: pending, Status: status,
+      })
+    }
+    onSaved()
+  }
+
+  return (
+    <Modal title={editing ? `Edit interest — ${row?.Loan_No}` : 'Add customer interest'} onClose={onClose} footer={<>
+      <button className="btn-ghost" onClick={onClose}>Cancel</button>
+      <button className="btn-primary" disabled={!valid || busy} onClick={save}>{editing ? 'Save changes' : 'Add interest'}</button>
+    </>}>
+      {!editing && (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Customer">
+            <select className="input" value={stl} onChange={e => { setStl(e.target.value); setLoanNo('') }}>
+              <option value="">Select…</option>
+              {customers.map(c => <option key={c.Customer_STL_NO} value={c.Customer_STL_NO}>{c.Customer_Name}</option>)}
+            </select>
+          </Field>
+          <Field label="Loan">
+            <select className="input" value={loanNo} onChange={e => setLoanNo(e.target.value)} disabled={!stl}>
+              <option value="">Select…</option>
+              {loans.map(l => <option key={l.Loan_No} value={l.Loan_No}>{l.Loan_No} · {inr(num(l.Loan_Amount))}</option>)}
+            </select>
+          </Field>
+        </div>
+      )}
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Month" hint="MM-YYYY"><input className="input" value={month} onChange={e => setMonth(e.target.value)} placeholder="08-2026" /></Field>
+        <Field label="From"><input type="date" className="input" value={from} onChange={e => setFrom(e.target.value)} /></Field>
+        <Field label="To"><input type="date" className="input" value={to} onChange={e => setTo(e.target.value)} /></Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Interest amount (₹)"><input className="input" inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} /></Field>
+        <Field label="Received (₹)"><input className="input" inputMode="numeric" value={received} onChange={e => setReceived(e.target.value)} /></Field>
+      </div>
+      <p className="text-sm text-slate-400">Pending: <b className="text-amber-300">{inr(pending)}</b></p>
+    </Modal>
   )
 }

@@ -1166,6 +1166,41 @@ export async function updateInterestRow(id: string, patch: Partial<InterestRow>)
   persist()
 }
 
+const rup_ = (n: number) => `₹${Math.round(num(n)).toLocaleString('en-IN')}`
+
+// Add a customer interest row by hand (admin correction). Logged; recomputes
+// the customer's roll-up totals.
+export async function addInterestRow(input: Omit<InterestRow, 'ID'> & { ID?: string }): Promise<InterestRow> {
+  const loan = (db.Loan_Processing ?? []).find(l => l.Loan_No === input.Loan_No)
+  const received = num(input.Amount_Received)
+  const amount = num(input.Interest_Amount)
+  const row: InterestRow = {
+    Amount_Received: received, Status: input.Status ?? (received >= amount && amount > 0 ? 'Paid' : received > 0 ? 'Partial' : 'Pending'),
+    Referred_Partner: input.Referred_Partner ?? loan?.Referred_Partner,
+    Interest_Type: input.Interest_Type ?? loan?.Interest_Type,
+    ...input,
+    Interest_Pending: input.Interest_Pending ?? Math.max(0, amount - received),
+    ID: input.ID || `${input.Customer_STL_NO}-${input.Loan_No}-${input.Month}-manual-${Date.now()}`,
+  }
+  db.Interest_Details = [...(db.Interest_Details ?? []), row]
+  await sInsert('Interest_Details', row)
+  if (row.Customer_STL_NO) recomputeCustomer(row.Customer_STL_NO)
+  writeLog({ Action: 'create', Entity: 'Interest_Details', Entity_Label: `${row.Loan_No} · ${row.Month} · ${rup_(amount)}`, After: row })
+  persist()
+  return row
+}
+
+// Delete a customer interest row (reversible from the log); recomputes customer.
+export async function deleteInterestRow(id: string): Promise<void> {
+  const row = (db.Interest_Details ?? []).find(i => i.ID === id)
+  if (!row) return
+  db.Interest_Details = (db.Interest_Details ?? []).filter(i => i.ID !== id)
+  await sDelete('Interest_Details', id)
+  if (row.Customer_STL_NO) recomputeCustomer(row.Customer_STL_NO)
+  writeLog({ Action: 'delete', Entity: 'Interest_Details', Entity_Label: `${row.Loan_No} · ${row.Month} · ${rup_(num(row.Interest_Amount))}`, Before: row })
+  persist()
+}
+
 // Remove every interest row for a finance + month (reversible from the log).
 export async function revokeInterestForMonth(finance: string, month: string): Promise<number> {
   const removed = (db.Interest_Details ?? []).filter(i => i.Finance_Name === finance && i.Month === month)

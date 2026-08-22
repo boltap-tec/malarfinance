@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Boxes, Users, Gavel, Coins, HandCoins, Plus, UserPlus, Printer } from 'lucide-react'
+import { ArrowLeft, Boxes, Users, Gavel, Coins, HandCoins, Plus, UserPlus, RotateCcw } from 'lucide-react'
 import {
   repo, addChit, nextChitId, addChitMember, runChitAuction, assignChitTaker, collectChitDue, payChitTaker,
-  getSettings,
+  getSettings, revokeChitAuction,
 } from '../data/repository'
 import type { ChitCreation, ChitAuction, ChitTakenMember, ChitLedgerRow, ChitMember } from '../data/types'
 import { useApp, canEdit } from '../store/app'
@@ -16,6 +16,7 @@ type ModalState =
   | { kind: 'taker'; auction: ChitAuction }
   | { kind: 'collect'; row: ChitLedgerRow }
   | { kind: 'payout'; taker: ChitTakenMember }
+  | { kind: 'revokeAuction'; auction: ChitAuction }
   | null
 
 export default function ChitDetail() {
@@ -99,7 +100,12 @@ export default function ChitDetail() {
                       <Td right className="text-hd">{inr(num(a.Total_Auction_Amount_After_Commission))}</Td>
                       <Td className="text-slate-300">{tk.length ? tk.map(t => t.Member_Name).join(', ') : <span className="text-slate-500">—</span>}</Td>
                       <Td><Badge tone={statusTone(a.Auction_Status)}>{a.Auction_Status ?? '—'}</Badge></Td>
-                      {editable && <Td>{canAssign && <button className="btn-ghost !py-1 !px-2 text-xs" onClick={() => setModal({ kind: 'taker', auction: a })}><Plus size={12} /> Assign taker</button>}</Td>}
+                      {editable && <Td>
+                        <div className="flex items-center gap-1">
+                          {canAssign && <button className="btn-ghost !py-1 !px-2 text-xs" onClick={() => setModal({ kind: 'taker', auction: a })}><Plus size={12} /> Assign taker</button>}
+                          <button className="btn-ghost !py-1 !px-2 text-xs text-rose-300" title="Revoke this auction" onClick={() => setModal({ kind: 'revokeAuction', auction: a })}><RotateCcw size={12} /> Revoke</button>
+                        </div>
+                      </Td>}
                     </tr>
                   )
                 })}
@@ -223,7 +229,39 @@ export default function ChitDetail() {
         onClose={() => setModal(null)}
         onSave={(amt, date, pt, remarks) => payChitTaker(modal.taker.Chit_Taken_ID, amt, date, pt, remarks).then(refresh)}
       />}
+      {modal?.kind === 'revokeAuction' && <RevokeAuctionModal auction={modal.auction} onClose={() => setModal(null)} onSaved={refresh} />}
     </div>
+  )
+}
+
+// Confirm + revoke a chit auction and everything it created (reversible from the Log).
+function RevokeAuctionModal({ auction, onClose, onSaved }: { auction: ChitAuction; onClose: () => void; onSaved: () => void }) {
+  const dues = repo.chitLedgerByAuction(auction.Chit_Auction_ID)
+  const takers = repo.chitTakersByAuction(auction.Chit_Auction_ID)
+  const collected = dues.reduce((s, r) => s + num(r.Received_Amount), 0)
+  const [busy, setBusy] = useState(false)
+
+  async function doRevoke() {
+    if (busy) return
+    setBusy(true)
+    await revokeChitAuction(auction.Chit_Auction_ID)
+    onSaved()
+  }
+
+  return (
+    <Modal title={`Revoke auction — month ${num(auction.Month_Count)}`} onClose={onClose} footer={<>
+      <button className="btn-ghost" onClick={onClose}>Cancel</button>
+      <button className="btn-primary !bg-rose-600 hover:!bg-rose-500" disabled={busy} onClick={doRevoke}><RotateCcw size={15} /> Revoke auction</button>
+    </>}>
+      <p className="text-sm text-slate-300">This removes month {num(auction.Month_Count)}'s auction and everything it created:</p>
+      <ul className="mt-2 space-y-1 text-sm text-slate-400">
+        <li>• The auction (bid {inr(num(auction.Total_Auction_Amount))})</li>
+        <li>• {dues.length} member due row{dues.length === 1 ? '' : 's'} ({inr(collected)} already collected will be undone)</li>
+        <li>• {takers.length} taker/payout record{takers.length === 1 ? '' : 's'}</li>
+      </ul>
+      {collected > 0 && <p className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300 ring-1 ring-amber-500/30">Note: {inr(collected)} of dues were already collected for this month — revoking removes those receipts too.</p>}
+      <p className="mt-3 text-xs text-slate-500">Fully reversible — you can restore it any time from the Activity Log.</p>
+    </Modal>
   )
 }
 

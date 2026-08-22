@@ -1165,10 +1165,91 @@ export async function revokeInterestForMonth(finance: string, month: string): Pr
   return removed.length
 }
 
+// Revoke (cancel) a chit auction and everything it created — its per-member due
+// rows and any takers — reversing the chit + member roll-ups. Fully reversible
+// from the Activity Log.
+export async function revokeChitAuction(auctionId: string): Promise<void> {
+  const auction = (db.Chit_Auction ?? []).find(a => a.Chit_Auction_ID === auctionId)
+  if (!auction) return
+  const chitId = auction.Chit_ID
+  const ledger = (db.Chit_Ledger ?? []).filter(r => r.Chit_Auction_ID === auctionId)
+  const takers = (db.Chit_Taken_Member ?? []).filter(t => t.Chit_Auction_ID === auctionId)
+
+  // Snapshot the member + chit rows we'll change, so restore can put them back.
+  const affected = [...new Set(takers.map(t => t.Member_ID))]
+  const memberBefore = (db.Chit_Member ?? []).filter(m => affected.includes(m.Member_ID)).map(m => ({ ...m }))
+  const chitRow = (db.Chit_Creation ?? []).find(c => c.Chit_ID === chitId)
+  const chitBefore = chitRow ? { ...chitRow } : undefined
+
+  // Reverse each taker's effect on its member row.
+  for (const t of takers) {
+    const member = (db.Chit_Member ?? []).find(m => m.Member_ID === t.Member_ID)
+    if (!member) continue
+    const takenElsewhere = (db.Chit_Taken_Member ?? []).some(x =>
+      x.Member_ID === t.Member_ID && x.Chit_ID === chitId &&
+      x.Chit_Auction_ID !== auctionId && x.Member_Type !== 'Company_Topup')
+    const patch: Partial<ChitMember> = {
+      Chit_Taken_Amount: Math.max(0, num(member.Chit_Taken_Amount) - num(t.Total_Amount_to_Member)),
+      Total_Auction_Amount: Math.max(0, num(member.Total_Auction_Amount) - num(t.Total_Amount_to_Member)),
+      Amount_Given: Math.max(0, num(member.Amount_Given) - num(t.Amount_Given_to_Member)),
+      Remaining_Amount: Math.max(0, num(member.Remaining_Amount) - num(t.Pending_Amount)),
+    }
+    if (!takenElsewhere) patch.Chit_Taken = 'Not_Taken'
+    db.Chit_Member = (db.Chit_Member ?? []).map(m => m.Member_ID === t.Member_ID ? { ...m, ...patch } : m)
+    await sUpdate('Chit_Member', t.Member_ID, patch)
+  }
+
+  // Delete the auction, its dues and its takers.
+  db.Chit_Auction = (db.Chit_Auction ?? []).filter(a => a.Chit_Auction_ID !== auctionId)
+  db.Chit_Ledger = (db.Chit_Ledger ?? []).filter(r => r.Chit_Auction_ID !== auctionId)
+  db.Chit_Taken_Member = (db.Chit_Taken_Member ?? []).filter(t => t.Chit_Auction_ID !== auctionId)
+  await sDelete('Chit_Auction', auctionId)
+  for (const r of ledger) await sDelete('Chit_Ledger', r.ID)
+  for (const t of takers) await sDelete('Chit_Taken_Member', t.Chit_Taken_ID)
+
+  // Undo this auction's contribution to the chit roll-ups: month count drops to
+  // the latest remaining auction, shares-taken loses exactly this auction's takers.
+  if (chitRow) {
+    const remaining = (db.Chit_Auction ?? []).filter(a => a.Chit_ID === chitId)
+    const maxMonth = remaining.reduce((m, a) => Math.max(m, num(a.Month_Count)), 0)
+    const revokedPct = takers.reduce((s, t) => s + num(t.Percentage_Need_to_Take), 0)
+    const newTaken = Math.max(0, num(chitRow.Total_Member_Taken) - revokedPct)
+    await updateChit(chitId, { No_Month_Completed: maxMonth, Total_Member_Taken: newTaken })
+  }
+
+  writeLog({
+    Action: 'revoke', Entity: 'Chit_Auction',
+    Entity_Label: `${auction.Chit_Name ?? chitId} · month ${num(auction.Month_Count)} · ${ledger.length} dues, ${takers.length} taker(s)`,
+    Before: { auction, ledger, takers, members: memberBefore, chit: chitBefore },
+  })
+  persist()
+}
+
 // ── Restore a deleted / revoked entry from the log ───────────────────────────
 export async function restoreFromLog(logId: string): Promise<void> {
   const entry = (db.Log ?? []).find(l => l.id === logId)
   if (!entry || entry.Restored || (entry.Action !== 'delete' && entry.Action !== 'revoke')) return
+
+  // Composite restore for a revoked chit auction (spans several tables).
+  if (entry.Entity === 'Chit_Auction' && entry.Before && !Array.isArray(entry.Before)) {
+    const b = entry.Before as {
+      auction: ChitAuction; ledger: ChitLedgerRow[]; takers: ChitTakenMember[]
+      members?: ChitMember[]; chit?: ChitCreation
+    }
+    if (b.auction) { db.Chit_Auction = [b.auction, ...(db.Chit_Auction ?? [])]; await sInsert('Chit_Auction', b.auction) }
+    if (b.ledger?.length) { db.Chit_Ledger = [...b.ledger, ...(db.Chit_Ledger ?? [])]; await sInsert('Chit_Ledger', b.ledger) }
+    if (b.takers?.length) { db.Chit_Taken_Member = [...b.takers, ...(db.Chit_Taken_Member ?? [])]; await sInsert('Chit_Taken_Member', b.takers) }
+    if (b.members?.length) for (const m of b.members) {
+      db.Chit_Member = (db.Chit_Member ?? []).map(x => x.Member_ID === m.Member_ID ? m : x); await sUpdate('Chit_Member', m.Member_ID, m)
+    }
+    if (b.chit) { db.Chit_Creation = (db.Chit_Creation ?? []).map(c => c.Chit_ID === b.chit!.Chit_ID ? b.chit! : c); await sUpdate('Chit_Creation', b.chit.Chit_ID, b.chit) }
+    db.Log = (db.Log ?? []).map(l => l.id === logId ? { ...l, Restored: true } : l)
+    await sUpdate('Log', logId, { Restored: true })
+    writeLog({ Action: 'restore', Entity: 'Chit_Auction', Entity_Label: entry.Entity_Label })
+    persist()
+    return
+  }
+
   const table = entry.Entity as keyof Dataset
   const rows = Array.isArray(entry.Before) ? entry.Before : [entry.Before]
   ;(db as any)[table] = [...rows, ...((db as any)[table] ?? [])]

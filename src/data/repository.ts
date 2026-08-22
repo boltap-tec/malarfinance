@@ -544,6 +544,19 @@ export async function deleteLedgerEntry(refId: string): Promise<void> {
   persist()
 }
 
+// Edit a ledger entry in place (date / description / amounts / mode) and
+// recompute the finance's running balance. Logged with before + after.
+export async function updateLedgerEntry(refId: string, patch: Partial<LedgerRow>): Promise<void> {
+  const before = (db.Transaction_Ledger ?? []).find(t => String(t.Ref_ID) === String(refId))
+  if (!before) return
+  const after = { ...before, ...patch }
+  db.Transaction_Ledger = (db.Transaction_Ledger ?? []).map(t => String(t.Ref_ID) === String(refId) ? after : t)
+  await sUpdate('Transaction_Ledger', String(refId), patch)
+  recomputeBalances(String(after.Finance_Name ?? ''))
+  writeLog({ Action: 'update', Entity: 'Transaction_Ledger', Entity_Label: `Ref ${refId} · ${after.Description ?? after.Nature_Transaction}`, Before: before, After: after })
+  persist()
+}
+
 // Deposit/other-finance rows have no unique key, so we match the exact row and
 // replace that finance's rows in Supabase.
 export async function deleteDeposit(row: Deposit): Promise<void> {

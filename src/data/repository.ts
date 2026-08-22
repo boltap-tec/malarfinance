@@ -1201,6 +1201,44 @@ export async function deleteInterestRow(id: string): Promise<void> {
   persist()
 }
 
+// ── Depositor & other-finance interest: admin add / edit / delete (logged) ───
+// These two schedules are plain rows keyed by ID; deletes are restorable.
+async function addSideInterest(table: 'Depositer_Interest' | 'Other_Finance_Interest', input: any, label: string): Promise<void> {
+  const amount = num(input.Interest_Amount), received = num(input.Amount_Received)
+  const row = {
+    Amount_Received: received, Status: received >= amount && amount > 0 ? 'Paid' : received > 0 ? 'Partial' : 'Pending',
+    ...input,
+    Interest_Pending: input.Interest_Pending ?? Math.max(0, amount - received),
+    ID: input.ID || `${label}-${input.Month}-manual-${Date.now()}`,
+  }
+  ;(db as any)[table] = [...((db as any)[table] ?? []), row]
+  await sInsert(table, row)
+  writeLog({ Action: 'create', Entity: table, Entity_Label: `${label} · ${input.Month} · ${rup_(amount)}`, After: row })
+  persist()
+}
+async function updateSideInterest(table: 'Depositer_Interest' | 'Other_Finance_Interest', id: string, patch: any, label: string): Promise<void> {
+  const before = ((db as any)[table] ?? []).find((i: any) => i.ID === id)
+  ;(db as any)[table] = ((db as any)[table] ?? []).map((i: any) => i.ID === id ? { ...i, ...patch } : i)
+  await sUpdate(table, id, patch)
+  writeLog({ Action: 'update', Entity: table, Entity_Label: `${label} · ${patch.Month ?? before?.Month}`, Before: before, After: ((db as any)[table] ?? []).find((i: any) => i.ID === id) })
+  persist()
+}
+async function deleteSideInterest(table: 'Depositer_Interest' | 'Other_Finance_Interest', id: string, label: string): Promise<void> {
+  const row = ((db as any)[table] ?? []).find((i: any) => i.ID === id)
+  if (!row) return
+  ;(db as any)[table] = ((db as any)[table] ?? []).filter((i: any) => i.ID !== id)
+  await sDelete(table, id)
+  writeLog({ Action: 'delete', Entity: table, Entity_Label: `${label} · ${row.Month} · ${rup_(num(row.Interest_Amount))}`, Before: row })
+  persist()
+}
+
+export const addDepositInterestRow = (input: any) => addSideInterest('Depositer_Interest', input, input.Deposit_No)
+export const updateDepositInterestRow = (id: string, patch: any) => updateSideInterest('Depositer_Interest', id, patch, patch.Deposit_No ?? '')
+export const deleteDepositInterestRow = (id: string) => deleteSideInterest('Depositer_Interest', id, '')
+export const addOtherFinanceInterestRow = (input: any) => addSideInterest('Other_Finance_Interest', input, input.Loan_No)
+export const updateOtherFinanceInterestRow = (id: string, patch: any) => updateSideInterest('Other_Finance_Interest', id, patch, patch.Loan_No ?? '')
+export const deleteOtherFinanceInterestRow = (id: string) => deleteSideInterest('Other_Finance_Interest', id, '')
+
 // Remove every interest row for a finance + month (reversible from the log).
 export async function revokeInterestForMonth(finance: string, month: string): Promise<number> {
   const removed = (db.Interest_Details ?? []).filter(i => i.Finance_Name === finance && i.Month === month)

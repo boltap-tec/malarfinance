@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Boxes, Users, Gavel, Coins, HandCoins, Plus, UserPlus, Printer } from 'lucide-react'
 import {
   repo, addChit, nextChitId, addChitMember, runChitAuction, assignChitTaker, collectChitDue, payChitTaker,
+  addChitCompanyTopup,
 } from '../data/repository'
 import type { ChitCreation, ChitAuction, ChitTakenMember, ChitLedgerRow, ChitMember } from '../data/types'
 import { useApp, canEdit } from '../store/app'
@@ -16,6 +17,7 @@ type ModalState =
   | { kind: 'collect'; row: ChitLedgerRow }
   | { kind: 'payout'; taker: ChitTakenMember }
   | { kind: 'statement'; member: ChitMember }
+  | { kind: 'topup' }
   | null
 
 export default function ChitDetail() {
@@ -38,11 +40,11 @@ export default function ChitDetail() {
       const arr = takenByAuction.get(t.Chit_Auction_ID) ?? []
       arr.push(t); takenByAuction.set(t.Chit_Auction_ID, arr)
     }
-    return { chit, members, auctions, takers, summary, takenByAuction }
+    return { chit, members, auctions, takers, summary, takenByAuction, companyPool: repo.chitCompanyPool(id), companyLedger: repo.chitCompanyLedger(id) }
   }, [id, tick])
 
   const [month, setMonth] = useState<number | null>(null)
-  const { chit, members, auctions, takers, summary, takenByAuction } = data
+  const { chit, members, auctions, takers, summary, takenByAuction, companyPool, companyLedger } = data
   if (!chit) return <EmptyState title="Chit fund not found" />
 
   const latestMonth = auctions.length ? num(auctions[auctions.length - 1].Month_Count) : null
@@ -146,6 +148,41 @@ export default function ChitDetail() {
         </>
       )}
 
+      {/* ── Company chit pool ──────────────────────────────────────────────── */}
+      {(editable || companyPool !== 0 || companyLedger.length > 0) && (
+        <>
+          <div className="mb-2 mt-8 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2"><Boxes size={16} className="text-brand-400" /><h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Company chit pool</h2></div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-slate-400">Available <b className={companyPool >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{inr(companyPool)}</b></span>
+              {editable && <button className="btn-ghost !py-1 !px-2 text-xs" onClick={() => setModal({ kind: 'topup' })}><Plus size={12} /> Add to pool</button>}
+            </div>
+          </div>
+          <p className="mb-2 text-xs text-slate-500">When the company takes an unsold month, its payout is held here; a later member can take from it, and you can top it up when it's short.</p>
+          {companyLedger.length > 0 && (
+            <Card className="!p-0 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="border-b border-slate-800 bg-slate-900/60">
+                    <tr><Th>Date</Th><Th>Movement</Th><Th right>In</Th><Th right>Out</Th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {companyLedger.map(e => (
+                      <tr key={e.id} className="hover:bg-slate-800/40">
+                        <Td className="text-slate-400">{fmtDate(e.date)}</Td>
+                        <Td className="text-slate-300">{e.reason}{e.who ? ` — ${e.who}` : ''}{e.month ? ` (month ${e.month})` : ''}</Td>
+                        <Td right className="text-emerald-400">{e.direction === 'in' ? inr(e.amount) : '—'}</Td>
+                        <Td right className="text-rose-300">{e.direction === 'out' ? inr(e.amount) : '—'}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+        </>
+      )}
+
       {/* ── Payouts to takers ──────────────────────────────────────────────── */}
       {takers.length > 0 && (
         <>
@@ -220,7 +257,38 @@ export default function ChitDetail() {
         onSave={(amt, date, pt) => payChitTaker(modal.taker.Chit_Taken_ID, amt, date, pt).then(refresh)}
       />}
       {modal?.kind === 'statement' && <MemberStatementModal member={modal.member} onClose={() => setModal(null)} />}
+      {modal?.kind === 'topup' && <CompanyTopupModal chitId={id} pool={companyPool} onClose={() => setModal(null)} onSaved={refresh} />}
     </div>
+  )
+}
+
+// Add money to the company chit pool.
+function CompanyTopupModal({ chitId, pool, onClose, onSaved }: { chitId: string; pool: number; onClose: () => void; onSaved: () => void }) {
+  const [amount, setAmount] = useState('')
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const valid = num(amount) > 0
+
+  async function save() {
+    if (!valid || busy) return
+    setBusy(true)
+    await addChitCompanyTopup(chitId, num(amount), date, note.trim() || undefined)
+    onSaved()
+  }
+
+  return (
+    <Modal title="Add to company pool" onClose={onClose} footer={<>
+      <button className="btn-ghost" onClick={onClose}>Cancel</button>
+      <button className="btn-primary" disabled={!valid || busy} onClick={save}>Add to pool</button>
+    </>}>
+      <p className="text-sm text-slate-400">Top up when the company pool is short for a member to take from. Current pool: <b className="text-hd">{inr(pool)}</b>.</p>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Amount (₹)"><input type="number" className="input" autoFocus value={amount} onChange={e => setAmount(e.target.value)} /></Field>
+        <Field label="Date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
+      </div>
+      <Field label="Note (optional)"><input className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="Source of funds / remark" /></Field>
+    </Modal>
   )
 }
 
@@ -443,16 +511,20 @@ export function RunAuctionModal({ chitId, onClose, onSaved }: { chitId: string; 
 // ── Assign taker ────────────────────────────────────────────────────────────
 export function AssignTakerModal({ chitId, auction, onClose, onSaved }: { chitId: string; auction: ChitAuction; onClose: () => void; onSaved: () => void }) {
   const members = repo.chitMembers(chitId)
+  const pool = repo.chitCompanyPool(chitId)
   const [memberId, setMemberId] = useState('')
   const [pct, setPct] = useState('1')
+  const [fromCompany, setFromCompany] = useState('')
   const [busy, setBusy] = useState(false)
   const payout = Math.round(num(auction.Total_Auction_Amount_After_Commission) * (num(pct) || 1))
-  const valid = memberId.length > 0
+  const isRealMember = memberId.length > 0 && memberId !== 'Company_Chit'
+  const draw = Math.max(0, Math.min(num(fromCompany), pool))
+  const valid = memberId.length > 0 && draw <= pool
 
   async function save() {
     if (!valid || busy) return
     setBusy(true)
-    await assignChitTaker({ auctionId: auction.Chit_Auction_ID, memberId, percentageNeedToTake: num(pct) || 1 })
+    await assignChitTaker({ auctionId: auction.Chit_Auction_ID, memberId, percentageNeedToTake: num(pct) || 1, takeFromCompany: isRealMember ? draw : 0 })
     onSaved()
   }
 
@@ -468,11 +540,17 @@ export function AssignTakerModal({ chitId, auction, onClose, onSaved }: { chitId
           <option value="Company_Chit">Company Chit (unsold)</option>
         </select>
       </Field>
-      <Field label="Share taken" hint="1 = full payout, 0.5 = half">
+      <Field label="Share taken" hint="1 = full payout, 0.5 = half (two members can split ½ + ½)">
         <select className="input" value={pct} onChange={e => setPct(e.target.value)}><option value="1">1 (full)</option><option value="0.5">0.5 (half)</option></select>
       </Field>
+      {isRealMember && pool > 0 && (
+        <Field label="Take from company amount (₹)" hint={`Company pool available: ${inr(pool)}`}>
+          <input type="number" className="input" value={fromCompany} onChange={e => setFromCompany(e.target.value)} placeholder="0" />
+        </Field>
+      )}
       <div className="rounded-lg bg-slate-800/50 p-3 text-sm text-slate-300">
         <div className="flex justify-between"><span className="text-slate-400">Payout owed to taker</span><b className="text-hd">{inr(payout)}</b></div>
+        {draw > 0 && <div className="mt-1 flex justify-between"><span className="text-slate-400">From company pool</span><b className="text-amber-300">{inr(draw)}</b></div>}
       </div>
     </Modal>
   )

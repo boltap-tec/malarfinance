@@ -260,11 +260,34 @@ export const repo = {
     return (db.Chit_Auction ?? []).find(a => a.Chit_Auction_ID === auctionId)
   },
   chitTakers(chitId: string): ChitTakenMember[] {
-    return (db.Chit_Taken_Member ?? []).filter(t => t.Chit_ID === chitId)
+    // Company top-up rows are pool bookkeeping, not real payouts — hide them here.
+    return (db.Chit_Taken_Member ?? []).filter(t => t.Chit_ID === chitId && t.Member_Type !== 'Company_Topup')
       .sort((a, b) => num(a.Month_Count) - num(b.Month_Count))
   },
   chitTakersByAuction(auctionId: string): ChitTakenMember[] {
-    return (db.Chit_Taken_Member ?? []).filter(t => t.Chit_Auction_ID === auctionId)
+    return (db.Chit_Taken_Member ?? []).filter(t => t.Chit_Auction_ID === auctionId && t.Member_Type !== 'Company_Topup')
+  },
+  // The company chit pool: money the company holds from months it took, plus
+  // manual top-ups, minus what later members have drawn from it.
+  chitCompanyPool(chitId: string): number {
+    let pool = 0
+    for (const t of db.Chit_Taken_Member ?? []) {
+      if (t.Chit_ID !== chitId) continue
+      if (t.Member_Type === 'Company_Chit' || t.Member_Type === 'Company_Topup') pool += num(t.Total_Amount_to_Member)
+      pool -= num(t.Amount_Taken_From_Company_Chit)
+    }
+    return pool
+  },
+  // Movements in the company pool, newest first, for the history view.
+  chitCompanyLedger(chitId: string): { id: string; date?: string; reason: string; direction: 'in' | 'out'; amount: number; who?: string; month?: number }[] {
+    const out: { id: string; date?: string; reason: string; direction: 'in' | 'out'; amount: number; who?: string; month?: number }[] = []
+    for (const t of db.Chit_Taken_Member ?? []) {
+      if (t.Chit_ID !== chitId) continue
+      if (t.Member_Type === 'Company_Chit') out.push({ id: t.Chit_Taken_ID + '-in', date: t.Date_Auction, reason: 'Company took the chit', direction: 'in', amount: num(t.Total_Amount_to_Member), month: num(t.Month_Count) })
+      if (t.Member_Type === 'Company_Topup') out.push({ id: t.Chit_Taken_ID, date: t.Date_Auction, reason: t.Member_Name || 'Top-up', direction: 'in', amount: num(t.Total_Amount_to_Member) })
+      if (num(t.Amount_Taken_From_Company_Chit) > 0) out.push({ id: t.Chit_Taken_ID + '-draw', date: t.Date_Auction, reason: 'Drawn by taker', direction: 'out', amount: num(t.Amount_Taken_From_Company_Chit), who: t.Member_Name, month: num(t.Month_Count) })
+    }
+    return out.sort((a, b) => new Date(b.date ?? 0).getTime() - new Date(a.date ?? 0).getTime())
   },
   chitLedger(chitId: string): ChitLedgerRow[] {
     return (db.Chit_Ledger ?? []).filter(r => r.Chit_ID === chitId)
@@ -1481,6 +1504,7 @@ export interface AssignTakerInput {
   auctionId: string
   memberId: string              // a Member_ID, or 'Company_Chit'
   percentageNeedToTake: number  // 1 (full pot) or 0.5 (half)
+  takeFromCompany?: number      // amount funded from the company chit pool
 }
 
 // Record the member who took (won) an auction, and the payout owed to them.
@@ -1491,6 +1515,7 @@ export async function assignChitTaker(inp: AssignTakerInput): Promise<void> {
   const member = (db.Chit_Member ?? []).find(m => m.Member_ID === inp.memberId)
   const pct = num(inp.percentageNeedToTake) || 1
   const payout = round(num(auction.Total_Auction_Amount_After_Commission) * pct)
+  const fromCompany = Math.max(0, Math.min(round(num(inp.takeFromCompany)), repo.chitCompanyPool(auction.Chit_ID)))
   const seq = (db.Chit_Taken_Member ?? []).filter(t => t.Chit_Auction_ID === inp.auctionId).length + 1
   const taken: ChitTakenMember = {
     Chit_Taken_ID: `${inp.auctionId}_M${seq}`,
@@ -1502,6 +1527,9 @@ export async function assignChitTaker(inp: AssignTakerInput): Promise<void> {
     Percentage_Need_to_Take: pct, Total_Amount_to_Member: payout,
     Amount_Given_to_Member: 0, Pending_Amount: payout,
     Finance_Name: auction.Finance_Name, Status: 'Pending',
+    Need_to_Take_From_Previous_Company_Chit: fromCompany > 0 ? 'Yes' : 'No',
+    Amount_Taken_From_Company_Chit: fromCompany,
+    Remaining_Amount_in_Company_Chit: fromCompany > 0 ? repo.chitCompanyPool(auction.Chit_ID) - fromCompany : undefined,
   }
   db.Chit_Taken_Member = [...(db.Chit_Taken_Member ?? []), taken]
   await sInsert('Chit_Taken_Member', taken)
@@ -1522,6 +1550,26 @@ export async function assignChitTaker(inp: AssignTakerInput): Promise<void> {
   }
   if (chit) await updateChit(chit.Chit_ID, { Total_Member_Taken: num(chit.Total_Member_Taken) + pct })
   writeLog({ Action: 'create', Entity: 'Chit_Taken_Member', Entity_Label: `${taken.Member_Name} took ${auction.Chit_Auction_ID} · ${inrFmt(payout)}`, After: taken })
+  persist()
+}
+
+// Add money to the company chit pool (when it's short for a member to draw).
+export async function addChitCompanyTopup(chitId: string, amount: number, date: string, note?: string): Promise<void> {
+  const chit = (db.Chit_Creation ?? []).find(c => c.Chit_ID === chitId)
+  if (!chit || num(amount) <= 0) return
+  const n = (db.Chit_Taken_Member ?? []).filter(t => t.Chit_ID === chitId && t.Member_Type === 'Company_Topup').length + 1
+  const row: ChitTakenMember = {
+    Chit_Taken_ID: `${chitId}_Topup_${n}`,
+    Chit_Auction_ID: '', Chit_ID: chitId, Chit_Name: chit.Chit_Name,
+    Date_Auction: date, Member_ID: 'Company_Chit',
+    Member_Name: note ? `Top-up — ${note}` : 'Top-up',
+    Member_Type: 'Company_Topup', Total_Amount_to_Member: num(amount),
+    Amount_Given_to_Member: num(amount), Pending_Amount: 0,
+    Finance_Name: chit.Finance_Name, Status: 'Given',
+  }
+  db.Chit_Taken_Member = [...(db.Chit_Taken_Member ?? []), row]
+  await sInsert('Chit_Taken_Member', row)
+  writeLog({ Action: 'create', Entity: 'Chit_Taken_Member', Entity_Label: `Company pool top-up · ${chit.Chit_Name} · ${inrFmt(num(amount))}` })
   persist()
 }
 

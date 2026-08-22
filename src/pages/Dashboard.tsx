@@ -17,6 +17,14 @@ const STATUS_COLORS: Record<string, string> = {
   Active: '#34d399', Closed: '#64748b', Pending: '#fbbf24', Overdue: '#fb7185', Inactive: '#94a3b8',
 }
 
+// Wrap a KPI card in a link to its page — but only when the viewer's role may
+// reach that page, so a partner never lands on a guarded redirect.
+function kpiLink(user: AppUser | null, to: string, card: ReactNode): ReactNode {
+  return canSeeRoute(user, to)
+    ? <Link to={to} className="block transition hover:-translate-y-0.5">{card}</Link>
+    : card
+}
+
 export default function Dashboard() {
   const finance = useApp(s => s.finance)
   const user = useApp(s => s.user)
@@ -65,11 +73,20 @@ export default function Dashboard() {
       .sort((a, b) => (new Date(b.Date_Transaction ?? 0).getTime()) - (new Date(a.Date_Transaction ?? 0).getTime()))
       .slice(0, 8)
 
+    // Chit funds the finance runs — roll up dues to collect + payouts still owed.
+    const chits = repo.chits(f)
+    let chitDuePending = 0, chitCollected = 0, chitPayoutPending = 0
+    for (const c of chits) {
+      const s = repo.chitSummary(c.Chit_ID)
+      chitDuePending += s.duePending; chitCollected += s.collected; chitPayoutPending += s.payoutPending
+    }
+
     return {
       activeLoans: activeLoans.length, loanCount: loans.length,
       customers: customers.length, activeCustomers: customers.filter(c => (c.Status ?? '').toLowerCase() === 'active').length,
       outstandingLoan, totalGiven, interestCollected, interestPending, depositOutstanding,
       trend, statusData, recent,
+      chitFunds: chits.length, chitDuePending, chitCollected, chitPayoutPending,
     }
   }, [f])
 
@@ -83,15 +100,22 @@ export default function Dashboard() {
       {/* Grouped action hub — each box opens its sub-actions */}
       <ActionHub user={user} />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Outstanding loans" value={inrShort(data.outstandingLoan)} tone="blue"
-          sub={`${data.activeLoans} active of ${data.loanCount}`} icon={<HandCoins size={18} />} />
-        <StatCard label="Interest pending" value={inrShort(data.interestPending)} tone="amber"
-          sub={`${inrShort(data.interestCollected)} collected`} icon={<Percent size={18} />} />
-        <StatCard label="Customers" value={data.customers} tone="green"
-          sub={`${data.activeCustomers} active`} icon={<Users size={18} />} />
-        <StatCard label="Deposits payable" value={inrShort(data.depositOutstanding)} tone="red"
-          sub="owed to depositors" icon={<PiggyBank size={18} />} />
+      <div className={`grid grid-cols-2 gap-3 ${data.chitFunds > 0 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
+        {kpiLink(user, '/loans',
+          <StatCard label="Outstanding loans" value={inrShort(data.outstandingLoan)} tone="blue"
+            sub={`${data.activeLoans} active of ${data.loanCount}`} icon={<HandCoins size={18} />} />)}
+        {kpiLink(user, '/customer-interest',
+          <StatCard label="Interest pending" value={inrShort(data.interestPending)} tone="amber"
+            sub={`${inrShort(data.interestCollected)} collected`} icon={<Percent size={18} />} />)}
+        {kpiLink(user, '/customers',
+          <StatCard label="Customers" value={data.customers} tone="green"
+            sub={`${data.activeCustomers} active`} icon={<Users size={18} />} />)}
+        {kpiLink(user, '/deposits',
+          <StatCard label="Deposits payable" value={inrShort(data.depositOutstanding)} tone="red"
+            sub="owed to depositors" icon={<PiggyBank size={18} />} />)}
+        {data.chitFunds > 0 && kpiLink(user, '/chits',
+          <StatCard label="Chit dues to collect" value={inrShort(data.chitDuePending)} tone="blue"
+            sub={`${data.chitFunds} fund${data.chitFunds > 1 ? 's' : ''} · ${inrShort(data.chitPayoutPending)} payout due`} icon={<Boxes size={18} />} />)}
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">

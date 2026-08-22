@@ -26,6 +26,7 @@ import Logs from './pages/Logs'
 import Settings from './pages/Settings'
 import Messages from './pages/Messages'
 import Chits from './pages/Chits'
+import ChitDetail from './pages/ChitDetail'
 import Menu from './pages/Menu'
 import Placeholder from './pages/Placeholder'
 
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="/messages" element={<Messages />} />
         <Route path="/menu" element={<Menu />} />
         <Route path="/chits" element={<Chits />} />
+        <Route path="/chits/:chitId" element={<ChitDetail />} />
         <Route path="/jewel" element={<Placeholder title="Jewel Loans" note="Gold/pawn loans with item particulars and photos — module coming next." />} />
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />

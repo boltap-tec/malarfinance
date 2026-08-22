@@ -146,6 +146,112 @@ export interface OtherFinanceLoan {
   Finance_Type?: string
 }
 
+// ── Chit fund (a chit your finance RUNS) ─────────────────────────────────────
+// A chit is a pot: every month members contribute, one member "takes" that
+// month's pot (via auction), and the firm keeps a small commission. These four
+// tables mirror the AppSheet sheets. Chit money is tracked in its OWN ledger
+// (ChitLedgerRow) — kept separate from the firm's Transaction_Ledger.
+export interface ChitCreation {
+  Chit_ID: string
+  Chit_Name: string
+  Chit_From_Date?: string
+  Chit_To_Date?: string
+  No_Members?: number
+  Total_Month?: number
+  Total_Amount?: number          // the full monthly pot (e.g. 5,00,000)
+  Chit_Percentage?: number       // firm commission %, charged on the full pot
+  Chit_Amount?: number           // pot after commission
+  Total_Chit_Count?: number      // sum of member shares (a 0.5 share counts half)
+  No_Month_Completed?: number
+  Total_Member_Taken?: number    // shares already taken
+  Finance_Name: string
+  Chit_Status?: string           // Open | Closed
+}
+
+export interface ChitMember {
+  Member_ID: string
+  Chit_ID: string
+  Chit_Name?: string
+  Member_Name: string
+  Member_Phone_No?: number | string
+  Member_Address?: string
+  Member_Photo?: string
+  Date_Added?: string
+  Member_Percentage?: number     // share size: 1 (full) or 0.5 (half)
+  Recommended_Partner?: string
+  Chit_Taken?: string            // Taken | Not_Taken
+  Chit_Taken_Amount?: number
+  Month_Taken?: string
+  Total_Auction_Amount?: number
+  Amount_Given?: number          // payout already given to this member
+  Remaining_Amount?: number      // payout still owed to this member
+  Member_Type?: string           // Member | Finance
+  Finance_Name: string
+  Message?: string
+  Pending_Amount?: string
+  Last_Receipt?: string
+}
+
+export interface ChitAuction {
+  Chit_Auction_ID: string
+  Chit_ID: string
+  Chit_Name?: string
+  Date_Auction?: string
+  Month_Count?: number
+  Total_Auction_Amount?: number                  // winning bid — what members pay this month
+  Indivitual_Member_Amount?: number              // per full share this month
+  Interest_Percentage?: number                   // auction discount vs the full pot
+  Total_Auction_Amount_After_Commission?: number // payout to the taker
+  Finance_Name: string
+  Auction_Status?: string                        // Open | Closed
+  Member_Type?: string
+  Remaining?: number
+}
+
+export interface ChitTakenMember {
+  Chit_Taken_ID: string
+  Chit_Auction_ID: string
+  Chit_ID: string
+  Chit_Name?: string
+  Date_Auction?: string
+  Month_Count?: number
+  Total_Auction_Amount?: number
+  Member_ID: string
+  Member_Name?: string
+  Member_Type?: string
+  Percentage_Need_to_Take?: number   // 1 (full pot) or 0.5 (half)
+  Total_Amount_to_Member?: number    // payout owed to the taker
+  Amount_Given_to_Member?: number
+  Pending_Amount?: number
+  Finance_Name: string
+  Need_to_Take_From_Previous_Company_Chit?: string
+  Amount_Taken_From_Company_Chit?: number
+  Remaining_Amount_in_Company_Chit?: number
+  Status?: string                    // Pending | Given
+}
+
+// One row per member per auction/month — their contribution obligation.
+export interface ChitLedgerRow {
+  ID: string
+  Finance_Name: string
+  Chit_ID: string
+  Chit_Name?: string
+  Chit_Auction_ID: string
+  Month_Count?: number
+  Date_Auction?: string
+  Member_ID: string
+  Member_Name?: string
+  Recommended_Partner?: string
+  Member_Percentage?: number
+  One_Share_Amount?: number
+  Due_Amount?: number
+  Received_Amount?: number
+  Pending_Amount?: number
+  Payment_Type?: string
+  Paid_Date?: string
+  Status?: string                    // Paid | Partial | Pending
+}
+
 export interface NatureTransaction {
   Nature_Transaction: string
   Type: 'Receipt' | 'Payment' | string
@@ -214,10 +320,11 @@ export interface Dataset {
   Depositer_Interest: any[]
   Invested_Chit: any[]
   Invested_Chit_Trans: any[]
-  Chit_Creation: any[]
-  Chit_Member: any[]
-  Chit_Auction: any[]
-  Chit_Transaction: any[]
+  Chit_Creation: ChitCreation[]
+  Chit_Member: ChitMember[]
+  Chit_Auction: ChitAuction[]
+  Chit_Taken_Member: ChitTakenMember[]
+  Chit_Ledger: ChitLedgerRow[]
   Other_Finance_Loan: OtherFinanceLoan[]
   Other_Finance_Interest: any[]
   Worker: Worker[]

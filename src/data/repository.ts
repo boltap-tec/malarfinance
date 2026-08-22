@@ -9,6 +9,7 @@ import { supabase, isSupabaseConfigured } from './supabase'
 import type {
   Dataset, Loan, Customer, InterestRow, LedgerRow, Partner, Finance, Deposit,
   OtherFinanceLoan, Worker, AppNotification, LogEntry, Message,
+  ChitCreation, ChitMember, ChitAuction, ChitTakenMember, ChitLedgerRow,
 } from './types'
 
 const STORAGE_KEY = 'arul-finance:data:v1'
@@ -236,6 +237,56 @@ export const repo = {
     return new Set((db.Interest_Details ?? []).filter(i => i.Loan_No === loanNo && i.Month).map(i => i.Month as string))
   },
   natureTypes() { return db.Nature_Transaction ?? [] },
+
+  // ── Chit fund (chits your finance runs) ────────────────────────────────────
+  chits(finance?: string): ChitCreation[] {
+    return (db.Chit_Creation ?? []).filter(c => !finance || c.Finance_Name === finance)
+  },
+  chit(chitId: string): ChitCreation | undefined {
+    return (db.Chit_Creation ?? []).find(c => c.Chit_ID === chitId)
+  },
+  chitMembers(chitId: string): ChitMember[] {
+    return (db.Chit_Member ?? []).filter(m => m.Chit_ID === chitId)
+  },
+  chitMember(memberId: string): ChitMember | undefined {
+    return (db.Chit_Member ?? []).find(m => m.Member_ID === memberId)
+  },
+  chitAuctions(chitId: string): ChitAuction[] {
+    return (db.Chit_Auction ?? []).filter(a => a.Chit_ID === chitId)
+      .sort((a, b) => num(a.Month_Count) - num(b.Month_Count))
+  },
+  chitAuction(auctionId: string): ChitAuction | undefined {
+    return (db.Chit_Auction ?? []).find(a => a.Chit_Auction_ID === auctionId)
+  },
+  chitTakers(chitId: string): ChitTakenMember[] {
+    return (db.Chit_Taken_Member ?? []).filter(t => t.Chit_ID === chitId)
+      .sort((a, b) => num(a.Month_Count) - num(b.Month_Count))
+  },
+  chitTakersByAuction(auctionId: string): ChitTakenMember[] {
+    return (db.Chit_Taken_Member ?? []).filter(t => t.Chit_Auction_ID === auctionId)
+  },
+  chitLedger(chitId: string): ChitLedgerRow[] {
+    return (db.Chit_Ledger ?? []).filter(r => r.Chit_ID === chitId)
+  },
+  chitLedgerByAuction(auctionId: string): ChitLedgerRow[] {
+    return (db.Chit_Ledger ?? []).filter(r => r.Chit_Auction_ID === auctionId)
+  },
+  chitLedgerByMember(memberId: string): ChitLedgerRow[] {
+    return (db.Chit_Ledger ?? []).filter(r => r.Member_ID === memberId)
+      .sort((a, b) => num(a.Month_Count) - num(b.Month_Count))
+  },
+  // Rolled-up figures for one chit fund, computed from its ledger + takers.
+  chitSummary(chitId: string) {
+    const led = (db.Chit_Ledger ?? []).filter(r => r.Chit_ID === chitId)
+    const takers = (db.Chit_Taken_Member ?? []).filter(t => t.Chit_ID === chitId)
+    return {
+      collected: led.reduce((s, r) => s + num(r.Received_Amount), 0),
+      duePending: led.reduce((s, r) => s + num(r.Pending_Amount), 0),
+      payoutGiven: takers.reduce((s, t) => s + num(t.Amount_Given_to_Member), 0),
+      payoutPending: takers.reduce((s, t) => s + num(t.Pending_Amount), 0),
+    }
+  },
+
   raw<K extends keyof Dataset>(key: K): Dataset[K] { return db[key] },
 }
 
@@ -316,6 +367,8 @@ const PK: Partial<Record<keyof Dataset, string>> = {
   Deposit_Amount: 'Deposit_No', Other_Finance_Loan: 'Loan_No', Worker: 'Worker_ID',
   Depositer_Interest: 'ID', Other_Finance_Interest: 'ID',
   Notification: 'id', Message: 'id', Log: 'id',
+  Chit_Creation: 'Chit_ID', Chit_Member: 'Member_ID', Chit_Auction: 'Chit_Auction_ID',
+  Chit_Taken_Member: 'Chit_Taken_ID', Chit_Ledger: 'ID',
 }
 export let lastWriteError = ''
 function noteErr(where: string, msg?: string) {
@@ -1181,5 +1234,246 @@ export async function repayLoan(opts: RepayOptions): Promise<void> {
     Entity_Label: `Repay ${loanNo} · ₹${num(principal).toLocaleString('en-IN')}${payInterest ? ' + interest' : ''}`,
     Before: loan,
   })
+  persist()
+}
+
+// ── Chit fund writes ─────────────────────────────────────────────────────────
+// A chit is a pot the firm runs: each month every member contributes, one member
+// "takes" that month's pot at auction, and the firm keeps a commission. Chit
+// money lives in its own ledger (Chit_Ledger) — separate from Transaction_Ledger.
+const round = (n: number) => Math.round(n)
+const inrFmt = (n: number) => `₹${round(n).toLocaleString('en-IN')}`
+
+function ledgerStatus(due: number, recv: number): string {
+  const pend = due - recv
+  return pend <= 0 && recv > 0 ? 'Paid' : recv > 0 ? 'Partial' : 'Pending'
+}
+
+// Next "Chit_A<n>" id for a finance.
+export function nextChitId(finance: string): string {
+  const max = (db.Chit_Creation ?? []).reduce((m, c) => {
+    const n = Number(String(c.Chit_ID).replace(/\D/g, ''))
+    return isNaN(n) ? m : Math.max(m, n)
+  }, 0)
+  return `Chit_A${max + 1}`
+}
+
+export async function addChit(c: ChitCreation): Promise<void> {
+  const commission = round(num(c.Chit_Percentage) / 100 * num(c.Total_Amount))
+  const row: ChitCreation = {
+    ...c,
+    Chit_Amount: c.Chit_Amount ?? num(c.Total_Amount) - commission,
+    No_Month_Completed: c.No_Month_Completed ?? 0,
+    Total_Member_Taken: c.Total_Member_Taken ?? 0,
+    Total_Chit_Count: c.Total_Chit_Count ?? 0,
+    Chit_Status: c.Chit_Status ?? 'Open',
+  }
+  db.Chit_Creation = [row, ...(db.Chit_Creation ?? [])]
+  await sInsert('Chit_Creation', row)
+  writeLog({ Action: 'create', Entity: 'Chit_Creation', Entity_Label: `${row.Chit_ID} · ${row.Chit_Name}`, After: row })
+  persist()
+}
+
+export async function updateChit(chitId: string, patch: Partial<ChitCreation>): Promise<void> {
+  db.Chit_Creation = (db.Chit_Creation ?? []).map(c => c.Chit_ID === chitId ? { ...c, ...patch } : c)
+  await sUpdate('Chit_Creation', chitId, patch)
+  persist()
+}
+
+export async function deleteChit(chitId: string): Promise<void> {
+  const row = (db.Chit_Creation ?? []).find(c => c.Chit_ID === chitId)
+  if (!row) return
+  const members = (db.Chit_Member ?? []).filter(m => m.Chit_ID === chitId)
+  const auctions = (db.Chit_Auction ?? []).filter(a => a.Chit_ID === chitId)
+  const takers = (db.Chit_Taken_Member ?? []).filter(t => t.Chit_ID === chitId)
+  const ledger = (db.Chit_Ledger ?? []).filter(r => r.Chit_ID === chitId)
+  db.Chit_Creation = (db.Chit_Creation ?? []).filter(c => c.Chit_ID !== chitId)
+  db.Chit_Member = (db.Chit_Member ?? []).filter(m => m.Chit_ID !== chitId)
+  db.Chit_Auction = (db.Chit_Auction ?? []).filter(a => a.Chit_ID !== chitId)
+  db.Chit_Taken_Member = (db.Chit_Taken_Member ?? []).filter(t => t.Chit_ID !== chitId)
+  db.Chit_Ledger = (db.Chit_Ledger ?? []).filter(r => r.Chit_ID !== chitId)
+  await sDelete('Chit_Creation', chitId)
+  for (const m of members) await sDelete('Chit_Member', m.Member_ID)
+  for (const a of auctions) await sDelete('Chit_Auction', a.Chit_Auction_ID)
+  for (const t of takers) await sDelete('Chit_Taken_Member', t.Chit_Taken_ID)
+  for (const r of ledger) await sDelete('Chit_Ledger', r.ID)
+  writeLog({ Action: 'delete', Entity: 'Chit_Creation', Entity_Label: `${chitId} · ${row.Chit_Name}`, Before: { chit: row, members, auctions, takers, ledger } })
+  persist()
+}
+
+// Next member id, e.g. Chit_A1_M7_Palanisamy.
+function nextChitMemberId(chitId: string, name: string): string {
+  const max = (db.Chit_Member ?? []).filter(m => m.Chit_ID === chitId).reduce((mx, m) => {
+    const mt = String(m.Member_ID).match(/_M(\d+)_/)
+    return mt ? Math.max(mx, Number(mt[1])) : mx
+  }, 0)
+  return `${chitId}_M${max + 1}_${String(name).trim().replace(/\s+/g, ' ')}`
+}
+
+export async function addChitMember(input: Omit<ChitMember, 'Member_ID'> & { Member_ID?: string }): Promise<ChitMember> {
+  const chit = (db.Chit_Creation ?? []).find(c => c.Chit_ID === input.Chit_ID)
+  const m: ChitMember = {
+    Chit_Taken: 'Not_Taken', Chit_Taken_Amount: 0, Total_Auction_Amount: 0,
+    Amount_Given: 0, Remaining_Amount: 0, Member_Type: 'Member',
+    Member_Percentage: 1, Chit_Name: chit?.Chit_Name,
+    ...input,
+    Member_ID: input.Member_ID || nextChitMemberId(input.Chit_ID, input.Member_Name),
+  }
+  db.Chit_Member = [...(db.Chit_Member ?? []), m]
+  await sInsert('Chit_Member', m)
+  // Keep the chit's share count in step with its members.
+  if (chit) {
+    const count = (db.Chit_Member ?? []).filter(x => x.Chit_ID === chit.Chit_ID)
+      .reduce((s, x) => s + num(x.Member_Percentage), 0)
+    await updateChit(chit.Chit_ID, { Total_Chit_Count: count })
+  }
+  writeLog({ Action: 'create', Entity: 'Chit_Member', Entity_Label: `${m.Member_ID} · ${m.Member_Name}`, After: m })
+  persist()
+  return m
+}
+
+export interface RunAuctionInput {
+  chitId: string
+  date: string
+  totalAuctionAmount: number    // the winning bid — what members collectively pay this month
+  interestPercentage?: number   // auction discount vs the full pot (informational)
+  memberType?: string           // 'Finance' waives commission (typically month 1)
+}
+
+// Run the next month's auction: create the auction row and a per-member due row.
+export async function runChitAuction(inp: RunAuctionInput): Promise<ChitAuction | null> {
+  const chit = (db.Chit_Creation ?? []).find(c => c.Chit_ID === inp.chitId)
+  if (!chit) return null
+  const month = (db.Chit_Auction ?? []).filter(a => a.Chit_ID === inp.chitId)
+    .reduce((m, a) => Math.max(m, num(a.Month_Count)), 0) + 1
+  const totalMonth = num(chit.Total_Month) || num(chit.No_Members) || 1
+  const indiv = round(num(inp.totalAuctionAmount) / totalMonth)
+  const commission = inp.memberType === 'Finance' ? 0 : round(num(chit.Chit_Percentage) / 100 * num(chit.Total_Amount))
+  const afterCommission = num(inp.totalAuctionAmount) - commission
+  const auction: ChitAuction = {
+    Chit_Auction_ID: `${inp.chitId}_Auction_${month}`,
+    Chit_ID: inp.chitId, Chit_Name: chit.Chit_Name,
+    Date_Auction: inp.date, Month_Count: month,
+    Total_Auction_Amount: num(inp.totalAuctionAmount),
+    Indivitual_Member_Amount: indiv,
+    Interest_Percentage: num(inp.interestPercentage),
+    Total_Auction_Amount_After_Commission: afterCommission,
+    Finance_Name: chit.Finance_Name, Auction_Status: 'Open',
+    Member_Type: inp.memberType ?? 'Member', Remaining: 0,
+  }
+  db.Chit_Auction = [...(db.Chit_Auction ?? []), auction]
+  await sInsert('Chit_Auction', auction)
+
+  // A due row for every member, scaled by their share.
+  const rows: ChitLedgerRow[] = (db.Chit_Member ?? []).filter(m => m.Chit_ID === inp.chitId).map(m => {
+    const due = round(indiv * num(m.Member_Percentage))
+    return {
+      ID: `${m.Member_ID}_${auction.Chit_Auction_ID}`,
+      Finance_Name: chit.Finance_Name, Chit_ID: inp.chitId, Chit_Name: chit.Chit_Name,
+      Chit_Auction_ID: auction.Chit_Auction_ID, Month_Count: month, Date_Auction: inp.date,
+      Member_ID: m.Member_ID, Member_Name: m.Member_Name, Recommended_Partner: m.Recommended_Partner,
+      Member_Percentage: m.Member_Percentage, One_Share_Amount: indiv,
+      Due_Amount: due, Received_Amount: 0, Pending_Amount: due, Status: 'Pending',
+    }
+  })
+  db.Chit_Ledger = [...(db.Chit_Ledger ?? []), ...rows]
+  await sInsert('Chit_Ledger', rows)
+  await updateChit(inp.chitId, { No_Month_Completed: month })
+  writeLog({ Action: 'create', Entity: 'Chit_Auction', Entity_Label: `${auction.Chit_Auction_ID} · month ${month} · pot ${inrFmt(afterCommission)}`, After: auction })
+  persist()
+  return auction
+}
+
+export interface AssignTakerInput {
+  auctionId: string
+  memberId: string              // a Member_ID, or 'Company_Chit'
+  percentageNeedToTake: number  // 1 (full pot) or 0.5 (half)
+}
+
+// Record the member who took (won) an auction, and the payout owed to them.
+export async function assignChitTaker(inp: AssignTakerInput): Promise<void> {
+  const auction = (db.Chit_Auction ?? []).find(a => a.Chit_Auction_ID === inp.auctionId)
+  if (!auction) return
+  const chit = (db.Chit_Creation ?? []).find(c => c.Chit_ID === auction.Chit_ID)
+  const member = (db.Chit_Member ?? []).find(m => m.Member_ID === inp.memberId)
+  const pct = num(inp.percentageNeedToTake) || 1
+  const payout = round(num(auction.Total_Auction_Amount_After_Commission) * pct)
+  const seq = (db.Chit_Taken_Member ?? []).filter(t => t.Chit_Auction_ID === inp.auctionId).length + 1
+  const taken: ChitTakenMember = {
+    Chit_Taken_ID: `${inp.auctionId}_M${seq}`,
+    Chit_Auction_ID: inp.auctionId, Chit_ID: auction.Chit_ID, Chit_Name: auction.Chit_Name,
+    Date_Auction: auction.Date_Auction, Month_Count: auction.Month_Count,
+    Total_Auction_Amount: auction.Total_Auction_Amount,
+    Member_ID: inp.memberId, Member_Name: member?.Member_Name ?? (inp.memberId === 'Company_Chit' ? 'Company Chit' : inp.memberId),
+    Member_Type: member?.Member_Type ?? (inp.memberId === 'Company_Chit' ? 'Company_Chit' : 'Member'),
+    Percentage_Need_to_Take: pct, Total_Amount_to_Member: payout,
+    Amount_Given_to_Member: 0, Pending_Amount: payout,
+    Finance_Name: auction.Finance_Name, Status: 'Pending',
+  }
+  db.Chit_Taken_Member = [...(db.Chit_Taken_Member ?? []), taken]
+  await sInsert('Chit_Taken_Member', taken)
+
+  // Mark the auction closed and reflect the win on the member row.
+  db.Chit_Auction = (db.Chit_Auction ?? []).map(a => a.Chit_Auction_ID === inp.auctionId ? { ...a, Auction_Status: 'Closed' } : a)
+  await sUpdate('Chit_Auction', inp.auctionId, { Auction_Status: 'Closed' })
+  if (member) {
+    const patch: Partial<ChitMember> = {
+      Chit_Taken: 'Taken',
+      Chit_Taken_Amount: num(member.Chit_Taken_Amount) + payout,
+      Total_Auction_Amount: num(member.Total_Auction_Amount) + payout,
+      Remaining_Amount: num(member.Remaining_Amount) + payout,
+      Month_Taken: auction.Date_Auction,
+    }
+    db.Chit_Member = (db.Chit_Member ?? []).map(m => m.Member_ID === inp.memberId ? { ...m, ...patch } : m)
+    await sUpdate('Chit_Member', inp.memberId, patch)
+  }
+  if (chit) await updateChit(chit.Chit_ID, { Total_Member_Taken: num(chit.Total_Member_Taken) + pct })
+  writeLog({ Action: 'create', Entity: 'Chit_Taken_Member', Entity_Label: `${taken.Member_Name} took ${auction.Chit_Auction_ID} · ${inrFmt(payout)}`, After: taken })
+  persist()
+}
+
+// Member pays (part of) their monthly due — updates the chit ledger row only.
+export async function collectChitDue(ledgerId: string, amount?: number, date?: string, payType?: string): Promise<void> {
+  const row = (db.Chit_Ledger ?? []).find(r => r.ID === ledgerId)
+  if (!row) return
+  const pending = num(row.Pending_Amount)
+  if (pending <= 0) return
+  const pay = Math.min(num(amount) > 0 ? num(amount) : pending, pending)
+  const recv = num(row.Received_Amount) + pay
+  const patch: Partial<ChitLedgerRow> = {
+    Received_Amount: recv, Pending_Amount: num(row.Due_Amount) - recv,
+    Status: ledgerStatus(num(row.Due_Amount), recv),
+    Payment_Type: payType ?? row.Payment_Type, Paid_Date: date ?? new Date().toISOString().slice(0, 10),
+  }
+  db.Chit_Ledger = (db.Chit_Ledger ?? []).map(r => r.ID === ledgerId ? { ...r, ...patch } : r)
+  await sUpdate('Chit_Ledger', ledgerId, patch)
+  writeLog({ Action: 'update', Entity: 'Chit_Ledger', Entity_Label: `Due paid — ${row.Member_Name} · month ${row.Month_Count} · ${inrFmt(pay)}`, Before: row })
+  persist()
+}
+
+// Firm pays out (part of) the amount owed to a member who took a chit.
+export async function payChitTaker(takenId: string, amount?: number, date?: string, payType?: string): Promise<void> {
+  const row = (db.Chit_Taken_Member ?? []).find(t => t.Chit_Taken_ID === takenId)
+  if (!row) return
+  const pending = num(row.Pending_Amount)
+  if (pending <= 0) return
+  const pay = Math.min(num(amount) > 0 ? num(amount) : pending, pending)
+  const given = num(row.Amount_Given_to_Member) + pay
+  const left = num(row.Total_Amount_to_Member) - given
+  const patch: Partial<ChitTakenMember> = { Amount_Given_to_Member: given, Pending_Amount: left, Status: left <= 0 ? 'Given' : 'Pending' }
+  db.Chit_Taken_Member = (db.Chit_Taken_Member ?? []).map(t => t.Chit_Taken_ID === takenId ? { ...t, ...patch } : t)
+  await sUpdate('Chit_Taken_Member', takenId, patch)
+
+  const member = (db.Chit_Member ?? []).find(m => m.Member_ID === row.Member_ID)
+  if (member) {
+    const mp: Partial<ChitMember> = {
+      Amount_Given: num(member.Amount_Given) + pay,
+      Remaining_Amount: Math.max(0, num(member.Remaining_Amount) - pay),
+      Last_Receipt: `Payout ${inrFmt(pay)} — ${payType ?? ''} — ${date ?? new Date().toISOString().slice(0, 10)}`,
+    }
+    db.Chit_Member = (db.Chit_Member ?? []).map(m => m.Member_ID === row.Member_ID ? { ...m, ...mp } : m)
+    await sUpdate('Chit_Member', row.Member_ID, mp)
+  }
+  writeLog({ Action: 'update', Entity: 'Chit_Taken_Member', Entity_Label: `Payout — ${row.Member_Name} · ${inrFmt(pay)}`, Before: row })
   persist()
 }

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Users2, Plus, Pencil, Trash2 } from 'lucide-react'
 import { repo, addPartner, updatePartner, deletePartner } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
@@ -59,7 +60,7 @@ export default function Partners() {
                         <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white">
                           {p.Partner_Name?.[0]?.toUpperCase() ?? 'P'}
                         </span>
-                        <span className="text-slate-200">{p.Partner_Name}</span>
+                        <Link to={`/partners/${encodeURIComponent(p.Partner_ID)}`} className="text-brand-300 hover:underline">{p.Partner_Name}</Link>
                       </div>
                     </Td>
                     <Td className="text-slate-400">{p.Partner_ID}</Td>

@@ -23,11 +23,11 @@ export default function CustomerInterest() {
       String(i.Loan_No ?? '').toLowerCase().includes(s) ||
       String(i.Month ?? '').toLowerCase().includes(s))
     list = list.slice().sort((a, b) => monthKey(b.Month) - monthKey(a.Month) || num(b.Interest_Pending) - num(a.Interest_Pending))
-    const monthTotals: Record<string, { interest: number; pending: number }> = {}
+    const monthTotals: Record<string, { interest: number; received: number; pending: number }> = {}
     for (const r of list) {
       const m = r.Month ?? '—'
-      const t = monthTotals[m] ?? (monthTotals[m] = { interest: 0, pending: 0 })
-      t.interest += num(r.Interest_Amount); t.pending += num(r.Interest_Pending)
+      const t = monthTotals[m] ?? (monthTotals[m] = { interest: 0, received: 0, pending: 0 })
+      t.interest += num(r.Interest_Amount); t.received += num(r.Amount_Received); t.pending += num(r.Interest_Pending)
     }
     return {
       rows: list, monthTotals,
@@ -65,7 +65,7 @@ export default function CustomerInterest() {
                       <tr className="bg-slate-900/80"><td colSpan={editable ? 8 : 7} className="px-3 py-1.5">
                         <div className="flex flex-wrap items-center gap-3">
                           <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">{monthName(i.Month)}</span>
-                          <span className="text-xs text-slate-400">Interest <b className="text-hd">{inr(monthTotals[i.Month ?? '—']?.interest ?? 0)}</b> · Pending <b className="text-amber-300">{inr(monthTotals[i.Month ?? '—']?.pending ?? 0)}</b></span>
+                          <span className="text-xs text-slate-400">Interest <b className="text-hd">{inr(monthTotals[i.Month ?? '—']?.interest ?? 0)}</b> · Received <b className="text-emerald-300">{inr(monthTotals[i.Month ?? '—']?.received ?? 0)}</b> · Pending <b className="text-amber-300">{inr(monthTotals[i.Month ?? '—']?.pending ?? 0)}</b></span>
                         </div>
                       </td></tr>
                     )}

@@ -20,6 +20,7 @@ import OtherFinanceDetail from './pages/OtherFinanceDetail'
 import OtherFinances from './pages/OtherFinances'
 import OtherFinanceInterest from './pages/OtherFinanceInterest'
 import Partners from './pages/Partners'
+import PartnerDetail from './pages/PartnerDetail'
 import Finances from './pages/Finances'
 import FinanceDetail from './pages/FinanceDetail'
 import Workers from './pages/Workers'
@@ -85,6 +86,7 @@ export default function App() {
         <Route path="/finances" element={<Finances />} />
         <Route path="/finances/:name" element={<FinanceDetail />} />
         <Route path="/partners" element={<Partners />} />
+        <Route path="/partners/:id" element={<PartnerDetail />} />
         <Route path="/workers" element={<Workers />} />
         <Route path="/logs" element={<Logs />} />
         <Route path="/settings" element={<Settings />} />

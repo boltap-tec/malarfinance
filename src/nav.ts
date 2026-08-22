@@ -4,8 +4,9 @@
 import {
   LayoutDashboard, Users, HandCoins, Percent, BookOpenText, PiggyBank,
   Boxes, Gem, Building2, Users2, UserCog, History, Settings, MessageSquare,
-  Landmark, Wallet, ReceiptText, Banknote, type LucideIcon,
+  Landmark, Wallet, ReceiptText, Banknote, Coins, Gavel, type LucideIcon,
 } from 'lucide-react'
+import { SHOW_OWN_CHIT_FUND } from './store/app'
 
 export interface NavItem {
   to: string
@@ -18,6 +19,18 @@ export interface NavItem {
 export interface NavGroup {
   title: string
   items: NavItem[]
+}
+
+// The run-your-own chit section — its own group next to Other Finance.
+const chitGroup: NavGroup = {
+  title: 'Chit',
+  items: [
+    { to: '/chit', label: 'Chit Funds', icon: Boxes, end: true, desc: 'Chits you run — create & open' },
+    { to: '/chit/members', label: 'Chit Members', icon: Users2, desc: 'Members in each chit' },
+    { to: '/chit/auctions', label: 'Chit Auctions', icon: Gavel, desc: 'Post auctions & assign takers' },
+    { to: '/chit/transactions', label: 'Chit Transactions', icon: Coins, desc: 'Monthly member dues' },
+    { to: '/chit/ledger', label: 'Chit Ledger', icon: BookOpenText, desc: 'Chit cash book' },
+  ],
 }
 
 export const navGroups: NavGroup[] = [
@@ -52,6 +65,7 @@ export const navGroups: NavGroup[] = [
       { to: '/other-finance-interest', label: 'Other Finance Interest', icon: ReceiptText, desc: 'Interest you owe them' },
     ],
   },
+  ...(SHOW_OWN_CHIT_FUND ? [chitGroup] : []),
   {
     title: 'Organisation',
     items: [
@@ -63,7 +77,7 @@ export const navGroups: NavGroup[] = [
   {
     title: 'More',
     items: [
-      { to: '/chits', label: 'Chits', icon: Boxes, desc: 'Chit funds you run & invest in' },
+      { to: '/chits', label: 'Chits', icon: Boxes, desc: 'Invested chit funds' },
       { to: '/jewel', label: 'Jewel Loans', icon: Gem, desc: 'Gold / pawn (soon)' },
     ],
   },

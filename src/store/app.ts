@@ -119,6 +119,11 @@ export const financeFilter = (f: string) => (f === 'ALL' ? undefined : f)
 // MD and workers may create/modify; partners are view-only.
 export const canEdit = (role?: Role) => role === 'md' || role === 'worker'
 
+// Feature flag: the "chit fund you RUN" section (its own sidebar group with
+// Funds, Members, Auctions, Transactions and Ledger pages). Invested chits are
+// a separate, always-on feature. Flip to false to hide the run-your-own section.
+export const SHOW_OWN_CHIT_FUND = true
+
 export const PARTNER_ROUTES = ['/', '/messages', '/customers', '/loans', '/customer-interest', '/ledger']
 export function canSeeRoute(user: AppUser | null, to: string): boolean {
   if (!user) return false

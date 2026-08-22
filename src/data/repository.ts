@@ -10,6 +10,7 @@ import type {
   Dataset, Loan, Customer, InterestRow, LedgerRow, Partner, Finance, Deposit,
   OtherFinanceLoan, Worker, AppNotification, LogEntry, Message,
   ChitCreation, ChitMember, ChitAuction, ChitTakenMember, ChitLedgerRow,
+  InvestedChit, InvestedChitTrans,
 } from './types'
 
 const STORAGE_KEY = 'arul-finance:data:v1'
@@ -287,6 +288,25 @@ export const repo = {
     }
   },
 
+  // ── Invested chits (chits you join at another company) ─────────────────────
+  investedChits(): InvestedChit[] {
+    return db.Invested_Chit ?? []
+  },
+  investedChit(chitId: string): InvestedChit | undefined {
+    return (db.Invested_Chit ?? []).find(c => c.Chit_ID === chitId)
+  },
+  investedChitTrans(chitId: string): InvestedChitTrans[] {
+    return (db.Invested_Chit_Trans ?? []).filter(t => t.Chit_ID === chitId)
+      .sort((a, b) => num(a.Month_Count) - num(b.Month_Count))
+  },
+  investedChitSummary(chitId: string) {
+    const trans = (db.Invested_Chit_Trans ?? []).filter(t => t.Chit_ID === chitId)
+    return {
+      invested: trans.reduce((s, t) => s + num(t.Chit_This_Month_Amount), 0),
+      months: trans.length,
+    }
+  },
+
   raw<K extends keyof Dataset>(key: K): Dataset[K] { return db[key] },
 }
 
@@ -369,6 +389,7 @@ const PK: Partial<Record<keyof Dataset, string>> = {
   Notification: 'id', Message: 'id', Log: 'id',
   Chit_Creation: 'Chit_ID', Chit_Member: 'Member_ID', Chit_Auction: 'Chit_Auction_ID',
   Chit_Taken_Member: 'Chit_Taken_ID', Chit_Ledger: 'ID',
+  Invested_Chit: 'Chit_ID', Invested_Chit_Trans: 'ID',
 }
 export let lastWriteError = ''
 function noteErr(where: string, msg?: string) {
@@ -1475,5 +1496,75 @@ export async function payChitTaker(takenId: string, amount?: number, date?: stri
     await sUpdate('Chit_Member', row.Member_ID, mp)
   }
   writeLog({ Action: 'update', Entity: 'Chit_Taken_Member', Entity_Label: `Payout — ${row.Member_Name} · ${inrFmt(pay)}`, Before: row })
+  persist()
+}
+
+// ── Invested chit writes (chits you join at another company) ─────────────────
+export async function addInvestedChit(c: InvestedChit): Promise<void> {
+  const row: InvestedChit = {
+    No_Months_Completed: 0, Total_Amount_Invested_Till_Now: 0,
+    Chit_Status: 'Active', Chit_Taken: 'No',
+    ...c,
+  }
+  db.Invested_Chit = [row, ...(db.Invested_Chit ?? [])]
+  await sInsert('Invested_Chit', row)
+  writeLog({ Action: 'create', Entity: 'Invested_Chit', Entity_Label: `${row.Chit_Name} · ${row.Chit_Invested_Company}`, After: row })
+  persist()
+}
+
+export async function updateInvestedChit(chitId: string, patch: Partial<InvestedChit>): Promise<void> {
+  db.Invested_Chit = (db.Invested_Chit ?? []).map(c => c.Chit_ID === chitId ? { ...c, ...patch } : c)
+  await sUpdate('Invested_Chit', chitId, patch)
+  persist()
+}
+
+export async function deleteInvestedChit(chitId: string): Promise<void> {
+  const row = (db.Invested_Chit ?? []).find(c => c.Chit_ID === chitId)
+  if (!row) return
+  const trans = (db.Invested_Chit_Trans ?? []).filter(t => t.Chit_ID === chitId)
+  db.Invested_Chit = (db.Invested_Chit ?? []).filter(c => c.Chit_ID !== chitId)
+  db.Invested_Chit_Trans = (db.Invested_Chit_Trans ?? []).filter(t => t.Chit_ID !== chitId)
+  await sDelete('Invested_Chit', chitId)
+  for (const t of trans) await sDelete('Invested_Chit_Trans', t.ID)
+  writeLog({ Action: 'delete', Entity: 'Invested_Chit', Entity_Label: `${row.Chit_Name} · ${row.Chit_Invested_Company}`, Before: { chit: row, trans } })
+  persist()
+}
+
+export interface InvestedContributionInput {
+  chitId: string
+  amount: number
+  date: string
+  remarks?: string
+}
+
+// Record one month's contribution to an invested chit, and roll the parent up.
+export async function recordInvestedContribution(inp: InvestedContributionInput): Promise<void> {
+  const chit = (db.Invested_Chit ?? []).find(c => c.Chit_ID === inp.chitId)
+  if (!chit) return
+  const month = (db.Invested_Chit_Trans ?? []).filter(t => t.Chit_ID === inp.chitId)
+    .reduce((m, t) => Math.max(m, num(t.Month_Count)), 0) + 1
+  const d = new Date(inp.date)
+  const monthYear = isNaN(d.getTime())
+    ? undefined
+    : `${d.toLocaleString('en-US', { month: 'short' })}-${d.getFullYear()}`
+  const row: InvestedChitTrans = {
+    ID: `${inp.chitId}-${String(inp.date).replace(/-/g, '')}-${month}`,
+    Chit_ID: inp.chitId, Chit_Invested_By: chit.Chit_Invested_By,
+    Chit_Invested_Company: chit.Chit_Invested_Company,
+    Chit_Invested_Company_Address: chit.Chit_Invested_Company_Address,
+    Total_Amount_Chit: chit.Total_Amount_Chit, No_Months: chit.No_Months,
+    Chit_Started_Date: chit.Chit_Started_Date, Month_Count: month,
+    Chit_This_Month_Amount: num(inp.amount), Date: inp.date, Month_Year: monthYear,
+    Chit_Taken: chit.Chit_Taken, Chit_Name: chit.Chit_Name, Paid_Date: inp.date,
+    Remarks: inp.remarks, Chit_Status: month >= num(chit.No_Months) ? 'Completed' : 'Active',
+  }
+  db.Invested_Chit_Trans = [...(db.Invested_Chit_Trans ?? []), row]
+  await sInsert('Invested_Chit_Trans', row)
+  await updateInvestedChit(inp.chitId, {
+    No_Months_Completed: month,
+    Total_Amount_Invested_Till_Now: num(chit.Total_Amount_Invested_Till_Now) + num(inp.amount),
+    Chit_Status: month >= num(chit.No_Months) ? 'Completed' : 'Active',
+  })
+  writeLog({ Action: 'create', Entity: 'Invested_Chit_Trans', Entity_Label: `${chit.Chit_Name} · month ${month} · ${inrFmt(num(inp.amount))}`, After: row })
   persist()
 }

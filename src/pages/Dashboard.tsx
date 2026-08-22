@@ -9,7 +9,7 @@ import {
   Boxes, Landmark, ChevronDown, Plus, type LucideIcon,
 } from 'lucide-react'
 import { repo } from '../data/repository'
-import { useApp, financeFilter, canEdit, canSeeRoute, type AppUser } from '../store/app'
+import { useApp, financeFilter, canEdit, canSeeRoute, SHOW_OWN_CHIT_FUND, type AppUser } from '../store/app'
 import { PageHeader, StatCard, Card, Badge } from '../components/ui'
 import { inr, inrShort, fmtDate, num } from '../lib/format'
 
@@ -100,7 +100,7 @@ export default function Dashboard() {
       {/* Grouped action hub — each box opens its sub-actions */}
       <ActionHub user={user} />
 
-      <div className={`grid grid-cols-2 gap-3 ${data.chitFunds > 0 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
+      <div className={`grid grid-cols-2 gap-3 ${SHOW_OWN_CHIT_FUND && data.chitFunds > 0 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
         {kpiLink(user, '/loans',
           <StatCard label="Outstanding loans" value={inrShort(data.outstandingLoan)} tone="blue"
             sub={`${data.activeLoans} active of ${data.loanCount}`} icon={<HandCoins size={18} />} />)}
@@ -113,7 +113,7 @@ export default function Dashboard() {
         {kpiLink(user, '/deposits',
           <StatCard label="Deposits payable" value={inrShort(data.depositOutstanding)} tone="red"
             sub="owed to depositors" icon={<PiggyBank size={18} />} />)}
-        {data.chitFunds > 0 && kpiLink(user, '/chits',
+        {SHOW_OWN_CHIT_FUND && data.chitFunds > 0 && kpiLink(user, '/chit/transactions',
           <StatCard label="Chit dues to collect" value={inrShort(data.chitDuePending)} tone="blue"
             sub={`${data.chitFunds} fund${data.chitFunds > 1 ? 's' : ''} · ${inrShort(data.chitPayoutPending)} payout due`} icon={<Boxes size={18} />} />)}
       </div>
@@ -237,6 +237,16 @@ const GROUPS: Group[] = [
       { label: 'Their interest', to: '/other-finance-interest' },
     ],
   },
+  ...(SHOW_OWN_CHIT_FUND ? [{
+    title: 'Chit', icon: Boxes, tone: 'text-brand-300 bg-brand-500/15 ring-brand-500/30',
+    items: [
+      { label: 'New chit fund', to: '/chit?new=1', create: true },
+      { label: 'Post auction', to: '/chit/auctions' },
+      { label: 'Collect dues', to: '/chit/transactions' },
+      { label: 'Chit ledger', to: '/chit/ledger' },
+      { label: 'Members', to: '/chit/members' },
+    ],
+  }] : []),
   {
     title: 'Organisation', icon: Users, tone: 'text-brand-300 bg-brand-500/15 ring-brand-500/30',
     items: [

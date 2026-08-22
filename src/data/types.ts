@@ -146,6 +146,44 @@ export interface OtherFinanceLoan {
   Finance_Type?: string
 }
 
+// ── Invested chit (a chit your finance JOINS at another company) ─────────────
+// You pay a monthly contribution to someone else's chit; each payment is a row
+// in Invested_Chit_Trans. One Invested_Chit row summarises the whole chit.
+export interface InvestedChit {
+  Chit_ID: string
+  Chit_Invested_By?: string             // who in your finance joined (Arul / Malar …)
+  Chit_Invested_Company?: string        // the company running the chit
+  Chit_Invested_Company_Address?: string
+  Total_Amount_Chit?: number            // the chit's full monthly pot value
+  No_Months?: number
+  Chit_Started_Date?: string
+  No_Months_Completed?: number
+  Total_Amount_Invested_Till_Now?: number
+  Chit_Status?: string                  // Active | Completed
+  Chit_Taken?: string                   // Yes | No — whether you've won/taken it
+  Chit_Name?: string
+}
+
+export interface InvestedChitTrans {
+  ID: string
+  Chit_ID: string
+  Chit_Invested_By?: string
+  Chit_Invested_Company?: string
+  Chit_Invested_Company_Address?: string
+  Total_Amount_Chit?: number
+  No_Months?: number
+  Chit_Started_Date?: string
+  Month_Count?: number
+  Chit_This_Month_Amount?: number       // what you paid that month
+  Date?: string
+  Month_Year?: string                   // label, e.g. "Nov-2024"
+  Chit_Taken?: string
+  Chit_Name?: string
+  Paid_Date?: string
+  Remarks?: string
+  Chit_Status?: string
+}
+
 // ── Chit fund (a chit your finance RUNS) ─────────────────────────────────────
 // A chit is a pot: every month members contribute, one member "takes" that
 // month's pot (via auction), and the firm keeps a small commission. These four
@@ -318,8 +356,8 @@ export interface Dataset {
   Nature_Transaction: NatureTransaction[]
   Deposit_Amount: Deposit[]
   Depositer_Interest: any[]
-  Invested_Chit: any[]
-  Invested_Chit_Trans: any[]
+  Invested_Chit: InvestedChit[]
+  Invested_Chit_Trans: InvestedChitTrans[]
   Chit_Creation: ChitCreation[]
   Chit_Member: ChitMember[]
   Chit_Auction: ChitAuction[]

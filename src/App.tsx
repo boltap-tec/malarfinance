@@ -27,6 +27,12 @@ import Settings from './pages/Settings'
 import Messages from './pages/Messages'
 import Chits from './pages/Chits'
 import ChitDetail from './pages/ChitDetail'
+import InvestedChitDetail from './pages/InvestedChitDetail'
+import ChitFunds from './pages/ChitFunds'
+import ChitMembers from './pages/ChitMembers'
+import ChitAuctions from './pages/ChitAuctions'
+import ChitTransactions from './pages/ChitTransactions'
+import ChitLedger from './pages/ChitLedger'
 import Menu from './pages/Menu'
 import Placeholder from './pages/Placeholder'
 
@@ -80,7 +86,13 @@ export default function App() {
         <Route path="/messages" element={<Messages />} />
         <Route path="/menu" element={<Menu />} />
         <Route path="/chits" element={<Chits />} />
-        <Route path="/chits/:chitId" element={<ChitDetail />} />
+        <Route path="/chits/invested/:chitId" element={<InvestedChitDetail />} />
+        <Route path="/chit" element={<ChitFunds />} />
+        <Route path="/chit/members" element={<ChitMembers />} />
+        <Route path="/chit/auctions" element={<ChitAuctions />} />
+        <Route path="/chit/transactions" element={<ChitTransactions />} />
+        <Route path="/chit/ledger" element={<ChitLedger />} />
+        <Route path="/chit/:chitId" element={<ChitDetail />} />
         <Route path="/jewel" element={<Placeholder title="Jewel Loans" note="Gold/pawn loans with item particulars and photos — module coming next." />} />
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />

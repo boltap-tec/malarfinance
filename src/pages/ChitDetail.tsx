@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Boxes, Users, Gavel, Coins, HandCoins, Plus, UserPlus, Printer } from 'lucide-react'
 import {
-  repo, addChitMember, runChitAuction, assignChitTaker, collectChitDue, payChitTaker,
+  repo, addChit, nextChitId, addChitMember, runChitAuction, assignChitTaker, collectChitDue, payChitTaker,
 } from '../data/repository'
-import type { ChitAuction, ChitTakenMember, ChitLedgerRow, ChitMember } from '../data/types'
+import type { ChitCreation, ChitAuction, ChitTakenMember, ChitLedgerRow, ChitMember } from '../data/types'
 import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
 import { inr, fmtDate, phone, num } from '../lib/format'
@@ -54,7 +54,7 @@ export default function ChitDetail() {
 
   return (
     <div>
-      <Link to="/chits" className="mb-4 inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-200"><ArrowLeft size={16} /> Chits</Link>
+      <Link to="/chit" className="mb-4 inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-200"><ArrowLeft size={16} /> Chit funds</Link>
       <PageHeader
         title={`Chit ${chit.Chit_Name}`}
         subtitle={`${chit.Chit_ID} · ${chit.Finance_Name}`}
@@ -301,8 +301,61 @@ function MemberStatementModal({ member, onClose }: { member: ChitMember; onClose
   )
 }
 
+// ── Create a chit fund you run ──────────────────────────────────────────────
+export function CreateChitModal({ defaultFinance, onClose, onSaved }: { defaultFinance: string; onClose: () => void; onSaved: () => void }) {
+  const finances = repo.finances()
+  const [name, setName] = useState('')
+  const [financeName, setFinanceName] = useState(defaultFinance)
+  const [fromDate, setFromDate] = useState(new Date().toISOString().slice(0, 10))
+  const [totalAmount, setTotalAmount] = useState('')
+  const [totalMonth, setTotalMonth] = useState('')
+  const [noMembers, setNoMembers] = useState('')
+  const [pct, setPct] = useState('3')
+  const [busy, setBusy] = useState(false)
+
+  const commission = Math.round(num(pct) / 100 * num(totalAmount))
+  const valid = name.trim() && financeName && num(totalAmount) > 0 && num(totalMonth) > 0
+
+  async function save() {
+    if (!valid || busy) return
+    setBusy(true)
+    const chit: ChitCreation = {
+      Chit_ID: nextChitId(financeName), Chit_Name: name.trim(), Chit_From_Date: fromDate,
+      No_Members: num(noMembers), Total_Month: num(totalMonth), Total_Amount: num(totalAmount),
+      Chit_Percentage: num(pct), Finance_Name: financeName, Chit_Status: 'Open',
+    }
+    await addChit(chit)
+    onSaved()
+  }
+
+  return (
+    <Modal title="New chit fund" onClose={onClose} footer={<>
+      <button className="btn-ghost" onClick={onClose}>Cancel</button>
+      <button className="btn-primary" disabled={!valid || busy} onClick={save}>Create chit</button>
+    </>}>
+      <Field label="Chit name"><input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. A" /></Field>
+      <Field label="Finance">
+        <select className="input" value={financeName} onChange={e => setFinanceName(e.target.value)}>
+          {finances.map(f => <option key={f.Finance_Name} value={f.Finance_Name}>{f.Finance_Name}</option>)}
+        </select>
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Start date"><input type="date" className="input" value={fromDate} onChange={e => setFromDate(e.target.value)} /></Field>
+        <Field label="No. of members"><input type="number" className="input" value={noMembers} onChange={e => setNoMembers(e.target.value)} placeholder="25" /></Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Monthly pot (₹)" hint="Full auction amount"><input type="number" className="input" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} placeholder="500000" /></Field>
+        <Field label="Total months"><input type="number" className="input" value={totalMonth} onChange={e => setTotalMonth(e.target.value)} placeholder="20" /></Field>
+      </div>
+      <Field label="Commission %" hint={num(totalAmount) > 0 ? `Firm keeps ${inr(commission)} per full auction` : 'Charged on the pot'}>
+        <input type="number" className="input" value={pct} onChange={e => setPct(e.target.value)} />
+      </Field>
+    </Modal>
+  )
+}
+
 // ── Add member ──────────────────────────────────────────────────────────────
-function AddMemberModal({ chitId, onClose, onSaved }: { chitId: string; onClose: () => void; onSaved: () => void }) {
+export function AddMemberModal({ chitId, onClose, onSaved }: { chitId: string; onClose: () => void; onSaved: () => void }) {
   const chit = repo.chit(chitId)!
   const [name, setName] = useState('')
   const [phoneNo, setPhoneNo] = useState('')
@@ -343,7 +396,7 @@ function AddMemberModal({ chitId, onClose, onSaved }: { chitId: string; onClose:
 }
 
 // ── Run auction ─────────────────────────────────────────────────────────────
-function RunAuctionModal({ chitId, onClose, onSaved }: { chitId: string; onClose: () => void; onSaved: () => void }) {
+export function RunAuctionModal({ chitId, onClose, onSaved }: { chitId: string; onClose: () => void; onSaved: () => void }) {
   const chit = repo.chit(chitId)!
   const nextMonth = repo.chitAuctions(chitId).reduce((m, a) => Math.max(m, num(a.Month_Count)), 0) + 1
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
@@ -388,7 +441,7 @@ function RunAuctionModal({ chitId, onClose, onSaved }: { chitId: string; onClose
 }
 
 // ── Assign taker ────────────────────────────────────────────────────────────
-function AssignTakerModal({ chitId, auction, onClose, onSaved }: { chitId: string; auction: ChitAuction; onClose: () => void; onSaved: () => void }) {
+export function AssignTakerModal({ chitId, auction, onClose, onSaved }: { chitId: string; auction: ChitAuction; onClose: () => void; onSaved: () => void }) {
   const members = repo.chitMembers(chitId)
   const [memberId, setMemberId] = useState('')
   const [pct, setPct] = useState('1')
@@ -426,7 +479,7 @@ function AssignTakerModal({ chitId, auction, onClose, onSaved }: { chitId: strin
 }
 
 // ── Generic amount modal (collect due / pay taker) ──────────────────────────
-function AmountModal({ title, max, onClose, onSave }: { title: string; max: number; onClose: () => void; onSave: (amount: number, date: string, payType: string) => Promise<void> }) {
+export function AmountModal({ title, max, onClose, onSave }: { title: string; max: number; onClose: () => void; onSave: (amount: number, date: string, payType: string) => Promise<void> }) {
   const [amount, setAmount] = useState(String(max))
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [payType, setPayType] = useState('Cash')

@@ -606,6 +606,21 @@ export async function updateLoan(loanNo: string, patch: Partial<Loan>): Promise<
   persist()
 }
 
+// An admin edit/correction of a loan (amount / outstanding / rate / status).
+// Unlike updateLoan (used internally by repayments), this one refreshes the
+// customer roll-up and records a before/after entry in the Activity Log, so it's
+// restorable. Use it to fix a mis-recorded repayment, etc.
+export async function editLoan(loanNo: string, patch: Partial<Loan>): Promise<void> {
+  const before = (db.Loan_Processing ?? []).find(l => l.Loan_No === loanNo)
+  if (!before) return
+  const after = { ...before, ...patch }
+  db.Loan_Processing = (db.Loan_Processing ?? []).map(l => l.Loan_No === loanNo ? after : l)
+  await sUpdate('Loan_Processing', loanNo, patch)
+  recomputeCustomer(before.Customer_STL_NO)
+  writeLog({ Action: 'update', Entity: 'Loan_Processing', Entity_Label: `Edit ${loanNo} · ${before.Customer_Name}`, Before: before, After: after })
+  persist()
+}
+
 export async function addCustomer(c: Customer): Promise<void> {
   db.STL_CRM = [c, ...(db.STL_CRM ?? [])]
   await sInsert('STL_CRM', c)

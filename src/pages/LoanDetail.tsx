@@ -1,21 +1,24 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Calculator, HandCoins } from 'lucide-react'
-import { repo } from '../data/repository'
+import { ArrowLeft, Calculator, HandCoins, Pencil } from 'lucide-react'
+import { repo, editLoan } from '../data/repository'
 import { computeInterest } from '../lib/interestEngine'
 import { useApp, canEdit } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
 import RepayModal from '../components/RepayModal'
 import { inr, fmtDate, num } from '../lib/format'
+import type { Loan } from '../data/types'
 
 export default function LoanDetail() {
   const { loanNo = '' } = useParams()
   const role = useApp(s => s.user?.role)
   const id = decodeURIComponent(loanNo)
   const [tick, setTick] = useState(0)
+  const isMd = role === 'md'
   const loan = useMemo(() => repo.loan(id), [id, tick])
   const interest = useMemo(() => repo.interestByLoan(id), [id, tick])
   const [repayOpen, setRepayOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
 
   const today = new Date().toISOString().slice(0, 10)
   const monthStart = today.slice(0, 8) + '01'
@@ -39,6 +42,9 @@ export default function LoanDetail() {
         action={
           <div className="flex items-center gap-2">
             <Badge tone={statusTone(loan.Loan_Status)}>{loan.Loan_Status ?? '—'}</Badge>
+            {isMd && (
+              <button className="btn-ghost !py-1.5" onClick={() => setEditOpen(true)}><Pencil size={15} /> Edit</button>
+            )}
             {canEdit(role) && num(loan.Outstand_Amount) > 0 && (
               <button className="btn-primary !py-1.5" onClick={() => setRepayOpen(true)}><HandCoins size={15} /> Repay</button>
             )}
@@ -126,7 +132,69 @@ export default function LoanDetail() {
           onSaved={() => { setRepayOpen(false); setTick(t => t + 1) }}
         />
       )}
+
+      {editOpen && (
+        <EditLoanModal
+          loan={loan}
+          onClose={() => setEditOpen(false)}
+          onSaved={() => { setEditOpen(false); setTick(t => t + 1) }}
+        />
+      )}
     </div>
+  )
+}
+
+// Admin correction of a loan. Outstanding is what you set; Repaid is kept
+// consistent as (loan amount − outstanding). Logged & restorable.
+function EditLoanModal({ loan, onClose, onSaved }: { loan: Loan; onClose: () => void; onSaved: () => void }) {
+  const perMonth = loan.Interest_Type === 'Per_Month'
+  const [amount, setAmount] = useState(String(num(loan.Loan_Amount)))
+  const [outstanding, setOutstanding] = useState(String(num(loan.Outstand_Amount)))
+  const [rate, setRate] = useState(String(perMonth ? num(loan.Interest_Per_Month_Per_Lakh) : num(loan.Interest_Per_day_Per_Lakh)))
+  const [status, setStatus] = useState(loan.Loan_Status ?? 'Active')
+  const [busy, setBusy] = useState(false)
+
+  const amt = num(amount), out = num(outstanding)
+  const repaid = Math.max(0, amt - out)
+  const valid = amt > 0 && out >= 0 && out <= amt && !busy
+
+  async function save() {
+    if (!valid) return
+    setBusy(true)
+    await editLoan(loan.Loan_No, {
+      Loan_Amount: amt,
+      Outstand_Amount: out,
+      Repaid_Amount: repaid,
+      Loan_Status: status,
+      ...(perMonth ? { Interest_Per_Month_Per_Lakh: num(rate) } : { Interest_Per_day_Per_Lakh: num(rate) }),
+    })
+    onSaved()
+  }
+
+  return (
+    <Modal title={`Edit loan ${loan.Loan_No}`} onClose={onClose} footer={<>
+      <button className="btn-ghost" onClick={onClose}>Cancel</button>
+      <button className="btn-primary" disabled={!valid} onClick={save}>Save changes</button>
+    </>}>
+      <p className="text-sm text-slate-400">Correct this loan's figures. Repaid is kept as (amount − outstanding). This is logged and can be restored from the Activity Log.</p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Loan amount (₹)"><input className="input" inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} /></Field>
+        <Field label="Outstanding (₹)"><input className="input" inputMode="numeric" value={outstanding} onChange={e => setOutstanding(e.target.value)} /></Field>
+      </div>
+      {out > amt && <p className="text-xs text-rose-300">Outstanding can't be more than the loan amount.</p>}
+      <div className="rounded-xl bg-slate-800/40 p-3 text-sm">
+        <div className="flex justify-between"><span className="text-slate-400">Repaid (auto)</span><span className="font-semibold text-hd">{inr(repaid)}</span></div>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label={perMonth ? 'Rate (₹/lakh/month)' : 'Rate (₹/lakh/day)'}><input className="input" inputMode="numeric" value={rate} onChange={e => setRate(e.target.value)} /></Field>
+        <Field label="Status">
+          <select className="input" value={status} onChange={e => setStatus(e.target.value)}>
+            <option>Active</option><option>Closed</option>
+          </select>
+        </Field>
+      </div>
+      <p className="text-xs text-slate-500">Note: this fixes the loan record only. If you're reversing a wrong repayment, also delete its entry from the Ledger tab so the cash balance matches.</p>
+    </Modal>
   )
 }
 

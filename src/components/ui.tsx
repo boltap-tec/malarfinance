@@ -70,9 +70,9 @@ export function Modal({
   title, onClose, children, footer,
 }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="card relative z-10 w-full max-w-lg p-5">
+      <div className="card relative z-10 max-h-[90vh] w-full max-w-lg min-w-0 overflow-hidden p-5">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-hd">{title}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-200"><X size={18} /></button>
@@ -99,6 +99,33 @@ export function ConfirmModal({
       <div className="text-sm text-slate-300">{message}</div>
       <p className="mt-2 text-xs text-slate-500">This is recorded in the Activity Log and can be restored from there.</p>
     </Modal>
+  )
+}
+
+// A horizontal segmented control for switching between sections on a detail page.
+// Scrolls sideways on narrow screens so it never pushes the layout off-screen.
+export function Tabs<T extends string>({ tabs, active, onChange }: {
+  tabs: { key: T; label: ReactNode; badge?: ReactNode }[]
+  active: T
+  onChange: (key: T) => void
+}) {
+  return (
+    <div className="mb-4 flex gap-1 overflow-x-auto rounded-xl bg-slate-800/40 p-1">
+      {tabs.map(t => (
+        <button
+          key={t.key}
+          onClick={() => onChange(t.key)}
+          className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+            active === t.key ? 'bg-slate-900 text-hd shadow' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          {t.label}
+          {t.badge != null && t.badge !== '' && (
+            <span className={`rounded-full px-1.5 py-0.5 text-[11px] tabular-nums ${active === t.key ? 'bg-brand-500/20 text-brand-300' : 'bg-slate-700/60 text-slate-300'}`}>{t.badge}</span>
+          )}
+        </button>
+      ))}
+    </div>
   )
 }
 

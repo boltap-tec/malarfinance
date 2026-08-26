@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Phone, Mail, HandCoins, Plus, Percent } from 'lucide-react'
-import { repo } from '../data/repository'
+import { ArrowLeft, Phone, Mail, HandCoins, Plus, Percent, IndianRupee, BookText } from 'lucide-react'
+import { repo, repayCustomer } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Tabs } from '../components/ui'
 import CustomerRepayModal from '../components/CustomerRepayModal'
+import CustomerInterestPayModal from '../components/CustomerInterestPayModal'
+import LedgerTable from '../components/LedgerTable'
 import ReminderButton from '../components/ReminderButton'
 import { inr, phone, fmtDate, num, monthName } from '../lib/format'
+
+type TabKey = 'loans' | 'interest' | 'ledger'
 
 export default function CustomerDetail() {
   const { stl = '' } = useParams()
@@ -15,27 +19,32 @@ export default function CustomerDetail() {
   const role = useApp(s => s.user?.role)
   const setFinance = useApp(s => s.setFinance)
   const editable = canEdit(role)
+  const isMd = role === 'md'
   const [sp] = useSearchParams()
   const doParam = sp.get('do')
   const [tick, setTick] = useState(0)
-  const [repayModal, setRepayModal] = useState<'repay' | 'interest' | null>(null)
+  const [tab, setTab] = useState<TabKey>('loans')
+  const [repayModal, setRepayModal] = useState(false)
+  const [payInterest, setPayInterest] = useState(false)
 
-  const { customer, loans, interest, totals } = useMemo(() => {
+  const { customer, loans, interest, ledger, totals } = useMemo(() => {
     const customer = repo.customer(id)
     const loans = repo.loansByCustomer(id)
     const interest = repo.interestByCustomer(id)
+    const ledger = repo.ledgerByCustomer(id)
     const totals = {
       given: loans.reduce((s, l) => s + num(l.Loan_Amount), 0),
       outstanding: loans.reduce((s, l) => s + num(l.Outstand_Amount), 0),
       interestDue: interest.reduce((s, i) => s + num(i.Interest_Pending), 0),
     }
-    return { customer, loans, interest, totals }
+    return { customer, loans, interest, ledger, totals }
   }, [id, tick])
 
-  // Opened from a row's Repay/Interest icon: auto-open the unified repay.
+  // Opened from a row's Repay/Interest icon: auto-open the right action + tab.
   useEffect(() => {
     if (!editable) return
-    if (doParam === 'repay' || doParam === 'interest') setRepayModal(doParam)
+    if (doParam === 'repay') setRepayModal(true)
+    if (doParam === 'interest') { setTab('interest'); setPayInterest(true) }
   }, [doParam, editable]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!customer) return <EmptyState title="Customer not found" />
@@ -62,12 +71,12 @@ export default function CustomerDetail() {
                 <Plus size={15} /> Give loan
               </button>
               {totals.outstanding > 0 && (
-                <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setRepayModal('repay')}>
+                <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setRepayModal(true)}>
                   <HandCoins size={15} /> Repay loan
                 </button>
               )}
               {totals.interestDue > 0 && (
-                <button className="btn-ghost !py-1.5 text-amber-300 ring-1 ring-inset ring-amber-500/30" onClick={() => setRepayModal('interest')}>
+                <button className="btn-ghost !py-1.5 text-amber-300 ring-1 ring-inset ring-amber-500/30" onClick={() => { setTab('interest'); setPayInterest(true) }}>
                   <Percent size={15} /> Pay interest
                 </button>
               )}
@@ -81,61 +90,89 @@ export default function CustomerDetail() {
         {customer.Customer_Email && <span className="flex items-center gap-1.5"><Mail size={14} /> {customer.Customer_Email}</span>}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Total loan given" value={inr(totals.given)} tone="blue" />
         <StatCard label="Outstanding loan" value={inr(totals.outstanding)} tone="amber" />
         <StatCard label="Interest paid" value={inr(num(customer.Total_Interest_Paid))} tone="green" />
         <StatCard label="Interest due" value={inr(totals.interestDue)} tone="red" />
       </div>
 
-      <h3 className="mb-2 mt-6 flex items-center gap-2 font-semibold text-hd"><HandCoins size={16} /> Loans</h3>
-      {loans.length === 0 ? <EmptyState title="No loans for this customer" /> : (
-        <Card className="!p-0 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Loan no.</Th><Th>Given</Th><Th right>Amount</Th><Th>Rate</Th><Th right>Outstanding</Th><Th>Status</Th></tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {loans.map(l => (
-                  <tr key={l.Loan_No} className="hover:bg-slate-800/40">
-                    <Td><Link to={`/loans/${encodeURIComponent(l.Loan_No)}`} className="font-medium text-brand-300">{l.Loan_No}</Link></Td>
-                    <Td className="text-slate-400">{fmtDate(l.Loan_Given_Date)}</Td>
-                    <Td right className="text-hd">{inr(num(l.Loan_Amount))}</Td>
-                    <Td className="text-slate-300">{rateLabel(l)}</Td>
-                    <Td right className="text-amber-300">{inr(num(l.Outstand_Amount))}</Td>
-                    <Td><Badge tone={statusTone(l.Loan_Status)}>{l.Loan_Status ?? '—'}</Badge></Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+      <Tabs<TabKey>
+        active={tab}
+        onChange={setTab}
+        tabs={[
+          { key: 'loans', label: <span className="flex items-center gap-1.5"><HandCoins size={14} /> Loans</span>, badge: loans.length || '' },
+          { key: 'interest', label: <span className="flex items-center gap-1.5"><Percent size={14} /> Interest</span>, badge: totals.interestDue > 0 ? '!' : '' },
+          { key: 'ledger', label: <span className="flex items-center gap-1.5"><BookText size={14} /> Ledger</span>, badge: ledger.length || '' },
+        ]}
+      />
+
+      {tab === 'loans' && (
+        loans.length === 0 ? <EmptyState title="No loans for this customer" /> : (
+          <Card className="!p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b border-slate-800 bg-slate-900/60">
+                  <tr><Th>Loan no.</Th><Th>Given</Th><Th right>Amount</Th><Th>Rate</Th><Th right>Outstanding</Th><Th>Status</Th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {loans.map(l => (
+                    <tr key={l.Loan_No} className="hover:bg-slate-800/40">
+                      <Td><Link to={`/loans/${encodeURIComponent(l.Loan_No)}`} className="font-medium text-brand-300">{l.Loan_No}</Link></Td>
+                      <Td className="text-slate-400">{fmtDate(l.Loan_Given_Date)}</Td>
+                      <Td right className="text-hd">{inr(num(l.Loan_Amount))}</Td>
+                      <Td className="text-slate-300">{rateLabel(l)}</Td>
+                      <Td right className="text-amber-300">{inr(num(l.Outstand_Amount))}</Td>
+                      <Td><Badge tone={statusTone(l.Loan_Status)}>{l.Loan_Status ?? '—'}</Badge></Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )
       )}
 
-      <h3 className="mb-2 mt-6 font-semibold text-hd">Interest history</h3>
-      {interest.length === 0 ? <EmptyState title="No interest postings yet" /> : (
-        <Card className="!p-0 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Month</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th></tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {interest.slice().reverse().map((i, k) => (
-                  <tr key={k} className="hover:bg-slate-800/40">
-                    <Td className="text-slate-300">{monthName(i.Month)}</Td>
-                    <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>
-                    <Td right className="text-hd">{inr(num(i.Interest_Amount))}</Td>
-                    <Td right className="text-emerald-400">{inr(num(i.Amount_Received))}</Td>
-                    <Td right className="text-amber-400">{inr(num(i.Interest_Pending))}</Td>
-                    <Td><Badge tone={statusTone(i.Status)}>{i.Status ?? '—'}</Badge></Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+      {tab === 'interest' && (
+        interest.length === 0 ? <EmptyState title="No interest postings yet" /> : (
+          <Card className="!p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b border-slate-800 bg-slate-900/60">
+                  <tr><Th>Month</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Collect</Th>}</tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {interest.slice().reverse().map((i, k) => (
+                    <tr key={k} className="hover:bg-slate-800/40">
+                      <Td className="text-slate-300">{monthName(i.Month)}</Td>
+                      <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>
+                      <Td right className="text-hd">{inr(num(i.Interest_Amount))}</Td>
+                      <Td right className="text-emerald-400">{inr(num(i.Amount_Received))}</Td>
+                      <Td right className="text-amber-400">{inr(num(i.Interest_Pending))}</Td>
+                      <Td><Badge tone={statusTone(i.Status)}>{i.Status ?? '—'}</Badge></Td>
+                      {editable && (
+                        <Td>
+                          {num(i.Interest_Pending) > 0
+                            ? <button title="Collect interest" className="btn-ghost !px-2.5 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setPayInterest(true)}><IndianRupee size={13} /> Pay</button>
+                            : <span className="text-xs text-slate-600">—</span>}
+                        </Td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )
+      )}
+
+      {tab === 'ledger' && (
+        <LedgerTable
+          rows={ledger}
+          canManage={isMd}
+          emptyHint="Loan, repayment and interest movements appear here."
+          onChanged={() => setTick(t => t + 1)}
+        />
       )}
 
       {repayModal && (
@@ -144,9 +181,19 @@ export default function CustomerDetail() {
           name={customer.Customer_Name}
           outstanding={totals.outstanding}
           pendingInterest={totals.interestDue}
-          mode={repayModal}
-          onClose={() => setRepayModal(null)}
-          onSaved={() => { setRepayModal(null); setTick(t => t + 1) }}
+          mode="repay"
+          onClose={() => setRepayModal(false)}
+          onSaved={() => { setRepayModal(false); setTick(t => t + 1) }}
+        />
+      )}
+
+      {payInterest && (
+        <CustomerInterestPayModal
+          name={customer.Customer_Name}
+          rows={interest}
+          onPay={(amount, date, payType, note) => repayCustomer({ stl: customer.Customer_STL_NO, principal: 0, interest: amount, date, payType, note })}
+          onClose={() => setPayInterest(false)}
+          onSaved={() => { setPayInterest(false); setTick(t => t + 1) }}
         />
       )}
     </div>

@@ -17,7 +17,7 @@ export default function InterestPayModal({
   onClose: () => void
   onSaved: () => void
 }) {
-  const [amount, setAmount] = useState(String(pending))
+  const [amount, setAmount] = useState('')   // typed by the user — no pre-fill
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [payType, setPayType] = useState('Cash')
   const [note, setNote] = useState('')
@@ -44,10 +44,11 @@ export default function InterestPayModal({
         <div className="mt-1 flex justify-between"><span className="text-slate-400">Pending interest</span><span className="font-semibold text-amber-300">{inr(pending)}</span></div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Amount (₹)"><input className="input" inputMode="numeric" autoFocus value={amount} onChange={e => setAmount(e.target.value)} /></Field>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Amount (₹) *" hint="Required"><input className="input" inputMode="numeric" autoFocus placeholder="Enter amount" value={amount} onChange={e => setAmount(e.target.value)} /></Field>
         <Field label="Date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
       </div>
+      {amt > pending && <p className="text-xs text-rose-300">Cannot pay more than the pending interest ({inr(pending)}).</p>}
       <Field label="Payment type">
         <select className="input" value={payType} onChange={e => setPayType(e.target.value)}>
           <option>Cash</option><option>Bank</option><option>UPI</option><option>Cheque</option>

@@ -23,7 +23,7 @@ export default function CustomerInterestPayModal({
       String(a.From_Date ?? '').localeCompare(String(b.From_Date ?? '')))
 
   const total = pending.reduce((s, r) => s + num(r.Interest_Pending), 0)
-  const [amount, setAmount] = useState(String(total))
+  const [amount, setAmount] = useState('')   // typed by the user — no pre-fill
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [payType, setPayType] = useState('Cash')
   const [note, setNote] = useState('')
@@ -54,7 +54,7 @@ export default function CustomerInterestPayModal({
       onClose={onClose}
       footer={<>
         <button className="btn-ghost" onClick={onClose}>Cancel</button>
-        <button className="btn-primary" disabled={!valid || busy} onClick={save}>Pay {inr(amt)}</button>
+        <button className="btn-primary" disabled={!valid || busy} onClick={save}>{amt > 0 ? `Pay ${inr(amt)}` : 'Pay'}</button>
       </>}
     >
       <div className="rounded-xl bg-slate-800/40 p-3">
@@ -82,10 +82,11 @@ export default function CustomerInterestPayModal({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Amount to pay (₹)" hint="Applied oldest month first"><input className="input" inputMode="numeric" autoFocus value={amount} onChange={e => setAmount(e.target.value)} /></Field>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Amount to pay (₹) *" hint="Required · applied oldest month first"><input className="input" inputMode="numeric" autoFocus placeholder="Enter amount" value={amount} onChange={e => setAmount(e.target.value)} /></Field>
         <Field label="Date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
       </div>
+      {amt > total && <p className="text-xs text-rose-300">Cannot pay more than the total pending ({inr(total)}).</p>}
       <Field label="Payment type">
         <select className="input" value={payType} onChange={e => setPayType(e.target.value)}>
           <option>Cash</option><option>Bank</option><option>UPI</option><option>Cheque</option>

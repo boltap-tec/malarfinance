@@ -18,9 +18,8 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
 
   const outstanding = num(loan.Outstand_Amount)
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
-  const [principal, setPrincipal] = useState(interestOnly ? '0' : String(outstanding))
+  const [principal, setPrincipal] = useState('')         // typed by the user — no pre-fill
   const [interestStr, setInterestStr] = useState('')     // interest amount being paid now
-  const [touched, setTouched] = useState(false)           // user edited the interest amount
   const [includeToday, setIncludeToday] = useState(true)
   const [payType, setPayType] = useState('Cash')
   const [note, setNote] = useState('')
@@ -41,8 +40,8 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
 
   const accrued = accrue?.amount ?? 0
   const totalInterest = pendingInterest + accrued
-  // Default the interest paid to the full total; the user can lower it.
-  const interestPaid = touched ? Math.max(0, num(interestStr)) : totalInterest
+  // Interest paid is typed by the user (no pre-fill); the total is shown as a reference.
+  const interestPaid = Math.max(0, num(interestStr))
   const remainingInterest = Math.max(0, totalInterest - interestPaid)
   const valid = (p > 0 || interestPaid > 0) && p <= outstanding && interestPaid <= totalInterest
 
@@ -73,8 +72,8 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Principal repaid (₹)"><input className="input" inputMode="numeric" value={principal} onChange={e => setPrincipal(e.target.value)} /></Field>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Principal repaid (₹)"><input className="input" inputMode="numeric" placeholder="Enter amount" value={principal} onChange={e => setPrincipal(e.target.value)} /></Field>
         <Field label="Repay date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
       </div>
 
@@ -91,9 +90,9 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
         <div className="mt-3">
           <span className="label">Interest paid now (₹)</span>
           <input
-            className="input mt-1" inputMode="numeric"
-            value={touched ? interestStr : String(totalInterest)}
-            onChange={e => { setTouched(true); setInterestStr(e.target.value) }}
+            className="input mt-1" inputMode="numeric" placeholder="Enter amount"
+            value={interestStr}
+            onChange={e => setInterestStr(e.target.value)}
           />
         </div>
         {interestPaid > totalInterest && <p className="mt-1 text-xs text-rose-300">Cannot pay more than the total interest due.</p>}

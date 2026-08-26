@@ -20,12 +20,13 @@ export default function LiabilityRepayModal({
   onSaved: () => void
 }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
-  const [principal, setPrincipal] = useState(interestOnly ? '0' : String(outstanding))
-  const [interest, setInterest] = useState(String(pendingInterest))
+  const [principal, setPrincipal] = useState('')   // typed by the user — no pre-fill
+  const [interest, setInterest] = useState('')     // typed by the user — no pre-fill
   const [payType, setPayType] = useState('Cash')
   const [note, setNote] = useState('')
 
-  const p = num(principal), i = num(interest)
+  const showPrincipal = !interestOnly
+  const p = showPrincipal ? num(principal) : 0, i = num(interest)
   const valid = (p > 0 || i > 0) && p <= outstanding && i <= pendingInterest
 
   async function save() {
@@ -48,11 +49,13 @@ export default function LiabilityRepayModal({
         <div className="mt-1 flex justify-between"><span className="text-slate-400">Pending interest</span><span className="font-semibold text-amber-300">{inr(pendingInterest)}</span></div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Principal paid (₹)"><input className="input" inputMode="numeric" value={principal} onChange={e => setPrincipal(e.target.value)} /></Field>
-        <Field label="Interest paid (₹)"><input className="input" inputMode="numeric" value={interest} onChange={e => setInterest(e.target.value)} /></Field>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {showPrincipal && <Field label="Principal paid (₹)"><input className="input" inputMode="numeric" placeholder="Enter amount" value={principal} onChange={e => setPrincipal(e.target.value)} /></Field>}
+        <Field label="Interest paid (₹)"><input className="input" inputMode="numeric" placeholder="Enter amount" value={interest} onChange={e => setInterest(e.target.value)} /></Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      {p > outstanding && <p className="text-xs text-rose-300">Principal cannot exceed the outstanding ({inr(outstanding)}).</p>}
+      {i > pendingInterest && <p className="text-xs text-rose-300">Interest cannot exceed the pending ({inr(pendingInterest)}).</p>}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Payment date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
         <Field label="Payment type">
           <select className="input" value={payType} onChange={e => setPayType(e.target.value)}>

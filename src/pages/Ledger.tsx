@@ -101,7 +101,12 @@ export default function Ledger() {
               <tbody className="divide-y divide-slate-800">
                 {rows.map((t, i) => (
                   <tr key={i} className="hover:bg-slate-800/40">
-                    <Td className="whitespace-nowrap text-slate-400">{fmtDate(t.Date_Transaction)}</Td>
+                    <Td className="whitespace-nowrap text-slate-400">
+                      {fmtDate(t.Date_Transaction)}
+                      {t.Created_Date && fmtDate(t.Created_Date) !== fmtDate(t.Date_Transaction) && (
+                        <span className="block text-[11px] text-slate-500" title={t.Created_Date}>entered {fmtDate(t.Created_Date)}</span>
+                      )}
+                    </Td>
                     <Td><Badge tone="slate">{t.Nature_Transaction ?? '—'}</Badge></Td>
                     <Td>
                       <p className="text-slate-200">{t.Description ?? '—'}</p>

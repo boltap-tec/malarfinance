@@ -213,6 +213,13 @@ export const repo = {
   ledgerByRef(code: string): LedgerRow[] {
     return (db.Transaction_Ledger ?? []).filter(t => String(t.Loan_No) === code)
   },
+  // Every ledger movement tied to a customer — matched by their STL number or by
+  // any of their loan numbers (repayments/interest are tagged with the loan).
+  ledgerByCustomer(stl: string): LedgerRow[] {
+    const loanNos = new Set((db.Loan_Processing ?? []).filter(l => l.Customer_STL_NO === stl).map(l => String(l.Loan_No)))
+    return (db.Transaction_Ledger ?? []).filter(t =>
+      String(t.STL_No ?? '') === stl || (t.Loan_No != null && loanNos.has(String(t.Loan_No))))
+  },
   workers(finance?: string): Worker[] {
     return (db.Worker ?? []).filter(w => !finance || w.Finance_Name === finance)
   },
@@ -705,11 +712,17 @@ export async function recordLedger(row: Partial<LedgerRow>): Promise<LedgerRow> 
     ...row,
     Ref_ID: row.Ref_ID ?? nextRef(),
     Date_Transaction: row.Date_Transaction ?? new Date().toISOString().slice(0, 10),
+    // Audit stamp of when the entry was entered into the app (distinct from the
+    // transaction/value date, which may be back-dated). Kept in memory for
+    // instant display; NOT sent to Supabase so a missing column can never break
+    // the insert — the DB column's `default now()` stamps it on the server side.
+    Created_Date: row.Created_Date ?? new Date().toISOString(),
     Balance: 0,
   } as LedgerRow
   db.Transaction_Ledger = [...(db.Transaction_Ledger ?? []), full]
   // Interest_Amount is a text column in the DB — send it as a string.
-  await sInsert('Transaction_Ledger', { ...full, Interest_Amount: full.Interest_Amount != null ? String(full.Interest_Amount) : undefined })
+  // Created_Date is omitted so the DB's default fills it (see note above).
+  await sInsert('Transaction_Ledger', { ...full, Interest_Amount: full.Interest_Amount != null ? String(full.Interest_Amount) : undefined, Created_Date: undefined })
   // Re-run the per-finance, date-ordered balance so a back-dated entry is correct.
   recomputeBalances(String(full.Finance_Name ?? ''))
   persist()
@@ -1387,12 +1400,19 @@ export function customerRisk(stl: string): { level: 'low' | 'medium' | 'high'; m
 // One-shot customer repayment — no loan picker. Principal is applied to the
 // customer's outstanding loans oldest-first; interest settles pending interest
 // oldest-first. The ledger gets TWO separate entries (principal + interest).
-export async function repayCustomer(opts: { stl: string; principal: number; interest: number; date: string; payType?: string; note?: string }): Promise<void> {
-  const { stl, principal, interest, date, payType, note } = opts
+export async function repayCustomer(opts: { stl: string; principal: number; interest: number; date: string; payType?: string; note?: string; accruals?: InterestRow[] }): Promise<void> {
+  const { stl, principal, interest, date, payType, note, accruals } = opts
   const noteSuffix = note ? ` · ${note}` : ''
   const cust = (db.STL_CRM ?? []).find(c => c.Customer_STL_NO === stl)
   if (!cust) return
   const finance = cust.Finance_Name
+
+  // 0) Post any freshly-accrued interest (up to the repay date) as new pending
+  //    rows, so it joins the pool that the interest settlement below draws from.
+  if (accruals && accruals.length) {
+    db.Interest_Details = [...(db.Interest_Details ?? []), ...accruals]
+    await sInsert('Interest_Details', accruals)
+  }
 
   // 1) Principal → oldest loan first.
   let leftP = principal

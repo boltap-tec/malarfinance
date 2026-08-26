@@ -103,6 +103,7 @@ export interface LedgerRow {
   Payment_Type?: string
   Finance_Name?: string
   Interest_Amount?: number
+  Created_Date?: string   // when the row was entered into the app (audit stamp)
 }
 
 export interface Deposit {

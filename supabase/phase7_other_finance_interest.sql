@@ -1,6 +1,32 @@
--- Phase 7 — load Other-finance interest schedule (master data)
--- Run once in Supabase SQL editor. Safe to re-run (on conflict do nothing).
--- Requires phase4.sql (creates Other_Finance_Interest).
+-- Phase 7 — load Other-finance interest schedule (master data).
+-- Self-healing: migrate.sql created this table with only a lowercase "id"
+-- column, so we add the real columns first, then insert. Safe to re-run.
+-- Run once in Supabase -> SQL Editor.
+
+create table if not exists "Other_Finance_Interest" ("id" text);
+alter table "Other_Finance_Interest" add column if not exists "ID" text;
+alter table "Other_Finance_Interest" add column if not exists "Finance_Name" text;
+alter table "Other_Finance_Interest" add column if not exists "Loan_No" text;
+alter table "Other_Finance_Interest" add column if not exists "Loan_bought_Finance_Name" text;
+alter table "Other_Finance_Interest" add column if not exists "From_Date" text;
+alter table "Other_Finance_Interest" add column if not exists "To_Date" text;
+alter table "Other_Finance_Interest" add column if not exists "No_Days" numeric;
+alter table "Other_Finance_Interest" add column if not exists "Interest_Amount" numeric;
+alter table "Other_Finance_Interest" add column if not exists "Loan_Amount" numeric;
+alter table "Other_Finance_Interest" add column if not exists "Month" text;
+alter table "Other_Finance_Interest" add column if not exists "Description" text;
+alter table "Other_Finance_Interest" add column if not exists "Amount_Received" numeric;
+alter table "Other_Finance_Interest" add column if not exists "Status" text;
+alter table "Other_Finance_Interest" add column if not exists "Interest_Pending" numeric;
+alter table "Other_Finance_Interest" add column if not exists "Interest_Type" text;
+create unique index if not exists "Other_Finance_Interest_ID_key" on "Other_Finance_Interest" ("ID");
+
+-- Let the app read & write this table.
+alter table "Other_Finance_Interest" enable row level security;
+drop policy if exists "app_read" on "Other_Finance_Interest";
+create policy "app_read" on "Other_Finance_Interest" for select using (true);
+drop policy if exists "app_write" on "Other_Finance_Interest";
+create policy "app_write" on "Other_Finance_Interest" for all using (true) with check (true);
 
 insert into "Other_Finance_Interest" ("ID", "Finance_Name", "Loan_No", "Loan_bought_Finance_Name", "From_Date", "To_Date", "No_Days", "Interest_Amount", "Loan_Amount", "Month", "Description", "Amount_Received", "Status", "Interest_Pending", "Interest_Type") values
   ('AKPR finance-Mal-O-1-AKPR finance-600000-Other-Finance-Interest-08-2025', 'Malar_Finance', 'Mal-O-1-AKPR finance', 'AKPR finance', '2025-08-01', '2025-08-31', 13, 4680, 600000, '08-2025', 'Other-Finance-Interest-08-2025', 0, 'Pending', 4680, 'Per_Day'),

@@ -764,12 +764,19 @@ export async function addBalanceCorrection(finance: string, date: string, target
 
 // Firm repays a depositor (principal refund and/or interest) — both are payments
 // out. Reduces outstanding across that depositor's linked deposit rows.
-export interface LiabilityRepay { code: string; principal: number; interest: number; date: string; payType?: string; note?: string }
+export interface LiabilityRepay { code: string; principal: number; interest: number; date: string; payType?: string; note?: string; accruals?: any[] }
 
 export async function repayDeposit(o: LiabilityRepay): Promise<void> {
   const rows = (db.Deposit_Amount ?? []).filter(d => d.Deposit_No === o.code)
   if (!rows.length) return
   const name = rows[0].Depositer_Name, finance = rows[0].Finance_Name
+
+  // Post any freshly-accrued interest (on the refunded amount) as pending rows,
+  // so it joins the schedule the interest settlement below draws from.
+  if (o.accruals && o.accruals.length) {
+    db.Depositer_Interest = [...(db.Depositer_Interest ?? []), ...o.accruals]
+    await sInsert('Depositer_Interest', o.accruals)
+  }
 
   // Principal refund → oldest deposit first.
   const payByRef = new Map<Deposit, number>()
@@ -816,6 +823,12 @@ export async function repayOtherFinance(o: LiabilityRepay): Promise<void> {
   const rows = (db.Other_Finance_Loan ?? []).filter(l => l.Loan_No === o.code)
   if (!rows.length) return
   const name = rows[0].Loan_bought_Finance_Name, finance = rows[0].Finance_Name
+
+  // Post any freshly-accrued interest (on the refunded amount) as pending rows.
+  if (o.accruals && o.accruals.length) {
+    db.Other_Finance_Interest = [...(db.Other_Finance_Interest ?? []), ...o.accruals]
+    await sInsert('Other_Finance_Interest', o.accruals)
+  }
 
   // Principal refund → oldest borrowing first.
   const payByRef = new Map<OtherFinanceLoan, number>()

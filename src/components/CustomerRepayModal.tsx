@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { repo, repayCustomer } from '../data/repository'
-import { computeInterest } from '../lib/interestEngine'
+import { accrueOnRepaidPrincipal } from '../lib/interestEngine'
 import { Modal, Field } from './ui'
 import { inr, num, fmtDate } from '../lib/format'
 import type { InterestRow } from '../data/types'
@@ -9,7 +9,6 @@ const shiftDay = (d: string, days: number) => {
   const x = new Date(d); x.setDate(x.getDate() + days)
   return x.toISOString().slice(0, 10)
 }
-const nextDay = (d: string) => shiftDay(d, 1)
 
 // Repay a customer's loan(s). Principal is applied to the oldest loans first.
 // Interest up to the repay date is calculated fresh on each active loan (an
@@ -38,35 +37,49 @@ export default function CustomerRepayModal({
   // Interest is charged up to the repay date, or the previous day when today
   // shouldn't be charged. The ledger still uses the repay date.
   const calcTo = includeToday ? date : shiftDay(date, -1)
+  const p = num(principal)
 
-  // Fresh interest on every active loan, from the day after its last posted
-  // interest up to calcTo, on the loan's current outstanding.
+  // The customer's active loans, oldest first — the order principal is applied in.
+  const loans = useMemo(
+    () => repo.loansByCustomer(stl)
+      .filter(l => (l.Loan_Status ?? '').toLowerCase() === 'active' && num(l.Outstand_Amount) > 0)
+      .sort((a, b) => new Date(a.Loan_Given_Date ?? 0).getTime() - new Date(b.Loan_Given_Date ?? 0).getTime()),
+    [stl],
+  )
+
+  // Interest is charged ONLY on the principal being repaid (oldest loan first),
+  // from the day after each loan's last posted interest up to calcTo.
   const accruals = useMemo(() => {
-    const rows: InterestRow[] = []
-    const loans = repo.loansByCustomer(stl).filter(l => (l.Loan_Status ?? '').toLowerCase() === 'active' && num(l.Outstand_Amount) > 0)
-    for (const l of loans) {
-      const lastTo = repo.interestByLoan(l.Loan_No).map(i => i.To_Date).filter(Boolean).sort().slice(-1)[0]
-      const from = lastTo ? nextDay(lastTo) : (l.Loan_Given_Date ?? calcTo)
-      if (new Date(from) > new Date(calcTo)) continue
-      const pr = computeInterest({ ...l, Loan_Amount: num(l.Outstand_Amount) }, from, calcTo)
-      if (pr.interest <= 0) continue
-      rows.push({
-        ID: `${l.Customer_Name}-${l.Customer_STL_NO}-${l.Loan_No}-${pr.month}-repay-${Date.now()}-${l.Loan_No}`,
+    const lines = loans.map(l => ({
+      key: l.Loan_No,
+      outstanding: num(l.Outstand_Amount),
+      type: l.Interest_Type,
+      perDay: num(l.Interest_Per_day_Per_Lakh),
+      perMonth: num(l.Interest_Per_Month_Per_Lakh),
+      lastTo: repo.interestByLoan(l.Loan_No).map(i => i.To_Date).filter(Boolean).sort().slice(-1)[0],
+      givenDate: l.Loan_Given_Date,
+    }))
+    const { accruals: acc } = accrueOnRepaidPrincipal(lines, p, calcTo)
+    return acc.map((a): InterestRow => {
+      const l = loans.find(x => x.Loan_No === a.key)!
+      return {
+        ID: `${l.Customer_Name}-${l.Customer_STL_NO}-${l.Loan_No}-${a.month}-repay-${Date.now()}-${l.Loan_No}`,
         Finance_Name: l.Finance_Name, Loan_No: l.Loan_No,
         Customer_STL_NO: l.Customer_STL_NO, Customer_Name: l.Customer_Name,
-        From_Date: pr.actualFromDate, To_Date: pr.toDate, Interest_Amount: pr.interest,
-        Loan_Amount: num(l.Outstand_Amount), Month: pr.month,
-        Description: `Interest on repayment — ${l.Loan_No}`,
-        Amount_Received: 0, Status: 'Pending', Interest_Pending: pr.interest,
+        From_Date: a.from, To_Date: a.to, Interest_Amount: a.amount,
+        Loan_Amount: a.base, Month: a.month,
+        Description: `Interest on ₹${a.base.toLocaleString('en-IN')} repaid — ${l.Loan_No}`,
+        Amount_Received: 0, Status: 'Pending', Interest_Pending: a.amount,
         Referred_Partner: l.Referred_Partner, Interest_Type: l.Interest_Type,
-      })
-    }
-    return rows
-  }, [stl, calcTo])
+      }
+    })
+  }, [loans, p, calcTo])
 
   const accrued = accruals.reduce((s, r) => s + num(r.Interest_Amount), 0)
   const totalInterest = pendingInterest + accrued
-  const p = num(principal)
+  const rateLabel = loans.length
+    ? (loans[0].Interest_Type === 'Per_Month' ? `₹${num(loans[0].Interest_Per_Month_Per_Lakh)}/L·mo` : `₹${num(loans[0].Interest_Per_day_Per_Lakh)}/L·day`)
+    : ''
   const interestPaid = Math.max(0, num(interestStr))
   const remainingInterest = Math.max(0, totalInterest - interestPaid)
   const valid = (p > 0 || interestPaid > 0) && p <= outstanding && interestPaid <= totalInterest
@@ -89,7 +102,8 @@ export default function CustomerRepayModal({
     >
       <div className="rounded-xl bg-slate-800/40 p-3 text-sm">
         <div className="flex justify-between"><span className="text-slate-400">Total outstanding loan</span><span className="font-semibold text-hd">{inr(outstanding)}</span></div>
-        <div className="mt-1 flex justify-between"><span className="text-slate-400">Interest up to {fmtDate(calcTo)}</span><span className="font-semibold text-amber-300">{inr(accrued)}</span></div>
+        {rateLabel && <div className="mt-1 flex justify-between"><span className="text-slate-400">Interest rate</span><span className="font-semibold text-slate-200">{rateLabel}</span></div>}
+        <div className="mt-1 flex justify-between"><span className="text-slate-400">Interest on repaid amount (to {fmtDate(calcTo)})</span><span className="font-semibold text-amber-300">{inr(accrued)}</span></div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

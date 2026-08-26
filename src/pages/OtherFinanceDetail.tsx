@@ -167,7 +167,28 @@ export default function OtherFinanceDetail() {
           outstanding={outstanding}
           pendingInterest={repo.otherFinanceInterestPending(id)}
           interestOnly={modal === 'interest'}
-          onRepay={(principal, interest, date, payType, note) => repayOtherFinance({ code: id, principal, interest, date, payType, note })}
+          rateLabel={type === 'Per_Month' ? `₹${perMonth}/L·mo` : `₹${perDay}/L·day`}
+          debts={rows.filter(l => num(l.Outstand_Amount) > 0)
+            .sort((a, b) => new Date(a.Loan_Bought_Date ?? 0).getTime() - new Date(b.Loan_Bought_Date ?? 0).getTime())
+            .map((l, i) => ({
+              key: `${l.Loan_No}-${i}`,
+              outstanding: num(l.Outstand_Amount),
+              type: l.Interest_Type,
+              perDay: num(l.Interest_Per_day_Per_Lakh),
+              perMonth: typeof l.Interest_Per_Month_Per_Lakh === 'number' ? l.Interest_Per_Month_Per_Lakh : 0,
+              lastTo: interest.map((x: any) => x.To_Date).filter(Boolean).sort().slice(-1)[0],
+              givenDate: l.Loan_Bought_Date,
+            }))}
+          onRepay={(principal, interestAmt, date, payType, note, accruals) => repayOtherFinance({
+            code: id, principal, interest: interestAmt, date, payType, note,
+            accruals: (accruals ?? []).map((a, i) => ({
+              ID: `${id}-repay-${Date.now()}-${i}`,
+              Finance_Name: first.Finance_Name, Loan_No: id, Loan_bought_Finance_Name: first.Loan_bought_Finance_Name,
+              From_Date: a.from, To_Date: a.to, Interest_Amount: a.amount, Loan_Amount: a.base,
+              Month: a.month, Description: `Interest on ₹${a.base.toLocaleString('en-IN')} refunded`,
+              Amount_Received: 0, Status: 'Pending', Interest_Pending: a.amount,
+            })),
+          })}
           onClose={() => setModal(null)}
           onSaved={() => { setModal(null); setTick(t => t + 1) }}
         />

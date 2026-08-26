@@ -166,7 +166,27 @@ export default function DepositDetail() {
           outstanding={outstanding}
           pendingInterest={repo.depositInterestPending(id)}
           interestOnly={modal === 'interest'}
-          onRepay={(principal, interest, date, payType, note) => repayDeposit({ code: id, principal, interest, date, payType, note })}
+          rateLabel={`₹${rate}/L·mo`}
+          debts={rows.filter(d => num(d.Outstand_Amount) > 0)
+            .sort((a, b) => new Date(a.Deposit_Bought_Date ?? 0).getTime() - new Date(b.Deposit_Bought_Date ?? 0).getTime())
+            .map((d, i) => ({
+              key: `${d.Deposit_No}-${i}`,
+              outstanding: num(d.Outstand_Amount),
+              type: 'Per_Month',
+              perMonth: num(d.Interest_Per_Month_Per_Lakh),
+              lastTo: interest.map((x: any) => x.To_Date).filter(Boolean).sort().slice(-1)[0],
+              givenDate: d.Deposit_Bought_Date,
+            }))}
+          onRepay={(principal, interestAmt, date, payType, note, accruals) => repayDeposit({
+            code: id, principal, interest: interestAmt, date, payType, note,
+            accruals: (accruals ?? []).map((a, i) => ({
+              ID: `${id}-repay-${Date.now()}-${i}`,
+              Finance_Name: first.Finance_Name, Deposit_No: id, Depositer_Name: first.Depositer_Name,
+              From_Date: a.from, To_Date: a.to, Interest_Amount: a.amount, Deposit_Amount: a.base,
+              Month: a.month, Description: `Interest on ₹${a.base.toLocaleString('en-IN')} refunded`,
+              Amount_Received: 0, Status: 'Pending', Interest_Pending: a.amount,
+            })),
+          })}
           onClose={() => setModal(null)}
           onSaved={() => { setModal(null); setTick(t => t + 1) }}
         />

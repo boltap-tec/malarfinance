@@ -92,6 +92,58 @@ export function previewPosting(
     .filter(p => !isPosted || !isPosted(p.loan.Loan_No, p.month))
 }
 
+// ── Interest on a repayment ──────────────────────────────────────────────────
+// One outstanding debt line (a customer loan, a deposit, or an other-finance
+// borrowing) with everything needed to price interest on a repaid slice of it.
+export interface DebtLine {
+  key: string
+  outstanding: number
+  type?: string          // 'Per_Day' | 'Per_Month'
+  perDay?: number
+  perMonth?: number
+  lastTo?: string        // last interest To_Date already charged, if any
+  givenDate?: string     // loan/deposit start date
+}
+
+export interface RepayAccrual {
+  key: string
+  base: number           // the repaid slice this interest is charged on
+  from: string
+  to: string
+  amount: number
+  month: string
+}
+
+const dayAfter = (d: string) => { const x = new Date(d); x.setDate(x.getDate() + 1); return x.toISOString().slice(0, 10) }
+
+// Allocate `principal` across `lines` (caller passes them oldest-first) and
+// charge interest ONLY on each repaid slice, from the day after that line's last
+// interest date up to `calcTo`. Returns one accrual per line plus the total.
+// This matches the rule: repay ₹X → interest on ₹X for the unbilled days.
+export function accrueOnRepaidPrincipal(lines: DebtLine[], principal: number, calcTo: string): { accruals: RepayAccrual[]; total: number } {
+  const accruals: RepayAccrual[] = []
+  let left = Math.max(0, principal)
+  for (const l of lines) {
+    if (left <= 0) break
+    const out = Math.max(0, l.outstanding)
+    if (out <= 0) continue
+    const slice = Math.min(out, left)
+    left -= slice
+    const from = l.lastTo ? dayAfter(l.lastTo) : (l.givenDate ?? calcTo)
+    if (new Date(from) > new Date(calcTo)) continue
+    const pr = computeInterest({
+      Loan_Amount: slice,
+      Interest_Type: l.type,
+      Interest_Per_day_Per_Lakh: l.perDay,
+      Interest_Per_Month_Per_Lakh: l.perMonth,
+      Loan_Given_Date: l.givenDate,
+    } as Loan, from, calcTo)
+    if (pr.interest <= 0) continue
+    accruals.push({ key: l.key, base: slice, from: pr.actualFromDate, to: pr.toDate, amount: pr.interest, month: pr.month })
+  }
+  return { accruals, total: accruals.reduce((s, a) => s + a.amount, 0) }
+}
+
 // Last day of the month for a yyyy-mm-dd date — used to gate posting to month end.
 export function isMonthEnd(dateStr: string): boolean {
   const d = new Date(dateStr)

@@ -8,7 +8,7 @@ import CustomerRepayModal from '../components/CustomerRepayModal'
 import CustomerInterestPayModal from '../components/CustomerInterestPayModal'
 import LedgerTable from '../components/LedgerTable'
 import ReminderButton from '../components/ReminderButton'
-import { inr, phone, fmtDate, num, monthName } from '../lib/format'
+import { inr, phone, fmtDate, num, monthName, monthKey } from '../lib/format'
 
 type TabKey = 'loans' | 'interest' | 'ledger'
 
@@ -142,7 +142,7 @@ export default function CustomerDetail() {
                   <tr><Th>Month</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Collect</Th>}</tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {interest.slice().reverse().map((i, k) => (
+                  {interest.slice().sort((a, b) => (monthKey(b.Month) - monthKey(a.Month)) || String(b.To_Date ?? '').localeCompare(String(a.To_Date ?? ''))).map((i, k) => (
                     <tr key={k} className="hover:bg-slate-800/40">
                       <Td className="text-slate-300">{monthName(i.Month)}</Td>
                       <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>

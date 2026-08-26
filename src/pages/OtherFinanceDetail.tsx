@@ -8,7 +8,7 @@ import LiabilityRepayModal from '../components/LiabilityRepayModal'
 import InterestPayModal from '../components/InterestPayModal'
 import LedgerTable from '../components/LedgerTable'
 import ReminderButton from '../components/ReminderButton'
-import { inr, phone, fmtDate, num, monthName } from '../lib/format'
+import { inr, phone, fmtDate, num, monthName, monthKey } from '../lib/format'
 
 type TabKey = 'borrowings' | 'interest' | 'ledger'
 
@@ -99,13 +99,14 @@ export default function OtherFinanceDetail() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Bought</Th><Th right>Amount</Th><Th right>Repaid</Th><Th right>Outstanding</Th><Th>Status</Th></tr>
+                <tr><Th>Bought</Th><Th right>Amount</Th><Th>Rate</Th><Th right>Repaid</Th><Th right>Outstanding</Th><Th>Status</Th></tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map((o, i) => (
                   <tr key={i} className="hover:bg-slate-800/40">
                     <Td className="text-slate-400">{fmtDate(o.Loan_Bought_Date)}</Td>
                     <Td right className="text-hd">{inr(num(o.Loan_Amount))}</Td>
+                    <Td className="text-slate-300">{o.Interest_Type === 'Per_Month' ? `₹${num(o.Interest_Per_Month_Per_Lakh)}/L·mo` : `₹${num(o.Interest_Per_day_Per_Lakh)}/L·day`}</Td>
                     <Td right className="text-emerald-400">{inr(num(o.Repaid_Amount))}</Td>
                     <Td right className="text-rose-300">{inr(num(o.Outstand_Amount))}</Td>
                     <Td><Badge tone={statusTone(o.Loan_Status)}>{o.Loan_Status ?? '—'}</Badge></Td>
@@ -126,7 +127,7 @@ export default function OtherFinanceDetail() {
                   <tr><Th>Month</Th><Th>Period</Th><Th right>Interest</Th><Th right>Paid</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Collect</Th>}</tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {interest.slice().sort((a: any, b: any) => String(b.Month ?? '').localeCompare(String(a.Month ?? ''))).map((i: any, k: number) => (
+                  {interest.slice().sort((a: any, b: any) => (monthKey(b.Month) - monthKey(a.Month)) || String(b.To_Date ?? '').localeCompare(String(a.To_Date ?? ''))).map((i: any, k: number) => (
                     <tr key={k} className="hover:bg-slate-800/40">
                       <Td className="text-slate-300">{monthName(i.Month)}</Td>
                       <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>

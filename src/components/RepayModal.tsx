@@ -25,9 +25,10 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
   const [note, setNote] = useState('')
 
   const p = num(principal)
-  // Interest accrues on the amount being closed (the principal repaid); when
-  // paying interest only, it accrues on the whole outstanding balance.
-  const base = p > 0 ? p : outstanding
+  // Interest accrues ONLY on the amount being repaid (the closed principal), so
+  // an empty principal means no fresh interest — consistent with the customer &
+  // deposit repay screens. Already-posted interest still shows as pending.
+  const base = p
   // Interest is calculated up to the repay date, or the previous day if the
   // customer shouldn't be charged for today. The ledger still uses the repay date.
   const calcTo = includeToday ? date : shiftDay(date, -1)
@@ -67,7 +68,7 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
         <div className="flex justify-between"><span className="text-slate-400">Outstanding principal</span><span className="font-semibold text-hd">{inr(outstanding)}</span></div>
         <div className="mt-1 flex justify-between"><span className="text-slate-400">Pending interest</span><span className="font-semibold text-amber-300">{inr(pendingInterest)}</span></div>
         <div className="mt-1 flex justify-between">
-          <span className="text-slate-400">Interest up to {fmtDate(calcTo)}{lastTo ? ` (since ${fmtDate(lastTo)})` : ''}</span>
+          <span className="text-slate-400">Interest on repaid amount (to {fmtDate(calcTo)}{lastTo ? `, since ${fmtDate(lastTo)}` : ''})</span>
           <span className="font-semibold text-amber-300">{inr(accrued)}</span>
         </div>
       </div>
@@ -85,7 +86,7 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
       {/* Interest breakdown: previous pending + this closure's interest = total */}
       <div className="rounded-xl border border-slate-800 bg-slate-800/30 p-3 text-sm">
         <div className="flex justify-between"><span className="text-slate-400">Previous pending interest</span><span className="text-slate-200">{inr(pendingInterest)}</span></div>
-        <div className="mt-1 flex justify-between"><span className="text-slate-400">This closure's interest</span><span className="text-slate-200">{inr(accrued)}</span></div>
+        <div className="mt-1 flex justify-between"><span className="text-slate-400">This repayment's interest</span><span className="text-slate-200">{inr(accrued)}</span></div>
         <div className="mt-1.5 flex justify-between border-t border-slate-700 pt-1.5 font-semibold"><span className="text-hd">Total interest due</span><span className="text-hd">{inr(totalInterest)}</span></div>
         <div className="mt-3">
           <span className="label">Interest paid now (₹)</span>

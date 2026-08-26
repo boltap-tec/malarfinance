@@ -183,7 +183,7 @@ export default function DepositDetail() {
               key: `${d.Deposit_No}-${i}`,
               outstanding: num(d.Outstand_Amount),
               type: 'Per_Month',
-              perMonth: num(d.Interest_Per_Month_Per_Lakh),
+              perMonth: num(d.Interest_Per_Month_Per_Lakh) || derivedRate,
               lastTo: interest.map((x: any) => x.To_Date).filter(Boolean).sort().slice(-1)[0],
               givenDate: d.Deposit_Bought_Date,
             }))}

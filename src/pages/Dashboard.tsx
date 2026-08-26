@@ -6,7 +6,7 @@ import {
 } from 'recharts'
 import {
   HandCoins, Percent, Users, PiggyBank, TrendingUp, ArrowRight, Building2,
-  Boxes, Landmark, ChevronDown, Plus, type LucideIcon,
+  Boxes, Landmark, ChevronDown, Plus, Handshake, type LucideIcon,
 } from 'lucide-react'
 import { repo } from '../data/repository'
 import { useApp, financeFilter, canEdit, canSeeRoute, SHOW_OWN_CHIT_FUND, type AppUser } from '../store/app'
@@ -81,12 +81,16 @@ export default function Dashboard() {
       chitDuePending += s.duePending; chitCollected += s.collected; chitPayoutPending += s.payoutPending
     }
 
+    // Hand exchange is personal & not finance-scoped — a simple net owed both ways.
+    const hand = repo.handSummary()
+
     return {
       activeLoans: activeLoans.length, loanCount: loans.length,
       customers: customers.length, activeCustomers: customers.filter(c => (c.Status ?? '').toLowerCase() === 'active').length,
       outstandingLoan, totalGiven, interestCollected, interestPending, depositOutstanding,
       trend, statusData, recent,
       chitFunds: chits.length, chitDuePending, chitCollected, chitPayoutPending,
+      handTheyOwe: hand.theyOwe, handYouOwe: hand.youOwe,
     }
   }, [f])
 
@@ -117,6 +121,33 @@ export default function Dashboard() {
           <StatCard label="Chit dues to collect" value={inrShort(data.chitDuePending)} tone="blue"
             sub={`${data.chitFunds} fund${data.chitFunds > 1 ? 's' : ''} · ${inrShort(data.chitPayoutPending)} payout due`} icon={<Boxes size={18} />} />)}
       </div>
+
+      {canSeeRoute(user, '/hand') && (
+        <Link to="/hand" className="mt-4 block transition hover:-translate-y-0.5">
+          <Card>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-500/15 text-brand-300 ring-1 ring-inset ring-brand-500/30"><Handshake size={18} /></span>
+                <div>
+                  <p className="text-sm font-semibold text-hd">Hand Exchange</p>
+                  <p className="text-xs text-slate-500">Personal give &amp; take (private)</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-5">
+                <div className="text-right">
+                  <p className="label">They owe you</p>
+                  <p className="text-lg font-bold tabular-nums text-emerald-400">{inr(data.handTheyOwe)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="label">You owe</p>
+                  <p className="text-lg font-bold tabular-nums text-rose-400">{inr(data.handYouOwe)}</p>
+                </div>
+                <ArrowRight size={16} className="hidden text-slate-400 sm:block" />
+              </div>
+            </div>
+          </Card>
+        </Link>
+      )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">

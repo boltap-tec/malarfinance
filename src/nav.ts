@@ -39,6 +39,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, desc: 'KPIs & recent activity' },
       { to: '/ledger', label: 'Ledger', icon: BookOpenText, desc: 'All receipts & payments' },
+      { to: '/hand', label: 'Hand Exchange', icon: Handshake, desc: 'Personal give & take (private)' },
       { to: '/profit', label: 'Profit', icon: TrendingUp, desc: 'Profit by month & year' },
     ],
   },
@@ -79,7 +80,6 @@ export const navGroups: NavGroup[] = [
     title: 'More',
     items: [
       { to: '/chits', label: 'My Invested Chits', icon: Boxes, desc: 'Chits you joined at other companies' },
-      { to: '/hand', label: 'Hand Exchange', icon: Handshake, desc: 'Personal give & take (private)' },
       { to: '/jewel', label: 'Jewel Loans', icon: Gem, desc: 'Gold / pawn (soon)' },
     ],
   },

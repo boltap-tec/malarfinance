@@ -235,8 +235,8 @@ function EntryModal({ seed, onClose, onSaved }: { seed: EntrySeed; onClose: () =
       {/* Person: pick existing, or add a new one with details */}
       {!lockedPerson && known.length > 0 && (
         <div className="flex gap-2 text-sm">
-          <button className={`btn-ghost !py-1 ${personMode === 'existing' ? 'ring-1 ring-brand-500/40 text-brand-200' : ''}`} onClick={() => setPersonMode('existing')}>Existing person</button>
-          <button className={`btn-ghost !py-1 ${personMode === 'new' ? 'ring-1 ring-brand-500/40 text-brand-200' : ''}`} onClick={() => setPersonMode('new')}>New person</button>
+          <button className={personMode === 'existing' ? 'btn-primary !py-1' : 'btn-ghost !py-1'} onClick={() => setPersonMode('existing')}>Existing person</button>
+          <button className={personMode === 'new' ? 'btn-primary !py-1' : 'btn-ghost !py-1'} onClick={() => setPersonMode('new')}>New person</button>
         </div>
       )}
       {!lockedPerson && !usingNew && (

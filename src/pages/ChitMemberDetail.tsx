@@ -6,7 +6,8 @@ import type { ChitLedgerRow } from '../data/types'
 import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
 import { AmountModal } from './ChitDetail'
-import { inr, phone, fmtDate, num } from '../lib/format'
+import ReminderButton from '../components/ReminderButton'
+import { inr, phone, fmtDate, num, mmYyyy } from '../lib/format'
 
 // Full 360° view of one chit member — mirrors the customer/lender detail pages.
 // Shows their profile, dues across every month, and any payouts when they took
@@ -46,6 +47,13 @@ export default function ChitMemberDetail() {
         action={
           <div className="flex items-center gap-2">
             <Badge tone={member.Chit_Taken === 'Taken' ? 'green' : 'slate'}>{member.Chit_Taken === 'Taken' ? 'Taken' : 'Not taken'}</Badge>
+            <ReminderButton
+              header={`${chit?.Chit_Name ?? member.Chit_ID} - ${member.Member_Name}`}
+              phone={member.Member_Phone_No}
+              items={dues.map(r => ({ month: mmYyyy(r.Date_Auction) ?? `#${num(r.Month_Count)}`, amount: num(r.Due_Amount), pending: num(r.Pending_Amount) }))}
+              totalLabel="Total Chit Due Pending"
+              amountWord="Due"
+            />
             <button className="btn-ghost !py-1.5" onClick={() => printMemberStatement({ member, chitName: chit?.Chit_Name, dues, takings, ...totals })}><Printer size={15} /> Print / PDF</button>
           </div>
         }

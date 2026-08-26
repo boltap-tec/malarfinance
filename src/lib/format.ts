@@ -31,6 +31,14 @@ export const monthName = (m?: string): string => {
   return i >= 1 && i <= 12 && yy ? `${names[i]} ${yy}` : String(m ?? '—')
 }
 
+// "MM-YYYY" label from a date (e.g. a 2026-07-12 auction date -> "07-2026").
+export const mmYyyy = (d?: string | Date | null): string | undefined => {
+  if (!d) return undefined
+  const dt = typeof d === 'string' ? new Date(d) : d
+  if (isNaN(dt.getTime())) return undefined
+  return `${String(dt.getMonth() + 1).padStart(2, '0')}-${dt.getFullYear()}`
+}
+
 // Sortable key from a "MM-YYYY" month label (e.g. "08-2025" -> 202508).
 export const monthKey = (m: unknown): number => {
   const [mm, yy] = String(m ?? '').split('-')

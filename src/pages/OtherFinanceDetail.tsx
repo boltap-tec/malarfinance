@@ -5,6 +5,7 @@ import { repo, repayOtherFinance } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
 import LiabilityRepayModal from '../components/LiabilityRepayModal'
+import ReminderButton from '../components/ReminderButton'
 import { inr, phone, fmtDate, num, monthName } from '../lib/format'
 
 export default function OtherFinanceDetail() {
@@ -47,6 +48,11 @@ export default function OtherFinanceDetail() {
         action={
           <div className="flex items-center gap-2">
             <Badge tone={statusTone(first.Loan_Status)}>{first.Loan_Status ?? '—'}</Badge>
+            <ReminderButton
+              header={`${id}-${first.Loan_bought_Finance_Name}`}
+              phone={first.Loan_bought_Finance_Phone_No}
+              items={interest.map((i: any) => ({ month: i.Month, amount: num(i.Interest_Amount), pending: num(i.Interest_Pending) }))}
+            />
             {editable && (
               <button className="btn-primary !py-1.5" onClick={() => { setFinance(first.Finance_Name); navigate(`/other-finance?new=1&code=${encodeURIComponent(id)}`) }}>
                 <Plus size={15} /> Add loan

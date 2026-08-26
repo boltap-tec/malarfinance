@@ -5,6 +5,7 @@ import { repo } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
 import CustomerRepayModal from '../components/CustomerRepayModal'
+import ReminderButton from '../components/ReminderButton'
 import { inr, phone, fmtDate, num, monthName } from '../lib/format'
 
 export default function CustomerDetail() {
@@ -51,6 +52,11 @@ export default function CustomerDetail() {
         action={
           <div className="flex items-center gap-2">
             <Badge tone={statusTone(customer.Status)}>{customer.Status ?? '—'}</Badge>
+            <ReminderButton
+              header={`${customer.Customer_STL_NO}-${customer.Customer_Name}`}
+              phone={customer.Customer_Phone_No}
+              items={interest.map(i => ({ month: i.Month, amount: num(i.Interest_Amount), pending: num(i.Interest_Pending) }))}
+            />
             {editable && <>
               <button className="btn-primary !py-1.5" onClick={giveLoan}>
                 <Plus size={15} /> Give loan

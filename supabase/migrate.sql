@@ -2237,7 +2237,7 @@ alter table "Borrowed" enable row level security;
 create policy "read_all_Borrowed" on "Borrowed" for select using (true);
 
 drop table if exists "Hand_Exchange" cascade;
-create table "Hand_Exchange" ("ID" text, "Date" text, "Person" text, "Person_Phone" text, "Amount" numeric, "Direction" text, "Type" text, "Mode" text, "Note" text, "Remarks" text);
+create table "Hand_Exchange" ("ID" text, "Date" text, "Person" text, "Person_Phone" text, "Category" text, "Amount" numeric, "Direction" text, "Type" text, "Mode" text, "Note" text, "Remarks" text);
 insert into "Hand_Exchange" ("ID", "Date", "Person", "Person_Phone", "Amount", "Direction", "Type", "Mode", "Note", "Remarks") values
 ('b19c2a41', '2026-03-17', 'appa', NULL, 12500.0, 'out', 'Give', 'Other', '7500+5000 advocate fee', NULL),
 ('67e76b92', '2026-03-17', 'Chandrasekar', NULL, 20000.0, 'out', 'Give', 'Cash', 'by finance kannan chit amount 1l-80k', NULL),

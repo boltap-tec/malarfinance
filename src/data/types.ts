@@ -305,6 +305,7 @@ export interface HandExchange {
   Date?: string
   Person: string
   Person_Phone?: number | string
+  Category?: 'Customer' | 'Supplier' | string  // how the person is filed (OkCredit-style). Cosmetic grouping only.
   Amount: number
   Direction: 'out' | 'in'
   Type: 'Give' | 'Get' | 'Borrow' | 'Return' | string

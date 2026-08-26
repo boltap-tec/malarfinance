@@ -349,19 +349,26 @@ export const repo = {
       .sort((a, b) => new Date(b.Date ?? 0).getTime() - new Date(a.Date ?? 0).getTime())
   },
   // One row per person, with the net balance (net > 0 → they owe you).
-  handPeople(): { name: string; phone?: number | string; net: number; count: number; last?: string }[] {
-    const map = new Map<string, { name: string; phone?: number | string; net: number; count: number; last?: string }>()
+  // `category` (Customer / Supplier) is taken from the person's most recent
+  // entry that carries one — a cosmetic grouping, defaults to 'Customer'.
+  handPeople(): { name: string; phone?: number | string; category: string; net: number; count: number; last?: string }[] {
+    type Row = { name: string; phone?: number | string; category: string; net: number; count: number; last?: string; _catAt?: string }
+    const map = new Map<string, Row>()
     for (const e of db.Hand_Exchange ?? []) {
       const key = (e.Person ?? '').trim().toLowerCase()
       if (!key) continue
-      const cur = map.get(key) ?? { name: e.Person, phone: e.Person_Phone ?? undefined, net: 0, count: 0, last: e.Date }
+      const cur = map.get(key) ?? { name: e.Person, phone: e.Person_Phone ?? undefined, category: 'Customer', net: 0, count: 0, last: e.Date }
       cur.net += e.Direction === 'out' ? num(e.Amount) : -num(e.Amount)
       cur.count++
       if (e.Person_Phone && !cur.phone) cur.phone = e.Person_Phone
       if (e.Date && (!cur.last || e.Date > cur.last)) cur.last = e.Date
+      // Latest entry with an explicit Category wins.
+      if (e.Category && (!cur._catAt || (e.Date ?? '') >= cur._catAt)) { cur.category = e.Category; cur._catAt = e.Date ?? '' }
       map.set(key, cur)
     }
-    return [...map.values()].sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
+    return [...map.values()]
+      .map(({ _catAt, ...r }) => r)
+      .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
   },
   handSummary(): { theyOwe: number; youOwe: number } {
     let theyOwe = 0, youOwe = 0
@@ -1931,6 +1938,12 @@ export async function addHandEntry(e: Omit<HandExchange, 'ID'> & { ID?: string }
   const row: HandExchange = { ...e, ID: e.ID || `H-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` }
   db.Hand_Exchange = [row, ...(db.Hand_Exchange ?? [])]
   await sInsert('Hand_Exchange', row)
+  persist()
+}
+
+export async function updateHandEntry(id: string, patch: Partial<Omit<HandExchange, 'ID'>>): Promise<void> {
+  db.Hand_Exchange = (db.Hand_Exchange ?? []).map(e => e.ID === id ? { ...e, ...patch } : e)
+  await sUpdate('Hand_Exchange', id, patch)
   persist()
 }
 

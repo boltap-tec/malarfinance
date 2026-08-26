@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Building2, HandCoins, Percent, Plus, IndianRupee, BookText } from 'lucide-react'
-import { repo, repayOtherFinance, payOtherFinanceInterest } from '../data/repository'
+import { ArrowLeft, Building2, HandCoins, Percent, Plus, IndianRupee, BookText, Pencil } from 'lucide-react'
+import { repo, repayOtherFinance, payOtherFinanceInterest, editOtherFinance, updateOtherFinanceProfile } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Tabs } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Tabs, Modal, Field } from '../components/ui'
 import LiabilityRepayModal from '../components/LiabilityRepayModal'
 import InterestPayModal from '../components/InterestPayModal'
 import LedgerTable from '../components/LedgerTable'
@@ -28,6 +28,8 @@ export default function OtherFinanceDetail() {
     editable && (doParam === 'repay' || doParam === 'interest') ? (doParam as 'repay' | 'interest') : null,
   )
   const [pay, setPay] = useState<any | null>(null)
+  const [editProfile, setEditProfile] = useState(false)
+  const [editRow, setEditRow] = useState<any | null>(null)
 
   const { rows, ledger, interest, interestPending, outstanding, borrowed, first } = useMemo(() => {
     const rows = repo.otherFinanceByCode(id)
@@ -61,6 +63,9 @@ export default function OtherFinanceDetail() {
               phone={first.Loan_bought_Finance_Phone_No}
               items={interest.map((i: any) => ({ month: i.Month, amount: num(i.Interest_Amount), pending: num(i.Interest_Pending) }))}
             />
+            {editable && (
+              <button className="btn-ghost !py-1.5" onClick={() => setEditProfile(true)}><Pencil size={15} /> Edit</button>
+            )}
             {editable && (
               <button className="btn-primary !py-1.5" onClick={() => { setFinance(first.Finance_Name); navigate(`/other-finance?new=1&code=${encodeURIComponent(id)}`) }}>
                 <Plus size={15} /> Add loan
@@ -99,7 +104,7 @@ export default function OtherFinanceDetail() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Bought</Th><Th right>Amount</Th><Th>Rate</Th><Th right>Repaid</Th><Th right>Outstanding</Th><Th>Status</Th></tr>
+                <tr><Th>Bought</Th><Th right>Amount</Th><Th>Rate</Th><Th right>Repaid</Th><Th right>Outstanding</Th><Th>Status</Th>{isMd && <Th>Edit</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map((o, i) => (
@@ -110,6 +115,7 @@ export default function OtherFinanceDetail() {
                     <Td right className="text-emerald-400">{inr(num(o.Repaid_Amount))}</Td>
                     <Td right className="text-rose-300">{inr(num(o.Outstand_Amount))}</Td>
                     <Td><Badge tone={statusTone(o.Loan_Status)}>{o.Loan_Status ?? '—'}</Badge></Td>
+                    {isMd && <Td><button title="Edit borrowing" className="btn-ghost !px-2 !py-1 text-xs" onClick={() => setEditRow(o)}><Pencil size={13} /></button></Td>}
                   </tr>
                 ))}
               </tbody>
@@ -207,6 +213,109 @@ export default function OtherFinanceDetail() {
           onSaved={() => { setPay(null); setTick(t => t + 1) }}
         />
       )}
+
+      {editProfile && (
+        <EditLenderModal
+          code={id} first={first}
+          onClose={() => setEditProfile(false)}
+          onSaved={() => { setEditProfile(false); setTick(t => t + 1) }}
+        />
+      )}
+
+      {editRow && (
+        <EditBorrowingRowModal
+          row={editRow}
+          onClose={() => setEditRow(null)}
+          onSaved={() => { setEditRow(null); setTick(t => t + 1) }}
+        />
+      )}
     </div>
+  )
+}
+
+// Edit the lender's own details — applied to every borrowing under this code.
+function EditLenderModal({ code, first, onClose, onSaved }: { code: string; first: any; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState(first.Loan_bought_Finance_Name ?? '')
+  const [phoneNo, setPhoneNo] = useState(String(first.Loan_bought_Finance_Phone_No ?? ''))
+  const [email, setEmail] = useState(first.Loan_bought_Finance_Email ?? '')
+  const [address, setAddress] = useState(first.Loan_bought_Finance_Address ?? '')
+  const [busy, setBusy] = useState(false)
+  const valid = name.trim().length > 0 && !busy
+
+  async function save() {
+    if (!valid) return
+    setBusy(true)
+    await updateOtherFinanceProfile(code, {
+      Loan_bought_Finance_Name: name.trim(),
+      Loan_bought_Finance_Phone_No: phoneNo.trim() || undefined,
+      Loan_bought_Finance_Email: email.trim() || undefined,
+      Loan_bought_Finance_Address: address.trim() || undefined,
+    })
+    onSaved()
+  }
+
+  return (
+    <Modal title={`Edit lender — ${first.Loan_bought_Finance_Name}`} onClose={onClose} footer={<>
+      <button className="btn-ghost" onClick={onClose}>Cancel</button>
+      <button className="btn-primary" disabled={!valid} onClick={save}>Save changes</button>
+    </>}>
+      <Field label="Finance / lender name"><input className="input" value={name} onChange={e => setName(e.target.value)} /></Field>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Phone"><input className="input" inputMode="tel" value={phoneNo} onChange={e => setPhoneNo(e.target.value)} /></Field>
+        <Field label="Email"><input className="input" value={email} onChange={e => setEmail(e.target.value)} /></Field>
+      </div>
+      <Field label="Address"><input className="input" value={address} onChange={e => setAddress(e.target.value)} /></Field>
+      <p className="text-xs text-slate-500">Applies to all borrowings under {code}.</p>
+    </Modal>
+  )
+}
+
+// Edit one borrowing's financials — amount, outstanding, rate (drives future
+// interest posting), type and status. Repaid is kept as amount − outstanding.
+function EditBorrowingRowModal({ row, onClose, onSaved }: { row: any; onClose: () => void; onSaved: () => void }) {
+  const [amount, setAmount] = useState(String(num(row.Loan_Amount)))
+  const [outstanding, setOutstanding] = useState(String(num(row.Outstand_Amount)))
+  const [type, setType] = useState(row.Interest_Type === 'Per_Month' ? 'Per_Month' : 'Per_Day')
+  const [rate, setRate] = useState(String(row.Interest_Type === 'Per_Month' ? num(row.Interest_Per_Month_Per_Lakh) : num(row.Interest_Per_day_Per_Lakh)))
+  const [status, setStatus] = useState(row.Loan_Status ?? 'Active')
+  const [busy, setBusy] = useState(false)
+  const amt = num(amount), out = num(outstanding)
+  const valid = amt > 0 && out >= 0 && out <= amt && !busy
+
+  async function save() {
+    if (!valid) return
+    setBusy(true)
+    await editOtherFinance(row, {
+      Loan_Amount: amt, Outstand_Amount: out, Repaid_Amount: Math.max(0, amt - out),
+      Interest_Type: type, Loan_Status: status,
+      ...(type === 'Per_Month' ? { Interest_Per_Month_Per_Lakh: num(rate) } : { Interest_Per_day_Per_Lakh: num(rate) }),
+    })
+    onSaved()
+  }
+
+  return (
+    <Modal title={`Edit borrowing — ${fmtDate(row.Loan_Bought_Date)}`} onClose={onClose} footer={<>
+      <button className="btn-ghost" onClick={onClose}>Cancel</button>
+      <button className="btn-primary" disabled={!valid} onClick={save}>Save changes</button>
+    </>}>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Loan amount (₹)"><input className="input" inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} /></Field>
+        <Field label="Outstanding (₹)"><input className="input" inputMode="numeric" value={outstanding} onChange={e => setOutstanding(e.target.value)} /></Field>
+      </div>
+      {out > amt && <p className="text-xs text-rose-300">Outstanding can't exceed the loan amount.</p>}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Interest type">
+          <select className="input" value={type} onChange={e => setType(e.target.value)}>
+            <option value="Per_Day">Per day</option><option value="Per_Month">Per month</option>
+          </select>
+        </Field>
+        <Field label={type === 'Per_Month' ? 'Rate (₹/lakh/month)' : 'Rate (₹/lakh/day)'} hint="Used for future interest"><input className="input" inputMode="numeric" value={rate} onChange={e => setRate(e.target.value)} /></Field>
+      </div>
+      <Field label="Status">
+        <select className="input" value={status} onChange={e => setStatus(e.target.value)}>
+          <option>Active</option><option>Closed</option>
+        </select>
+      </Field>
+    </Modal>
   )
 }

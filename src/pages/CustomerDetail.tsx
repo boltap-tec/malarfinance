@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Phone, Mail, HandCoins, Plus, Percent, IndianRupee, BookText } from 'lucide-react'
-import { repo, repayCustomer } from '../data/repository'
+import { ArrowLeft, Phone, Mail, HandCoins, Plus, Percent, IndianRupee, BookText, Pencil } from 'lucide-react'
+import { repo, repayCustomer, updateCustomer } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Tabs } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Tabs, Modal, Field } from '../components/ui'
 import CustomerRepayModal from '../components/CustomerRepayModal'
 import CustomerInterestPayModal from '../components/CustomerInterestPayModal'
 import LedgerTable from '../components/LedgerTable'
@@ -26,6 +26,7 @@ export default function CustomerDetail() {
   const [tab, setTab] = useState<TabKey>('loans')
   const [repayModal, setRepayModal] = useState(false)
   const [payInterest, setPayInterest] = useState(false)
+  const [editProfile, setEditProfile] = useState(false)
 
   const { customer, loans, interest, ledger, totals } = useMemo(() => {
     const customer = repo.customer(id)
@@ -67,6 +68,9 @@ export default function CustomerDetail() {
               items={interest.map(i => ({ month: i.Month, amount: num(i.Interest_Amount), pending: num(i.Interest_Pending) }))}
             />
             {editable && <>
+              <button className="btn-ghost !py-1.5" onClick={() => setEditProfile(true)}>
+                <Pencil size={15} /> Edit
+              </button>
               <button className="btn-primary !py-1.5" onClick={giveLoan}>
                 <Plus size={15} /> Give loan
               </button>
@@ -196,7 +200,58 @@ export default function CustomerDetail() {
           onSaved={() => { setPayInterest(false); setTick(t => t + 1) }}
         />
       )}
+
+      {editProfile && (
+        <EditCustomerModal
+          customer={customer}
+          onClose={() => setEditProfile(false)}
+          onSaved={() => { setEditProfile(false); setTick(t => t + 1) }}
+        />
+      )}
     </div>
+  )
+}
+
+// Edit the customer's own details (name / phone / email / Aadhaar / status).
+function EditCustomerModal({ customer, onClose, onSaved }: { customer: any; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState(customer.Customer_Name ?? '')
+  const [phoneNo, setPhoneNo] = useState(String(customer.Customer_Phone_No ?? ''))
+  const [email, setEmail] = useState(customer.Customer_Email ?? '')
+  const [adhar, setAdhar] = useState(String(customer.Customer_Adhar_No ?? ''))
+  const [status, setStatus] = useState(customer.Status ?? 'Active')
+  const [busy, setBusy] = useState(false)
+  const valid = name.trim().length > 0 && !busy
+
+  async function save() {
+    if (!valid) return
+    setBusy(true)
+    await updateCustomer(customer.Customer_STL_NO, {
+      Customer_Name: name.trim(),
+      Customer_Phone_No: phoneNo.trim() || undefined,
+      Customer_Email: email.trim() || undefined,
+      Customer_Adhar_No: adhar.trim() || undefined,
+      Status: status,
+    })
+    onSaved()
+  }
+
+  return (
+    <Modal title={`Edit — ${customer.Customer_Name}`} onClose={onClose} footer={<>
+      <button className="btn-ghost" onClick={onClose}>Cancel</button>
+      <button className="btn-primary" disabled={!valid} onClick={save}>Save changes</button>
+    </>}>
+      <Field label="Customer name"><input className="input" value={name} onChange={e => setName(e.target.value)} /></Field>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Phone"><input className="input" inputMode="tel" value={phoneNo} onChange={e => setPhoneNo(e.target.value)} /></Field>
+        <Field label="Aadhaar no."><input className="input" value={adhar} onChange={e => setAdhar(e.target.value)} /></Field>
+      </div>
+      <Field label="Email"><input className="input" value={email} onChange={e => setEmail(e.target.value)} /></Field>
+      <Field label="Status">
+        <select className="input" value={status} onChange={e => setStatus(e.target.value)}>
+          <option>Active</option><option>Inactive</option>
+        </select>
+      </Field>
+    </Modal>
   )
 }
 

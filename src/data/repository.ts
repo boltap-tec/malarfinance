@@ -586,6 +586,29 @@ function sameDeposit(a: Deposit, b: Deposit): boolean {
     num(a.Deposit_Amount) === num(b.Deposit_Amount) && a.Depositer_Name === b.Depositer_Name
 }
 
+// Edit one deposit row's financials (amount / outstanding / rate / status).
+export async function editDeposit(row: Deposit, patch: Partial<Deposit>): Promise<void> {
+  const before = (db.Deposit_Amount ?? []).find(d => sameDeposit(d, row))
+  if (!before) return
+  const after = { ...before, ...patch }
+  db.Deposit_Amount = (db.Deposit_Amount ?? []).map(d => d === before ? after : d)
+  await sReplaceFinance('Deposit_Amount', before.Finance_Name, (db.Deposit_Amount ?? []).filter(d => d.Finance_Name === before.Finance_Name))
+  writeLog({ Action: 'update', Entity: 'Deposit_Amount', Entity_Label: `Edit ${before.Deposit_No} · ${before.Depositer_Name}`, Before: before, After: after })
+  persist()
+}
+
+// Update depositor profile fields (name / phone / email / address) on every
+// deposit under a code, so the change applies to the whole depositor.
+export async function updateDepositorProfile(code: string, patch: Partial<Deposit>): Promise<void> {
+  const rows = (db.Deposit_Amount ?? []).filter(d => d.Deposit_No === code)
+  if (!rows.length) return
+  const finance = rows[0].Finance_Name
+  db.Deposit_Amount = (db.Deposit_Amount ?? []).map(d => d.Deposit_No === code ? { ...d, ...patch } : d)
+  await sReplaceFinance('Deposit_Amount', finance, (db.Deposit_Amount ?? []).filter(d => d.Finance_Name === finance))
+  writeLog({ Action: 'update', Entity: 'Deposit_Amount', Entity_Label: `Edit depositor ${code} · ${rows[0].Depositer_Name}`, After: patch })
+  persist()
+}
+
 export async function deleteOtherFinance(row: OtherFinanceLoan): Promise<void> {
   const before = (db.Other_Finance_Loan ?? []).find(o => sameOther(o, row))
   if (!before) return
@@ -594,6 +617,29 @@ export async function deleteOtherFinance(row: OtherFinanceLoan): Promise<void> {
   writeLog({ Action: 'delete', Entity: 'Other_Finance_Loan', Entity_Label: `${before.Loan_No} · ${before.Loan_bought_Finance_Name}`, Before: before })
   persist()
 }
+// Edit one other-finance borrowing's financials (amount / outstanding / rate / type / status).
+export async function editOtherFinance(row: OtherFinanceLoan, patch: Partial<OtherFinanceLoan>): Promise<void> {
+  const before = (db.Other_Finance_Loan ?? []).find(o => sameOther(o, row))
+  if (!before) return
+  const after = { ...before, ...patch }
+  db.Other_Finance_Loan = (db.Other_Finance_Loan ?? []).map(o => o === before ? after : o)
+  await sReplaceFinance('Other_Finance_Loan', before.Finance_Name, (db.Other_Finance_Loan ?? []).filter(o => o.Finance_Name === before.Finance_Name))
+  writeLog({ Action: 'update', Entity: 'Other_Finance_Loan', Entity_Label: `Edit ${before.Loan_No} · ${before.Loan_bought_Finance_Name}`, Before: before, After: after })
+  persist()
+}
+
+// Update lender profile fields (name / phone / email / address) on every
+// borrowing under a code.
+export async function updateOtherFinanceProfile(code: string, patch: Partial<OtherFinanceLoan>): Promise<void> {
+  const rows = (db.Other_Finance_Loan ?? []).filter(o => o.Loan_No === code)
+  if (!rows.length) return
+  const finance = rows[0].Finance_Name
+  db.Other_Finance_Loan = (db.Other_Finance_Loan ?? []).map(o => o.Loan_No === code ? { ...o, ...patch } : o)
+  await sReplaceFinance('Other_Finance_Loan', finance, (db.Other_Finance_Loan ?? []).filter(o => o.Finance_Name === finance))
+  writeLog({ Action: 'update', Entity: 'Other_Finance_Loan', Entity_Label: `Edit lender ${code} · ${rows[0].Loan_bought_Finance_Name}`, After: patch })
+  persist()
+}
+
 function sameOther(a: OtherFinanceLoan, b: OtherFinanceLoan): boolean {
   return a.Loan_No === b.Loan_No && a.Loan_Bought_Date === b.Loan_Bought_Date &&
     num(a.Loan_Amount) === num(b.Loan_Amount) && a.Loan_bought_Finance_Name === b.Loan_bought_Finance_Name

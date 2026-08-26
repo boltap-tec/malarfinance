@@ -63,13 +63,12 @@ export default function ChitTransactions() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="border-b border-slate-800 bg-slate-900/60">
-                  <tr><Th>ID</Th><Th>Member</Th><Th right>Share</Th><Th right>Due</Th><Th right>Received</Th><Th right>Pending</Th><Th>Paid on</Th><Th>Status</Th>{editable && <Th>Action</Th>}</tr>
+                  <tr><Th>Member</Th><Th right>Share</Th><Th right>Due</Th><Th right>Received</Th><Th right>Pending</Th><Th>Paid on</Th><Th>Status</Th>{editable && <Th>Action</Th>}</tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                   {rows.map(r => (
                     <tr key={r.ID} className="hover:bg-slate-800/40">
-                      <Td><button className="text-brand-300 hover:underline" onClick={() => setDetail(r)}>{r.ID}</button></Td>
-                      <Td className="text-slate-200">{r.Member_Name}</Td>
+                      <Td><button className="text-left font-medium text-brand-300 hover:underline" onClick={() => setDetail(r)}>{r.Member_Name}</button></Td>
                       <Td right className="text-slate-400">{num(r.Member_Percentage)}</Td>
                       <Td right className="text-slate-300">{inr(num(r.Due_Amount))}</Td>
                       <Td right className="text-emerald-400">{inr(num(r.Received_Amount))}</Td>
@@ -100,7 +99,7 @@ export default function ChitTransactions() {
   )
 }
 
-// Full detail for one chit transaction (ledger row), opened by clicking its ID.
+// Full detail for one chit transaction (ledger row), opened by clicking the member.
 function TransactionDetailModal({ row, onClose }: { row: ChitLedgerRow; onClose: () => void }) {
   const auction = repo.chitAuction(row.Chit_Auction_ID)
   const Item = ({ k, v }: { k: string; v: ReactNode }) => (
@@ -109,7 +108,7 @@ function TransactionDetailModal({ row, onClose }: { row: ChitLedgerRow; onClose:
     </div>
   )
   return (
-    <Modal title={`Transaction ${row.ID}`} onClose={onClose} footer={<button className="btn-primary" onClick={onClose}>Close</button>}>
+    <Modal title={`${row.Member_Name} · Month #${num(row.Month_Count)}`} onClose={onClose} footer={<button className="btn-primary" onClick={onClose}>Close</button>}>
       <div className="rounded-lg bg-slate-800/40 px-3 py-1">
         <Item k="Transaction ID" v={row.ID} />
         <Item k="Member" v={<Link to={`/chit/member/${encodeURIComponent(row.Member_ID)}`} className="text-brand-300 hover:underline">{row.Member_Name}</Link>} />

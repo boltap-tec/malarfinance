@@ -215,6 +215,7 @@ const GROUPS: Group[] = [
     items: [
       { label: 'New loan', to: '/loans?new=1', create: true },
       { label: 'New customer', to: '/customers?new=1', create: true },
+      { label: 'Customers', to: '/customers' },
       { label: 'Collect interest', to: '/customer-interest' },
       { label: 'Post interest', to: '/interest' },
       { label: 'All loans', to: '/loans' },

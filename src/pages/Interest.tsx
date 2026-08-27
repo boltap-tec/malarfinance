@@ -50,9 +50,11 @@ export default function Interest() {
     return repo.deposits(f)
       .filter(d => (d.Deposit_Status ?? '').toLowerCase() === 'active' && num(d.Outstand_Amount) > 0)
       .map(d => {
-        const pseudo = { Loan_Amount: num(d.Outstand_Amount), Interest_Type: 'Per_Month', Interest_Per_Month_Per_Lakh: num(d.Interest_Per_Month_Per_Lakh), Loan_Given_Date: d.Deposit_Bought_Date } as Loan
+        // Use the deposit's stored rate, or derive it from past interest when blank.
+        const rate = num(d.Interest_Per_Month_Per_Lakh) || repo.derivedDepositRate(d.Deposit_No)
+        const pseudo = { Loan_Amount: num(d.Outstand_Amount), Interest_Type: 'Per_Month', Interest_Per_Month_Per_Lakh: rate, Loan_Given_Date: d.Deposit_Bought_Date } as Loan
         const p = computeInterest(pseudo, from, to)
-        return { d, p, id: `${d.Deposit_No}-${num(d.Deposit_Amount)}-${p.month}` }
+        return { d, p, rate, id: `${d.Deposit_No}-${num(d.Deposit_Amount)}-${p.month}` }
       })
       .filter(x => x.p.interest > 0)
       .filter(x => !(repo.depositInterest(f).some((i: any) => i.ID === x.id)))
@@ -78,9 +80,9 @@ export default function Interest() {
 
   async function postAll() {
     await appendInterestRows(custPreview.map(toInterestRow))
-    await appendDepositInterest(depPreview.map(({ d, p, id }) => ({
+    await appendDepositInterest(depPreview.map(({ d, p, rate, id }) => ({
       ID: id, Finance_Name: d.Finance_Name, Deposit_No: d.Deposit_No, Depositer_Name: d.Depositer_Name,
-      From_Date: p.fromDate, To_Date: p.toDate, No_Days: p.noOfDays, Interest_Per_Month_Per_Lakh: num(d.Interest_Per_Month_Per_Lakh),
+      From_Date: p.fromDate, To_Date: p.toDate, No_Days: p.noOfDays, Interest_Per_Month_Per_Lakh: rate,
       Interest_Amount: p.interest, Deposit_Amount: num(d.Deposit_Amount), Month: p.month, Description: p.description,
       Amount_Received: 0, Status: 'Pending', Interest_Pending: p.interest, Interest_Type: 'Per_Month',
     })))

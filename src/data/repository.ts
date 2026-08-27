@@ -198,6 +198,14 @@ export const repo = {
   depositPostedMonths(code: string): Set<string> {
     return new Set((db.Depositer_Interest ?? []).filter((i: any) => i.Deposit_No === code && i.Month).map((i: any) => i.Month as string))
   },
+  // The effective ₹/lakh/month rate for a depositor when it's not stored on the
+  // deposit — derived from a full-month past interest row (Interest ÷ amount).
+  derivedDepositRate(code: string): number {
+    const cand = (db.Depositer_Interest ?? []).filter((i: any) => i.Deposit_No === code && num(i.Interest_Amount) > 0 && num(i.Deposit_Amount) > 0)
+    const full = cand.filter((i: any) => num(i.No_Days) >= 28)
+    const r = (full.length ? full : cand).slice(-1)[0]
+    return r ? Math.round(num(r.Interest_Amount) / (num(r.Deposit_Amount) / 100000)) : 0
+  },
   otherFinanceInterest(finance?: string): any[] {
     return (db.Other_Finance_Interest ?? []).filter((i: any) => !finance || i.Finance_Name === finance)
   },

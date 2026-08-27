@@ -376,6 +376,25 @@ export interface AppNotification {
   Read?: boolean
 }
 
+// One row per interest-posting run (a finance + month) — the posting register.
+// It lets the app show exactly which months have been posted and block re-running
+// a month that's already been posted ("completed"), so there's no confusion.
+export interface PostingLog {
+  ID: string                 // `${Finance_Name}-${Month}`
+  Finance_Name: string
+  Month: string              // MM-YYYY
+  From_Date?: string
+  To_Date?: string
+  Posted_On?: string         // ISO timestamp the run was committed
+  Customer_Lines?: number
+  Deposit_Lines?: number
+  Other_Lines?: number
+  Customer_Amount?: number
+  Deposit_Amount?: number
+  Other_Amount?: number
+  Posted_By?: string
+}
+
 export interface Dataset {
   Finance_Details: Finance[]
   Partner: Partner[]
@@ -403,4 +422,5 @@ export interface Dataset {
   Borrowed: any[]
   Hand_Exchange: HandExchange[]
   Jewel_Loan: any[]
+  Interest_Posting_Log: PostingLog[]
 }

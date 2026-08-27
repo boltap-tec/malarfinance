@@ -193,8 +193,8 @@ export default function DepositDetail() {
               lastTo: repo.depositPostedUpto(id),
               givenDate: d.Deposit_Bought_Date,
             }))}
-          onRepay={(principal, interestAmt, date, payType, note, accruals, targetKey) => repayDeposit({
-            code: id, principal, interest: interestAmt, date, payType, note, targetKey,
+          onRepay={(principal, interestAmt, date, payType, note, accruals, targetKey, accrualInterest) => repayDeposit({
+            code: id, principal, interest: interestAmt, accrualInterest, date, payType, note, targetKey,
             accruals: (accruals ?? []).map((a, i) => ({
               ID: `${id}-repay-${Date.now()}-${i}`,
               Finance_Name: first.Finance_Name, Deposit_No: id, Depositer_Name: first.Depositer_Name,

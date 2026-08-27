@@ -3,7 +3,7 @@ import { Zap, Check, Percent } from 'lucide-react'
 import {
   repo, appendInterestRows, appendDepositInterest, appendOtherFinanceInterest,
   markCustomerPostedUpto, markDepositPostedUpto, markOtherFinancePostedUpto,
-  getSettings, setSettings,
+  appendPostingLog, getSettings, setSettings,
 } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { previewPosting, toInterestRow, computeInterest, isMonthEnd, distributeRounding, resumeFrom } from '../lib/interestEngine'
@@ -12,10 +12,17 @@ import { inr, num } from '../lib/format'
 import type { Loan } from '../data/types'
 
 const monthStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+// A YYYY-MM key → "August 2026" for display.
+const monthLabel = (m: string) => {
+  const [y, mo] = m.split('-').map(Number)
+  return new Date(y, (mo || 1) - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' })
+}
+const fmtDateTime = (iso?: string) => iso ? new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
 
 export default function Interest() {
   const finance = useApp(s => s.finance)
   const role = useApp(s => s.user?.role)
+  const userName = useApp(s => s.user?.name)
   const f = financeFilter(finance)
 
   const now = new Date()
@@ -39,6 +46,10 @@ export default function Interest() {
   const settings = getSettings()
   // Month end is enforced by construction; the To date must not be in the future.
   const monthEndOk = settings.postingAnyDate || new Date(to) <= new Date(todayStr)
+  // Already posted? Block re-running a completed month (belt-and-braces with each
+  // entity's posted-till). `posted` is a dep so this refreshes after a run.
+  const priorRun = repo.postingLog(finance).find(r => r.Month === month)
+  const alreadyPosted = !!priorRun && posted === null
 
   // Customer loan interest. Rounding is applied per CUSTOMER (not per loan): each
   // loan's raw interest is summed for the customer and that total rounded to ₹10.
@@ -111,6 +122,13 @@ export default function Interest() {
     for (const x of depPreview) await markDepositPostedUpto(x.d.Deposit_No, to)
     for (const x of othPreview) await markOtherFinancePostedUpto(x.o.Loan_No, to)
     setSettings({ lastPostedDate: to })
+    // Record the run in the posting register so this month reads as "posted".
+    await appendPostingLog({
+      ID: `${finance}-${month}`, Finance_Name: finance, Month: month, From_Date: from, To_Date: to,
+      Posted_On: new Date().toISOString(), Posted_By: userName || role || 'md',
+      Customer_Lines: custPreview.length, Deposit_Lines: depPreview.length, Other_Lines: othPreview.length,
+      Customer_Amount: custTotal, Deposit_Amount: depTotal, Other_Amount: othTotal,
+    })
     setPosted(`Posted ${custPreview.length} customer, ${depPreview.length} deposit and ${othPreview.length} other-finance interest lines.`)
   }
 
@@ -139,10 +157,15 @@ export default function Interest() {
             <p className="mt-1">{from} → {to}</p>
           </div>
           <div className="flex-1" />
-          <button className="btn-primary" onClick={postAll} disabled={count === 0 || !monthEndOk}>
+          <button className="btn-primary" onClick={postAll} disabled={count === 0 || !monthEndOk || alreadyPosted}>
             <Zap size={16} /> Post all interest
           </button>
         </div>
+        {alreadyPosted && priorRun && (
+          <div className="mt-3 rounded-xl bg-slate-500/10 px-4 py-2.5 text-sm text-slate-300 ring-1 ring-slate-500/30">
+            <b>{monthLabel(month)} is already posted.</b> Run on {fmtDateTime(priorRun.Posted_On)} · {priorRun.Customer_Lines ?? 0} customer, {priorRun.Deposit_Lines ?? 0} deposit, {priorRun.Other_Lines ?? 0} other-finance lines. Re-posting is blocked to avoid charging interest twice — see the posting register below.
+          </div>
+        )}
         {!monthEndOk && (
           <div className="mt-3 rounded-xl bg-amber-500/10 px-4 py-2.5 text-sm text-amber-300 ring-1 ring-amber-500/30">
             This month hasn’t ended — interest posts only for a <b>completed month</b> (the To date can’t be after today).
@@ -164,7 +187,52 @@ export default function Interest() {
           <Section title="Other-finance interest" total={othTotal} rows={othPreview.map(x => ({ a: x.o.Loan_No, b: x.o.Loan_bought_Finance_Name, days: x.p.noOfDays, amt: x.p.interest }))} />
         </div>
       )}
+
+      <PostingRegister rows={repo.postingLog(finance)} />
     </div>
+  )
+}
+
+// The interest-posting register — every month that's been posted, newest first.
+// This is the record that removes any doubt about whether a month was run.
+function PostingRegister({ rows }: { rows: ReturnType<typeof repo.postingLog> }) {
+  return (
+    <Card className="!p-0 mt-4 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5">
+        <h3 className="font-semibold text-hd">Posting register</h3>
+        <Badge tone="slate">{rows.length} posted</Badge>
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-4 py-6 text-sm text-slate-400">No interest has been posted yet. Each run you commit above is recorded here.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="border-y border-slate-800 bg-slate-900/60">
+              <tr>
+                <Th>Month</Th><Th>Period</Th><Th right>Customer</Th><Th right>Deposit</Th>
+                <Th right>Other</Th><Th right>Total</Th><Th>Posted on</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {rows.map(r => {
+                const total = num(r.Customer_Amount) - num(r.Deposit_Amount) - num(r.Other_Amount)
+                return (
+                  <tr key={r.ID} className="hover:bg-slate-800/40">
+                    <Td className="font-medium text-hd">{monthLabel(r.Month)}</Td>
+                    <Td className="text-slate-400">{r.From_Date} → {r.To_Date}</Td>
+                    <Td right className="text-emerald-300">{inr(num(r.Customer_Amount))} <span className="text-slate-500">· {r.Customer_Lines ?? 0}</span></Td>
+                    <Td right className="text-amber-300">{inr(num(r.Deposit_Amount))} <span className="text-slate-500">· {r.Deposit_Lines ?? 0}</span></Td>
+                    <Td right className="text-rose-300">{inr(num(r.Other_Amount))} <span className="text-slate-500">· {r.Other_Lines ?? 0}</span></Td>
+                    <Td right className="font-semibold text-hd">{inr(total)}</Td>
+                    <Td className="text-slate-400">{fmtDateTime(r.Posted_On)}{r.Posted_By ? ` · ${r.Posted_By}` : ''}</Td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   )
 }
 

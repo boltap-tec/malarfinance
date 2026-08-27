@@ -38,6 +38,17 @@ export function computeInterest(
   const loanDate = loan.Loan_Given_Date ? new Date(loan.Loan_Given_Date) : from
   from.setHours(0, 0, 0, 0); to.setHours(0, 0, 0, 0); loanDate.setHours(0, 0, 0, 0)
 
+  // Guard against an invalid/empty date (e.g. a half-typed date field): return a
+  // zero preview instead of throwing on toISOString() — which would white-screen
+  // the whole app the moment a repay date is being edited.
+  if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+    const safe = (d: Date) => isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
+    return {
+      loan, fromDate: safe(from), toDate: safe(to), actualFromDate: safe(from),
+      noOfDays: 0, totalMonthDays: 1, rawInterest: 0, interest: 0, month: '', description: '',
+    }
+  }
+
   const actualFrom = from < loanDate ? loanDate : from
   const noOfDays = Math.max(0, days(actualFrom, to))
   const totalMonthDays = Math.max(1, days(from, to))

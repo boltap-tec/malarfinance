@@ -186,8 +186,8 @@ export default function OtherFinanceDetail() {
               lastTo: repo.otherFinancePostedUpto(id),
               givenDate: l.Loan_Bought_Date,
             }))}
-          onRepay={(principal, interestAmt, date, payType, note, accruals, targetKey) => repayOtherFinance({
-            code: id, principal, interest: interestAmt, date, payType, note, targetKey,
+          onRepay={(principal, interestAmt, date, payType, note, accruals, targetKey, accrualInterest) => repayOtherFinance({
+            code: id, principal, interest: interestAmt, accrualInterest, date, payType, note, targetKey,
             accruals: (accruals ?? []).map((a, i) => ({
               ID: `${id}-repay-${Date.now()}-${i}`,
               Finance_Name: first.Finance_Name, Loan_No: id, Loan_bought_Finance_Name: first.Loan_bought_Finance_Name,

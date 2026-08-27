@@ -10,7 +10,7 @@ import type {
   Dataset, Loan, Customer, InterestRow, LedgerRow, Partner, Finance, Deposit,
   OtherFinanceLoan, Worker, AppNotification, LogEntry, Message,
   ChitCreation, ChitMember, ChitAuction, ChitTakenMember, ChitLedgerRow,
-  InvestedChit, InvestedChitTrans, HandExchange,
+  InvestedChit, InvestedChitTrans, HandExchange, PostingLog,
 } from './types'
 
 const STORAGE_KEY = 'arul-finance:data:v1'
@@ -244,6 +244,18 @@ export const repo = {
   },
   otherPostedMonths(code: string): Set<string> {
     return new Set((db.Other_Finance_Interest ?? []).filter((i: any) => i.Loan_No === code && i.Month).map((i: any) => i.Month as string))
+  },
+  // The interest-posting register — one row per posted month for a finance scope.
+  postingLog(finance?: string): PostingLog[] {
+    return (db.Interest_Posting_Log ?? [])
+      .filter(r => !finance || r.Finance_Name === finance)
+      .slice()
+      .sort((a, b) => String(b.To_Date ?? '').localeCompare(String(a.To_Date ?? '')))
+  },
+  // Has this month already been posted for this scope? Used to block re-running a
+  // completed month (belt-and-braces with each entity's posted-till date).
+  isMonthPosted(finance: string, month: string): boolean {
+    return (db.Interest_Posting_Log ?? []).some(r => r.Month === month && r.Finance_Name === finance)
   },
   ledgerByRef(code: string): LedgerRow[] {
     return (db.Transaction_Ledger ?? []).filter(t => String(t.Loan_No) === code)
@@ -504,7 +516,7 @@ const PK: Partial<Record<keyof Dataset, string>> = {
   Chit_Creation: 'Chit_ID', Chit_Member: 'Member_ID', Chit_Auction: 'Chit_Auction_ID',
   Chit_Taken_Member: 'Chit_Taken_ID', Chit_Ledger: 'ID',
   Invested_Chit: 'Chit_ID', Invested_Chit_Trans: 'ID',
-  Hand_Exchange: 'ID',
+  Hand_Exchange: 'ID', Interest_Posting_Log: 'ID',
 }
 export let lastWriteError = ''
 function noteErr(where: string, msg?: string) {
@@ -872,6 +884,14 @@ export async function appendOtherFinanceInterest(rows: any[]): Promise<void> {
   persist()
 }
 
+// Record a posting run in the register. Overwrites any existing row for the same
+// finance+month (so a re-run after a correction keeps one authoritative row).
+export async function appendPostingLog(row: PostingLog): Promise<void> {
+  db.Interest_Posting_Log = [row, ...(db.Interest_Posting_Log ?? []).filter(r => r.ID !== row.ID)]
+  await sReplace('Interest_Posting_Log', row.ID, [row])
+  persist()
+}
+
 // Pay a single interest line — a specific amount (defaults to the full pending),
 // capped at what's pending. Records the ledger entry.
 export async function payCustomerInterest(id: string, amount?: number, date?: string, payType?: string): Promise<void> {
@@ -972,9 +992,28 @@ export async function addBalanceCorrection(finance: string, date: string, target
 // out. Reduces outstanding across that depositor's linked deposit rows.
 // targetKey (optional) restricts the principal refund to a single deposit /
 // borrowing row — "<bought-date>|<amount>". Omit to refund oldest-first.
-export interface LiabilityRepay { code: string; principal: number; interest: number; date: string; payType?: string; note?: string; accruals?: any[]; targetKey?: string }
+// `interest`        = amount paid now against the PREVIOUS pending interest.
+// `accrualInterest` = amount paid now against THIS repayment's accrued interest
+//                     (the freshly-posted accrual rows). Kept separate so the two
+//                     are shown and settled independently in the repay screen.
+export interface LiabilityRepay { code: string; principal: number; interest: number; accrualInterest?: number; date: string; payType?: string; note?: string; accruals?: any[]; targetKey?: string }
 const depKey = (d: any) => `${d.Deposit_Bought_Date ?? ''}|${num(d.Deposit_Amount)}`
 const ofKey = (l: any) => `${l.Loan_Bought_Date ?? ''}|${num(l.Loan_Amount)}`
+
+// Settle a set of pending interest rows against a paid amount, oldest first.
+// Returns which rows to credit (id -> amount paid) and the total actually applied.
+function settleInterest(rows: any[], amount: number): { paidById: Map<string, number>; paid: number } {
+  const paidById = new Map<string, number>()
+  const total = Math.max(0, num(amount))
+  let left = total
+  const sorted = rows.slice().sort((a, b) => new Date(a.From_Date ?? a.Month ?? 0).getTime() - new Date(b.From_Date ?? b.Month ?? 0).getTime())
+  for (const r of sorted) {
+    if (left <= 0) break
+    const pay = Math.min(num(r.Interest_Pending), left)
+    if (pay > 0) { paidById.set(r.ID, pay); left -= pay }
+  }
+  return { paidById, paid: total - left }
+}
 
 export async function repayDeposit(o: LiabilityRepay): Promise<void> {
   const rows = (db.Deposit_Amount ?? []).filter(d => d.Deposit_No === o.code)
@@ -1004,14 +1043,14 @@ export async function repayDeposit(o: LiabilityRepay): Promise<void> {
   await sReplace('Deposit_Amount', o.code, (db.Deposit_Amount ?? []).filter(d => d.Deposit_No === o.code))
   const paidP = o.principal - leftP
 
-  // Interest → settle the depositor's pending interest schedule, oldest first.
-  const paidById = new Map<string, number>()
-  let leftI = o.interest
-  for (const r of (db.Depositer_Interest ?? []).filter((i: any) => i.Deposit_No === o.code && num(i.Interest_Pending) > 0).sort((a: any, b: any) => new Date(a.From_Date ?? a.Month ?? 0).getTime() - new Date(b.From_Date ?? b.Month ?? 0).getTime())) {
-    if (leftI <= 0) break
-    const pay = Math.min(num(r.Interest_Pending), leftI); leftI -= pay
-    paidById.set(r.ID, pay)
-  }
+  // Interest → two independent buckets, each settled oldest-first:
+  //   • `interest`        pays the PREVIOUS pending schedule (excludes accruals)
+  //   • `accrualInterest` pays THIS repayment's accrued interest (the accrual rows)
+  const accrualIds = new Set<string>((o.accruals ?? []).map((a: any) => a.ID))
+  const pending = (db.Depositer_Interest ?? []).filter((i: any) => i.Deposit_No === o.code && num(i.Interest_Pending) > 0)
+  const sPrev = settleInterest(pending.filter((i: any) => !accrualIds.has(i.ID)), o.interest)
+  const sAcc = settleInterest(pending.filter((i: any) => accrualIds.has(i.ID)), o.accrualInterest ?? 0)
+  const paidById = new Map<string, number>([...sPrev.paidById, ...sAcc.paidById])
   const changed: any[] = []
   db.Depositer_Interest = (db.Depositer_Interest ?? []).map((i: any) => {
     const pay = paidById.get(i.ID); if (!pay) return i
@@ -1019,7 +1058,7 @@ export async function repayDeposit(o: LiabilityRepay): Promise<void> {
     const upd = { ...i, Amount_Received: num(i.Amount_Received) + pay, Interest_Pending: p - pay, Status: p - pay <= 0 ? 'Paid' : 'Partial' }
     changed.push(upd); return upd
   })
-  const paidI = o.interest - leftI
+  const paidI = sPrev.paid + sAcc.paid
 
   if (paidP > 0) await recordLedger({ Nature_Transaction: 'Deposit_Prin_Refund', Loan_No: o.code, Customer_Name: name, Description: `Deposit refund — ${o.code}${o.note ? ` · ${o.note}` : ''}`, Payment_Amount: paidP, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
   if (paidI > 0) await recordLedger({ Nature_Transaction: 'Depositer_Interest', Loan_No: o.code, Customer_Name: name, Description: `Deposit interest — ${o.code}${o.note ? ` · ${o.note}` : ''}`, Payment_Amount: paidI, Interest_Amount: paidI, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
@@ -1056,14 +1095,14 @@ export async function repayOtherFinance(o: LiabilityRepay): Promise<void> {
   await sReplace('Other_Finance_Loan', o.code, (db.Other_Finance_Loan ?? []).filter(l => l.Loan_No === o.code))
   const paidP = o.principal - leftP
 
-  // Interest → settle the lender's pending interest schedule, oldest first.
-  const paidById = new Map<string, number>()
-  let leftI = o.interest
-  for (const r of (db.Other_Finance_Interest ?? []).filter((i: any) => i.Loan_No === o.code && num(i.Interest_Pending) > 0).sort((a: any, b: any) => new Date(a.From_Date ?? a.Month ?? 0).getTime() - new Date(b.From_Date ?? b.Month ?? 0).getTime())) {
-    if (leftI <= 0) break
-    const pay = Math.min(num(r.Interest_Pending), leftI); leftI -= pay
-    paidById.set(r.ID, pay)
-  }
+  // Interest → two independent buckets, each settled oldest-first:
+  //   • `interest`        pays the PREVIOUS pending schedule (excludes accruals)
+  //   • `accrualInterest` pays THIS repayment's accrued interest (the accrual rows)
+  const accrualIds = new Set<string>((o.accruals ?? []).map((a: any) => a.ID))
+  const pending = (db.Other_Finance_Interest ?? []).filter((i: any) => i.Loan_No === o.code && num(i.Interest_Pending) > 0)
+  const sPrev = settleInterest(pending.filter((i: any) => !accrualIds.has(i.ID)), o.interest)
+  const sAcc = settleInterest(pending.filter((i: any) => accrualIds.has(i.ID)), o.accrualInterest ?? 0)
+  const paidById = new Map<string, number>([...sPrev.paidById, ...sAcc.paidById])
   const changed: any[] = []
   db.Other_Finance_Interest = (db.Other_Finance_Interest ?? []).map((i: any) => {
     const pay = paidById.get(i.ID); if (!pay) return i
@@ -1071,7 +1110,7 @@ export async function repayOtherFinance(o: LiabilityRepay): Promise<void> {
     const upd = { ...i, Amount_Received: num(i.Amount_Received) + pay, Interest_Pending: p - pay, Status: p - pay <= 0 ? 'Paid' : 'Partial' }
     changed.push(upd); return upd
   })
-  const paidI = o.interest - leftI
+  const paidI = sPrev.paid + sAcc.paid
 
   if (paidP > 0) await recordLedger({ Nature_Transaction: 'Other_Finance_Loan_Refund', Loan_No: o.code, Customer_Name: name, Description: `Other-finance refund — ${o.code}${o.note ? ` · ${o.note}` : ''}`, Payment_Amount: paidP, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
   if (paidI > 0) await recordLedger({ Nature_Transaction: 'Other_Finance_Interest', Loan_No: o.code, Customer_Name: name, Description: `Other-finance interest — ${o.code}${o.note ? ` · ${o.note}` : ''}`, Payment_Amount: paidI, Interest_Amount: paidI, Payment_Type: o.payType, Finance_Name: finance, Date_Transaction: o.date })
@@ -1638,8 +1677,8 @@ export function customerRisk(stl: string): { level: 'low' | 'medium' | 'high'; m
 // One-shot customer repayment — no loan picker. Principal is applied to the
 // customer's outstanding loans oldest-first; interest settles pending interest
 // oldest-first. The ledger gets TWO separate entries (principal + interest).
-export async function repayCustomer(opts: { stl: string; principal: number; interest: number; date: string; payType?: string; note?: string; accruals?: InterestRow[]; targetLoanNo?: string }): Promise<void> {
-  const { stl, principal, interest, date, payType, note, accruals, targetLoanNo } = opts
+export async function repayCustomer(opts: { stl: string; principal: number; interest: number; accrualInterest?: number; date: string; payType?: string; note?: string; accruals?: InterestRow[]; targetLoanNo?: string }): Promise<void> {
+  const { stl, principal, interest, accrualInterest, date, payType, note, accruals, targetLoanNo } = opts
   const noteSuffix = note ? ` · ${note}` : ''
   const cust = (db.STL_CRM ?? []).find(c => c.Customer_STL_NO === stl)
   if (!cust) return
@@ -1666,17 +1705,15 @@ export async function repayCustomer(opts: { stl: string; principal: number; inte
   }
   const paidPrincipal = principal - leftP
 
-  // 2) Interest → oldest pending row first.
+  // 2) Interest → two independent buckets, each settled oldest-first:
+  //    • `interest`        pays the PREVIOUS pending interest (excludes accruals)
+  //    • `accrualInterest` pays THIS repayment's accrued interest (the accrual rows)
+  const accrualIds = new Set<string>((accruals ?? []).map(a => a.ID))
   const pendingRows = (db.Interest_Details ?? [])
     .filter(i => i.Customer_STL_NO === stl && num(i.Interest_Pending) > 0)
-    .sort((a, b) => new Date(a.From_Date ?? a.Month ?? 0).getTime() - new Date(b.From_Date ?? b.Month ?? 0).getTime())
-  const payById = new Map<string, number>()
-  let leftI = interest
-  for (const r of pendingRows) {
-    if (leftI <= 0) break
-    const pay = Math.min(num(r.Interest_Pending), leftI); leftI -= pay
-    payById.set(r.ID, pay)
-  }
+  const sPrev = settleInterest(pendingRows.filter(i => !accrualIds.has(i.ID)), interest)
+  const sAcc = settleInterest(pendingRows.filter(i => accrualIds.has(i.ID)), accrualInterest ?? 0)
+  const payById = new Map<string, number>([...sPrev.paidById, ...sAcc.paidById])
   const changed: InterestRow[] = []
   db.Interest_Details = (db.Interest_Details ?? []).map(i => {
     const pay = payById.get(i.ID)
@@ -1686,7 +1723,7 @@ export async function repayCustomer(opts: { stl: string; principal: number; inte
     changed.push(upd)
     return upd
   })
-  const paidInterest = interest - leftI
+  const paidInterest = sPrev.paid + sAcc.paid
 
   // 3) Two separate ledger entries.
   if (paidPrincipal > 0) await recordLedger({

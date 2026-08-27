@@ -6,7 +6,8 @@ import { inr, num, fmtDate } from '../lib/format'
 import type { InterestRow, Loan } from '../data/types'
 
 const shiftDay = (d: string, days: number) => {
-  const x = new Date(d); x.setDate(x.getDate() + days)
+  const x = new Date(d); if (isNaN(x.getTime())) return d
+  x.setDate(x.getDate() + days)
   return x.toISOString().slice(0, 10)
 }
 const rateLabelOf = (l: Loan) => l.Interest_Type === 'Per_Month'
@@ -44,13 +45,15 @@ export default function CustomerRepayModal({
   const [target, setTarget] = useState<string>(!multi ? (loans[0]?.Loan_No ?? '') : (allSameRate ? 'ALL' : ''))
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [principal, setPrincipal] = useState('')
-  const [interestStr, setInterestStr] = useState('')
+  const [interestDueStr, setInterestDueStr] = useState('')
+  const [repayIntStr, setRepayIntStr] = useState('')
   const [includeToday, setIncludeToday] = useState(true)
   const [payType, setPayType] = useState('Cash')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const calcTo = includeToday ? date : shiftDay(date, -1)
+  const dateOk = !!date && !isNaN(new Date(date).getTime())
+  const calcTo = !dateOk ? date : (includeToday ? date : shiftDay(date, -1))
   const p = num(principal)
 
   const targetLoans = target === 'ALL' ? loans : loans.filter(l => l.Loan_No === target)
@@ -75,11 +78,16 @@ export default function CustomerRepayModal({
   }, [target, loans, p, calcTo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const accrued = raw.reduce((s, a) => s + num(a.amount), 0)
-  const totalInterest = selPending + accrued
-  const interestPaid = Math.max(0, num(interestStr))
-  const remainingInterest = Math.max(0, totalInterest - interestPaid)
+  // Two separate buckets: interest DUE (previously pending) and this REPAYMENT's
+  // interest. Each is paid independently and clamped to its own maximum.
+  const interestDuePaid = Math.min(Math.max(0, num(interestDueStr)), selPending)
+  const repayIntPaid = Math.min(Math.max(0, num(repayIntStr)), accrued)
+  const dueRemaining = Math.max(0, selPending - interestDuePaid)
+  const repayRemaining = Math.max(0, accrued - repayIntPaid)
+  const overDue = num(interestDueStr) > selPending
+  const overRepay = num(repayIntStr) > accrued
   const needChoice = multi && target === ''
-  const valid = !needChoice && (p > 0 || interestPaid > 0) && p <= selOutstanding && interestPaid <= totalInterest
+  const valid = dateOk && !needChoice && (p > 0 || interestDuePaid > 0 || repayIntPaid > 0) && p <= selOutstanding && !overDue && !overRepay
 
   async function save() {
     if (!valid || busy) return
@@ -100,7 +108,7 @@ export default function CustomerRepayModal({
       }
     })
     await repayCustomer({
-      stl, principal: p, interest: interestPaid, date, payType, note: note.trim() || undefined,
+      stl, principal: p, interest: interestDuePaid, accrualInterest: repayIntPaid, date, payType, note: note.trim() || undefined,
       accruals: accrualRows, targetLoanNo: target === 'ALL' ? undefined : target,
     })
     onSaved()
@@ -117,7 +125,7 @@ export default function CustomerRepayModal({
     >
       {multi && (
         <Field label="Which loan to repay?" hint={allSameRate ? undefined : 'Rates differ — pick the loan you want to close.'}>
-          <select className="input" value={target} onChange={e => { setTarget(e.target.value); setPrincipal(''); setInterestStr('') }}>
+          <select className="input" value={target} onChange={e => { setTarget(e.target.value); setPrincipal(''); setInterestDueStr(''); setRepayIntStr('') }}>
             {!allSameRate && <option value="">Choose a loan…</option>}
             {allSameRate && <option value="ALL">All loans (oldest first)</option>}
             {loans.map(l => <option key={l.Loan_No} value={l.Loan_No}>{l.Loan_No} · {rateLabelOf(l)} · {inr(num(l.Outstand_Amount))}</option>)}
@@ -144,21 +152,32 @@ export default function CustomerRepayModal({
           Include today in the interest (calculate up to {fmtDate(date)}, else the previous day)
         </label>
 
+        {/* Interest due (previously pending) — paying it settles old pending rows. */}
         <div className="rounded-xl border border-slate-800 bg-slate-800/30 p-3 text-sm">
-          <div className="flex justify-between"><span className="text-slate-400">Previous pending interest</span><span className="text-slate-200">{inr(selPending)}</span></div>
-          <div className="mt-1 flex justify-between"><span className="text-slate-400">This repayment's interest</span><span className="text-slate-200">{inr(accrued)}</span></div>
-          <div className="mt-1.5 flex justify-between border-t border-slate-700 pt-1.5 font-semibold"><span className="text-hd">Total interest due</span><span className="text-hd">{inr(totalInterest)}</span></div>
-          <div className="mt-3">
-            <span className="label">Interest paid now (₹)</span>
-            <input className="input mt-1" inputMode="numeric" placeholder="Enter amount" value={interestStr} onChange={e => setInterestStr(e.target.value)} />
+          <div className="flex items-center justify-between">
+            <span className="text-slate-400">Interest due <span className="text-slate-500">· previously pending</span></span>
+            <span className="font-semibold text-slate-200">{inr(selPending)}</span>
           </div>
-          {interestPaid > totalInterest && <p className="mt-1 text-xs text-rose-300">Cannot pay more than the total interest due.</p>}
-          {remainingInterest > 0 && interestPaid <= totalInterest && (
-            <p className="mt-1.5 text-xs text-amber-300/90">{inr(remainingInterest)} will remain as <b>pending interest</b>.</p>
-          )}
-          {totalInterest > 0 && remainingInterest === 0 && interestPaid > 0 && (
-            <p className="mt-1.5 text-xs text-emerald-300/90">All interest cleared.</p>
-          )}
+          <div className="mt-2">
+            <span className="label">Pay interest due now (₹)</span>
+            <input className="input mt-1" inputMode="numeric" placeholder="Enter amount" value={interestDueStr} onChange={e => setInterestDueStr(e.target.value)} />
+          </div>
+          {overDue && <p className="mt-1 text-xs text-rose-300">Cannot exceed the interest due ({inr(selPending)}).</p>}
+          {!overDue && dueRemaining > 0 && interestDuePaid > 0 && <p className="mt-1.5 text-xs text-amber-300/90">{inr(dueRemaining)} interest due will remain pending.</p>}
+        </div>
+
+        {/* This repayment's interest — paying it settles the fresh accrual only. */}
+        <div className="rounded-xl border border-slate-800 bg-slate-800/30 p-3 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-400">Repayment interest <span className="text-slate-500">· on ₹{p.toLocaleString('en-IN')} to {fmtDate(calcTo)}</span></span>
+            <span className="font-semibold text-amber-300">{inr(accrued)}</span>
+          </div>
+          <div className="mt-2">
+            <span className="label">Pay repayment interest now (₹)</span>
+            <input className="input mt-1" inputMode="numeric" placeholder="Enter amount" value={repayIntStr} onChange={e => setRepayIntStr(e.target.value)} />
+          </div>
+          {overRepay && <p className="mt-1 text-xs text-rose-300">Cannot exceed this repayment's interest ({inr(accrued)}).</p>}
+          {!overRepay && repayRemaining > 0 && repayIntPaid > 0 && <p className="mt-1.5 text-xs text-amber-300/90">{inr(repayRemaining)} repayment interest will remain pending.</p>}
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

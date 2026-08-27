@@ -31,7 +31,9 @@ export default function Interest() {
   // Posting is per whole month: From = 1st, To = month end.
   const [my, mm] = month.split('-').map(Number)
   const from = `${month}-01`
-  const to = new Date(my, mm, 0).toISOString().slice(0, 10) // last day of the month
+  // Days in the month via getDate() (local, timezone-safe) — toISOString() would
+  // roll a local month-end back a day in +ve timezones (e.g. IST), so Aug showed 30.
+  const to = `${month}-${String(new Date(my, mm, 0).getDate()).padStart(2, '0')}`
 
   const settings = getSettings()
   // Month end is enforced by construction; the To date must not be in the future.

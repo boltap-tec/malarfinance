@@ -12,3 +12,7 @@ android
 ios
 .capacitor
 npm-debug.log*
+
+# Local build artifact — do not commit
+ArulFinance-debug.apk
+*.apk

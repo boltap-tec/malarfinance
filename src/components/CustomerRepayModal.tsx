@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { repo, repayCustomer, getSettings } from '../data/repository'
+import { repo, repayCustomer } from '../data/repository'
 import { accrueOnRepaidPrincipal } from '../lib/interestEngine'
 import { Modal, Field, AmountHint } from './ui'
 import { inr, num, fmtDate } from '../lib/format'
@@ -52,10 +52,6 @@ export default function CustomerRepayModal({
 
   const calcTo = includeToday ? date : shiftDay(date, -1)
   const p = num(principal)
-  // Where interest starts when a loan has NO posted interest yet: the "Interest
-  // posted up to" date from Settings (migration cut-over). computeInterest still
-  // clamps to the loan's given date, so newer loans start from their own date.
-  const postedUpto = getSettings().lastPostedDate || undefined
 
   const targetLoans = target === 'ALL' ? loans : loans.filter(l => l.Loan_No === target)
   const selOutstanding = target === 'ALL' ? outstanding : targetLoans.reduce((s, l) => s + num(l.Outstand_Amount), 0)
@@ -72,7 +68,7 @@ export default function CustomerRepayModal({
       type: l.Interest_Type,
       perDay: num(l.Interest_Per_day_Per_Lakh),
       perMonth: num(l.Interest_Per_Month_Per_Lakh),
-      lastTo: repo.interestByLoan(l.Loan_No).map(i => i.To_Date).filter(Boolean).sort().slice(-1)[0] || postedUpto,
+      lastTo: repo.loanPostedUpto(l.Loan_No),
       givenDate: l.Loan_Given_Date,
     }))
     return accrueOnRepaidPrincipal(lines, p, calcTo).accruals

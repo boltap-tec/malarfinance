@@ -23,6 +23,14 @@ export const num = (v: unknown): number => {
   return isNaN(n) ? 0 : n
 }
 
+// The later of two dates (yyyy-mm-dd or ISO), ignoring blanks. Used to pick the
+// interest "posted up to" reference from several sources.
+export const laterDate = (a?: string | null, b?: string | null): string | undefined => {
+  if (!a) return b || undefined
+  if (!b) return a || undefined
+  return new Date(a).getTime() >= new Date(b).getTime() ? a : b
+}
+
 // Amount spelled out in the Indian system, e.g. 150000 -> "One Lakh Fifty
 // Thousand", 6073050 -> "Sixty Lakh Seventy Three Thousand Fifty".
 export const amountWords = (v: number | string | undefined | null): string => {

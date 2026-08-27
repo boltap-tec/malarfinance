@@ -56,6 +56,7 @@ export interface Loan {
   Repaid_Amount?: number
   Outstand_Amount?: number
   Loan_Status?: string
+  Interest_Posted_Upto?: string   // interest billed up to this date (posting or repay)
   Referred_Partner?: string
   Payment_Type?: string
   Remarks?: string
@@ -119,6 +120,7 @@ export interface Deposit {
   Repaid_Amount?: number
   Outstand_Amount?: number
   Deposit_Status?: string
+  Interest_Posted_Upto?: string   // interest billed up to this date (posting or repay)
   Payment_Type?: string
   Remarks?: string
   Interest_Type?: string
@@ -141,6 +143,7 @@ export interface OtherFinanceLoan {
   Repaid_Amount?: number
   Outstand_Amount?: number
   Loan_Status?: string
+  Interest_Posted_Upto?: string   // interest billed up to this date (posting or repay)
   Payment_Type?: string
   Remarks?: string
   Interest_Type?: string

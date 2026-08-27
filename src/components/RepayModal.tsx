@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { repo, repayLoan, getSettings } from '../data/repository'
+import { repo, repayLoan } from '../data/repository'
 import { computeInterest } from '../lib/interestEngine'
 import { Modal, Field, AmountHint } from './ui'
 import { inr, num, fmtDate } from '../lib/format'
@@ -14,9 +14,9 @@ const nextDay = (d: string) => shiftDay(d, 1)
 export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { loan: Loan; onClose: () => void; onSaved: () => void; interestOnly?: boolean }) {
   const rows = repo.interestByLoan(loan.Loan_No)
   const pendingInterest = rows.reduce((s, i) => s + num(i.Interest_Pending), 0)
-  // Last posted interest date; if none yet, fall back to the Settings
-  // "Interest posted up to" migration date so we don't bill from loan inception.
-  const lastTo = rows.map(i => i.To_Date).filter(Boolean).sort().slice(-1)[0] || getSettings().lastPostedDate || undefined
+  // Interest starts the day after this — the later of the loan's posted-upto
+  // column, its last posted interest, and the Settings cut-over.
+  const lastTo = repo.loanPostedUpto(loan.Loan_No)
 
   const outstanding = num(loan.Outstand_Amount)
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))

@@ -28,7 +28,11 @@ export default function Loans() {
     const s = q.trim().toLowerCase()
     if (s) list = list.filter(l =>
       l.Loan_No?.toLowerCase().includes(s) || l.Customer_Name?.toLowerCase().includes(s) || l.Customer_STL_NO?.toLowerCase().includes(s))
-    list = list.slice().sort((a, b) => new Date(b.Loan_Given_Date ?? 0).getTime() - new Date(a.Loan_Given_Date ?? 0).getTime())
+    // Outstanding (active) loans first, then newest given.
+    list = list.slice().sort((a, b) => {
+      const ao = num(a.Outstand_Amount) > 0 ? 1 : 0, bo = num(b.Outstand_Amount) > 0 ? 1 : 0
+      return ao !== bo ? bo - ao : new Date(b.Loan_Given_Date ?? 0).getTime() - new Date(a.Loan_Given_Date ?? 0).getTime()
+    })
     return {
       rows: list,
       totalOut: list.reduce((s2, l) => s2 + num(l.Outstand_Amount), 0),

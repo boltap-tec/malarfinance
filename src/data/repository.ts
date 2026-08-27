@@ -198,6 +198,24 @@ export const repo = {
   depositPostedMonths(code: string): Set<string> {
     return new Set((db.Depositer_Interest ?? []).filter((i: any) => i.Deposit_No === code && i.Month).map((i: any) => i.Month as string))
   },
+  // Interest "posted up to" for an entity — the LATER of: its last posted
+  // interest To_Date, its stored Interest_Posted_Upto column, and the global
+  // Settings cut-over. Used as the start reference for repay & posting.
+  loanPostedUpto(loanNo: string): string | undefined {
+    const rowsLast = (db.Interest_Details ?? []).filter(i => String(i.Loan_No) === loanNo).map(i => i.To_Date).filter(Boolean).sort().slice(-1)[0]
+    const loan = (db.Loan_Processing ?? []).find(l => l.Loan_No === loanNo)
+    return laterD(laterD(rowsLast, loan?.Interest_Posted_Upto), getSettings().lastPostedDate || undefined)
+  },
+  depositPostedUpto(code: string): string | undefined {
+    const rowsLast = (db.Depositer_Interest ?? []).filter((i: any) => i.Deposit_No === code).map((i: any) => i.To_Date).filter(Boolean).sort().slice(-1)[0]
+    const col = (db.Deposit_Amount ?? []).filter(d => d.Deposit_No === code).map(d => d.Interest_Posted_Upto).filter(Boolean).sort().slice(-1)[0]
+    return laterD(laterD(rowsLast, col), getSettings().lastPostedDate || undefined)
+  },
+  otherFinancePostedUpto(code: string): string | undefined {
+    const rowsLast = (db.Other_Finance_Interest ?? []).filter((i: any) => i.Loan_No === code).map((i: any) => i.To_Date).filter(Boolean).sort().slice(-1)[0]
+    const col = (db.Other_Finance_Loan ?? []).filter(o => o.Loan_No === code).map(o => o.Interest_Posted_Upto).filter(Boolean).sort().slice(-1)[0]
+    return laterD(laterD(rowsLast, col), getSettings().lastPostedDate || undefined)
+  },
   // The effective ₹/lakh/month rate for a depositor when it's not stored on the
   // deposit — derived from a full-month past interest row (Interest ÷ amount).
   derivedDepositRate(code: string): number {
@@ -433,6 +451,9 @@ function nextRef(): string {
 
 const num = (v: unknown) => { const n = Number(v); return isNaN(n) ? 0 : n }
 const refNum = (r: unknown) => { const n = Number(String(r).replace(/\D/g, '')); return isNaN(n) ? 0 : n }
+// Later of two dates (yyyy-mm-dd / ISO), ignoring blanks.
+const laterD = (a?: string | null, b?: string | null): string | undefined =>
+  !a ? (b || undefined) : !b ? a : (new Date(a).getTime() >= new Date(b).getTime() ? a : b)
 
 // Recompute the running Balance per finance, ordered by transaction date then
 // insertion order — so a back-dated entry correctly shifts later balances.
@@ -773,6 +794,12 @@ export async function editLoan(loanNo: string, patch: Partial<Loan>): Promise<vo
   writeLog({ Action: 'update', Entity: 'Loan_Processing', Entity_Label: `Edit ${loanNo} · ${before.Customer_Name}`, Before: before, After: after })
   persist()
 }
+
+// The "interest posted up to" per entity is derived from the interest rows
+// (each posting / repay stamps a To_Date) — see repo.loanPostedUpto etc. — so no
+// separate stored column is written (that would risk the delete-then-insert sync
+// used for deposits/other). The optional Interest_Posted_Upto column is still
+// read when present, so a value set directly in the DB is honoured.
 
 export async function addCustomer(c: Customer): Promise<void> {
   db.STL_CRM = [c, ...(db.STL_CRM ?? [])]

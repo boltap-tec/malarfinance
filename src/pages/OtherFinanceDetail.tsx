@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Building2, HandCoins, Percent, Plus, IndianRupee, BookText, Pencil } from 'lucide-react'
-import { repo, repayOtherFinance, payOtherFinanceInterest, editOtherFinance, updateOtherFinanceProfile, getSettings } from '../data/repository'
+import { repo, repayOtherFinance, payOtherFinanceInterest, editOtherFinance, updateOtherFinanceProfile } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Tabs, Modal, Field } from '../components/ui'
 import LiabilityRepayModal from '../components/LiabilityRepayModal'
@@ -183,7 +183,7 @@ export default function OtherFinanceDetail() {
               type: l.Interest_Type,
               perDay: num(l.Interest_Per_day_Per_Lakh),
               perMonth: typeof l.Interest_Per_Month_Per_Lakh === 'number' ? l.Interest_Per_Month_Per_Lakh : 0,
-              lastTo: interest.map((x: any) => x.To_Date).filter(Boolean).sort().slice(-1)[0] || getSettings().lastPostedDate || undefined,
+              lastTo: repo.otherFinancePostedUpto(id),
               givenDate: l.Loan_Bought_Date,
             }))}
           onRepay={(principal, interestAmt, date, payType, note, accruals, targetKey) => repayOtherFinance({

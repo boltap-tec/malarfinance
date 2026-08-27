@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, PiggyBank, HandCoins, Percent, Plus, IndianRupee, BookText, Pencil } from 'lucide-react'
-import { repo, repayDeposit, payDepositInterest, editDeposit, updateDepositorProfile, getSettings } from '../data/repository'
+import { repo, repayDeposit, payDepositInterest, editDeposit, updateDepositorProfile } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Tabs, Modal, Field } from '../components/ui'
 import LiabilityRepayModal from '../components/LiabilityRepayModal'
@@ -190,7 +190,7 @@ export default function DepositDetail() {
               outstanding: num(d.Outstand_Amount),
               type: 'Per_Month',
               perMonth: num(d.Interest_Per_Month_Per_Lakh) || derivedRate,
-              lastTo: interest.map((x: any) => x.To_Date).filter(Boolean).sort().slice(-1)[0] || getSettings().lastPostedDate || undefined,
+              lastTo: repo.depositPostedUpto(id),
               givenDate: d.Deposit_Bought_Date,
             }))}
           onRepay={(principal, interestAmt, date, payType, note, accruals, targetKey) => repayDeposit({

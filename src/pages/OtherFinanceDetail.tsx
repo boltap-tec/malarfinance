@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Building2, HandCoins, Percent, Plus, IndianRupee, BookText, Pencil } from 'lucide-react'
-import { repo, repayOtherFinance, payOtherFinanceInterest, editOtherFinance, updateOtherFinanceProfile } from '../data/repository'
+import { repo, repayOtherFinance, payOtherFinanceInterest, editOtherFinance, updateOtherFinanceProfile, getSettings } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Tabs, Modal, Field } from '../components/ui'
 import LiabilityRepayModal from '../components/LiabilityRepayModal'
@@ -177,17 +177,17 @@ export default function OtherFinanceDetail() {
           rateLabel={type === 'Per_Month' ? `₹${perMonth}/L·mo` : `₹${perDay}/L·day`}
           debts={rows.filter(l => num(l.Outstand_Amount) > 0)
             .sort((a, b) => new Date(a.Loan_Bought_Date ?? 0).getTime() - new Date(b.Loan_Bought_Date ?? 0).getTime())
-            .map((l, i) => ({
-              key: `${l.Loan_No}-${i}`,
+            .map((l) => ({
+              key: `${l.Loan_Bought_Date ?? ''}|${num(l.Loan_Amount)}`,
               outstanding: num(l.Outstand_Amount),
               type: l.Interest_Type,
               perDay: num(l.Interest_Per_day_Per_Lakh),
               perMonth: typeof l.Interest_Per_Month_Per_Lakh === 'number' ? l.Interest_Per_Month_Per_Lakh : 0,
-              lastTo: interest.map((x: any) => x.To_Date).filter(Boolean).sort().slice(-1)[0],
+              lastTo: interest.map((x: any) => x.To_Date).filter(Boolean).sort().slice(-1)[0] || getSettings().lastPostedDate || undefined,
               givenDate: l.Loan_Bought_Date,
             }))}
-          onRepay={(principal, interestAmt, date, payType, note, accruals) => repayOtherFinance({
-            code: id, principal, interest: interestAmt, date, payType, note,
+          onRepay={(principal, interestAmt, date, payType, note, accruals, targetKey) => repayOtherFinance({
+            code: id, principal, interest: interestAmt, date, payType, note, targetKey,
             accruals: (accruals ?? []).map((a, i) => ({
               ID: `${id}-repay-${Date.now()}-${i}`,
               Finance_Name: first.Finance_Name, Loan_No: id, Loan_bought_Finance_Name: first.Loan_bought_Finance_Name,

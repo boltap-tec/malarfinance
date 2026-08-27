@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, PiggyBank, HandCoins, Percent, Plus, IndianRupee, BookText, Pencil } from 'lucide-react'
-import { repo, repayDeposit, payDepositInterest, editDeposit, updateDepositorProfile } from '../data/repository'
+import { repo, repayDeposit, payDepositInterest, editDeposit, updateDepositorProfile, getSettings } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Tabs, Modal, Field } from '../components/ui'
 import LiabilityRepayModal from '../components/LiabilityRepayModal'
@@ -185,16 +185,16 @@ export default function DepositDetail() {
           rateLabel={`₹${rate}/L·mo`}
           debts={rows.filter(d => num(d.Outstand_Amount) > 0)
             .sort((a, b) => new Date(a.Deposit_Bought_Date ?? 0).getTime() - new Date(b.Deposit_Bought_Date ?? 0).getTime())
-            .map((d, i) => ({
-              key: `${d.Deposit_No}-${i}`,
+            .map((d) => ({
+              key: `${d.Deposit_Bought_Date ?? ''}|${num(d.Deposit_Amount)}`,
               outstanding: num(d.Outstand_Amount),
               type: 'Per_Month',
               perMonth: num(d.Interest_Per_Month_Per_Lakh) || derivedRate,
-              lastTo: interest.map((x: any) => x.To_Date).filter(Boolean).sort().slice(-1)[0],
+              lastTo: interest.map((x: any) => x.To_Date).filter(Boolean).sort().slice(-1)[0] || getSettings().lastPostedDate || undefined,
               givenDate: d.Deposit_Bought_Date,
             }))}
-          onRepay={(principal, interestAmt, date, payType, note, accruals) => repayDeposit({
-            code: id, principal, interest: interestAmt, date, payType, note,
+          onRepay={(principal, interestAmt, date, payType, note, accruals, targetKey) => repayDeposit({
+            code: id, principal, interest: interestAmt, date, payType, note, targetKey,
             accruals: (accruals ?? []).map((a, i) => ({
               ID: `${id}-repay-${Date.now()}-${i}`,
               Finance_Name: first.Finance_Name, Deposit_No: id, Depositer_Name: first.Depositer_Name,

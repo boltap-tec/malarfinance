@@ -810,7 +810,11 @@ export async function addBalanceCorrection(finance: string, date: string, target
 
 // Firm repays a depositor (principal refund and/or interest) — both are payments
 // out. Reduces outstanding across that depositor's linked deposit rows.
-export interface LiabilityRepay { code: string; principal: number; interest: number; date: string; payType?: string; note?: string; accruals?: any[] }
+// targetKey (optional) restricts the principal refund to a single deposit /
+// borrowing row — "<bought-date>|<amount>". Omit to refund oldest-first.
+export interface LiabilityRepay { code: string; principal: number; interest: number; date: string; payType?: string; note?: string; accruals?: any[]; targetKey?: string }
+const depKey = (d: any) => `${d.Deposit_Bought_Date ?? ''}|${num(d.Deposit_Amount)}`
+const ofKey = (l: any) => `${l.Loan_Bought_Date ?? ''}|${num(l.Loan_Amount)}`
 
 export async function repayDeposit(o: LiabilityRepay): Promise<void> {
   const rows = (db.Deposit_Amount ?? []).filter(d => d.Deposit_No === o.code)
@@ -827,7 +831,7 @@ export async function repayDeposit(o: LiabilityRepay): Promise<void> {
   // Principal refund → oldest deposit first.
   const payByRef = new Map<Deposit, number>()
   let leftP = o.principal
-  for (const d of rows.filter(d => num(d.Outstand_Amount) > 0).sort((a, b) => new Date(a.Deposit_Bought_Date ?? 0).getTime() - new Date(b.Deposit_Bought_Date ?? 0).getTime())) {
+  for (const d of rows.filter(d => num(d.Outstand_Amount) > 0 && (!o.targetKey || depKey(d) === o.targetKey)).sort((a, b) => new Date(a.Deposit_Bought_Date ?? 0).getTime() - new Date(b.Deposit_Bought_Date ?? 0).getTime())) {
     if (leftP <= 0) break
     const pay = Math.min(num(d.Outstand_Amount), leftP); leftP -= pay
     payByRef.set(d, pay)
@@ -879,7 +883,7 @@ export async function repayOtherFinance(o: LiabilityRepay): Promise<void> {
   // Principal refund → oldest borrowing first.
   const payByRef = new Map<OtherFinanceLoan, number>()
   let leftP = o.principal
-  for (const l of rows.filter(l => num(l.Outstand_Amount) > 0).sort((a, b) => new Date(a.Loan_Bought_Date ?? 0).getTime() - new Date(b.Loan_Bought_Date ?? 0).getTime())) {
+  for (const l of rows.filter(l => num(l.Outstand_Amount) > 0 && (!o.targetKey || ofKey(l) === o.targetKey)).sort((a, b) => new Date(a.Loan_Bought_Date ?? 0).getTime() - new Date(b.Loan_Bought_Date ?? 0).getTime())) {
     if (leftP <= 0) break
     const pay = Math.min(num(l.Outstand_Amount), leftP); leftP -= pay
     payByRef.set(l, pay)

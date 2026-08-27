@@ -5,7 +5,7 @@ import {
   getSettings, setSettings,
 } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
-import { previewPosting, toInterestRow, computeInterest, isMonthEnd } from '../lib/interestEngine'
+import { previewPosting, toInterestRow, computeInterest, isMonthEnd, distributeRounding } from '../lib/interestEngine'
 import { PageHeader, Card, StatCard, Badge, Th, Td, EmptyState } from '../components/ui'
 import { inr, num } from '../lib/format'
 import type { Loan } from '../data/types'
@@ -39,15 +39,18 @@ export default function Interest() {
   // Month end is enforced by construction; the To date must not be in the future.
   const monthEndOk = settings.postingAnyDate || new Date(to) <= new Date(todayStr)
 
-  // Customer loan interest.
-  const custPreview = useMemo(
-    () => previewPosting(repo.loans(f), from, to, (loanNo, month) => repo.postedMonths(loanNo).has(month)),
-    [f, from, to, posted],
-  )
+  // Customer loan interest. Rounding is applied per CUSTOMER (not per loan): each
+  // loan's raw interest is summed for the customer and that total rounded to ₹10.
+  const custPreview = useMemo(() => {
+    const raw = previewPosting(repo.loans(f), from, to, (loanNo, month) => repo.postedMonths(loanNo).has(month))
+    const rounded = distributeRounding(raw, p => p.rawInterest, p => p.loan.Customer_STL_NO)
+    return raw.map(p => ({ ...p, interest: rounded.get(p) ?? p.interest })).filter(p => p.interest > 0)
+  }, [f, from, to, posted])
 
-  // Deposit interest (interest we OWE depositors), one line per deposit.
+  // Deposit interest (interest we OWE depositors), one line per deposit; rounded
+  // per depositor (grouped by DEP no.).
   const depPreview = useMemo(() => {
-    return repo.deposits(f)
+    const items = repo.deposits(f)
       .filter(d => (d.Deposit_Status ?? '').toLowerCase() === 'active' && num(d.Outstand_Amount) > 0)
       .map(d => {
         // Use the deposit's stored rate, or derive it from past interest when blank.
@@ -56,21 +59,26 @@ export default function Interest() {
         const p = computeInterest(pseudo, from, to)
         return { d, p, rate, id: `${d.Deposit_No}-${num(d.Deposit_Amount)}-${p.month}` }
       })
-      .filter(x => x.p.interest > 0)
+      .filter(x => x.p.rawInterest > 0)
       .filter(x => !(repo.depositInterest(f).some((i: any) => i.ID === x.id)))
+    const rounded = distributeRounding(items, x => x.p.rawInterest, x => x.d.Deposit_No)
+    return items.map(x => ({ ...x, p: { ...x.p, interest: rounded.get(x) ?? x.p.interest } })).filter(x => x.p.interest > 0)
   }, [f, from, to, posted])
 
-  // Other-finance interest (interest we OWE lenders), one line per borrowing.
+  // Other-finance interest (interest we OWE lenders), one line per borrowing;
+  // rounded per lender (grouped by FIN no.).
   const othPreview = useMemo(() => {
-    return repo.otherFinanceLoans(f)
+    const items = repo.otherFinanceLoans(f)
       .filter(o => (o.Loan_Status ?? '').toLowerCase() === 'active' && num(o.Outstand_Amount) > 0)
       .map(o => {
         const pseudo = { Loan_Amount: num(o.Outstand_Amount), Interest_Type: o.Interest_Type || 'Per_Day', Interest_Per_day_Per_Lakh: num(o.Interest_Per_day_Per_Lakh), Interest_Per_Month_Per_Lakh: num(o.Interest_Per_Month_Per_Lakh), Loan_Given_Date: o.Loan_Bought_Date } as Loan
         const p = computeInterest(pseudo, from, to)
         return { o, p, id: `${o.Loan_No}-${num(o.Loan_Amount)}-${p.month}` }
       })
-      .filter(x => x.p.interest > 0)
+      .filter(x => x.p.rawInterest > 0)
       .filter(x => !(repo.otherFinanceInterest(f).some((i: any) => i.ID === x.id)))
+    const rounded = distributeRounding(items, x => x.p.rawInterest, x => x.o.Loan_No)
+    return items.map(x => ({ ...x, p: { ...x.p, interest: rounded.get(x) ?? x.p.interest } })).filter(x => x.p.interest > 0)
   }, [f, from, to, posted])
 
   const custTotal = custPreview.reduce((s, p) => s + p.interest, 0)
@@ -102,11 +110,12 @@ export default function Interest() {
     <div>
       <PageHeader title="Interest posting" subtitle="Run customer, deposit and other-finance interest for a whole month — in one click." />
 
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Customer interest" value={inr(custTotal)} tone="green" sub={`${custPreview.length} loans`} icon={<Percent size={18} />} />
-        <StatCard label="Deposit interest" value={inr(depTotal)} tone="amber" sub={`${depPreview.length} deposits`} />
-        <StatCard label="Other-finance interest" value={inr(othTotal)} tone="red" sub={`${othPreview.length} loans`} />
-        <StatCard label="Total to post" value={inr(custTotal + depTotal + othTotal)} tone="blue" />
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <StatCard label="Customer interest" value={inr(custTotal)} tone="green" sub={`${custPreview.length} loans · earned`} icon={<Percent size={18} />} />
+        <StatCard label="Deposit interest" value={inr(depTotal)} tone="amber" sub={`${depPreview.length} deposits · owed`} />
+        <StatCard label="Other-finance interest" value={inr(othTotal)} tone="red" sub={`${othPreview.length} loans · owed`} />
+        <StatCard label="Total to post" value={inr(custTotal + depTotal + othTotal)} tone="slate" />
+        <StatCard label="Profit this period" value={inr(custTotal - depTotal - othTotal)} tone="blue" sub="customer − deposit − other" />
       </div>
 
       <Card className="mb-4">

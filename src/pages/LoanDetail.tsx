@@ -45,9 +45,6 @@ export default function LoanDetail() {
             {isMd && (
               <button className="btn-ghost !py-1.5" onClick={() => setEditOpen(true)}><Pencil size={15} /> Edit</button>
             )}
-            {canEdit(role) && num(loan.Outstand_Amount) > 0 && (
-              <button className="btn-primary !py-1.5" onClick={() => setRepayOpen(true)}><HandCoins size={15} /> Repay</button>
-            )}
           </div>
         }
       />
@@ -123,14 +120,6 @@ export default function LoanDetail() {
             </table>
           </div>
         </Card>
-      )}
-
-      {repayOpen && (
-        <RepayModal
-          loan={loan}
-          onClose={() => setRepayOpen(false)}
-          onSaved={() => { setRepayOpen(false); setTick(t => t + 1) }}
-        />
       )}
 
       {editOpen && (

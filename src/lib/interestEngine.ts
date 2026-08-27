@@ -75,6 +75,32 @@ export function computeInterest(
   }
 }
 
+// Round to ₹10 at the GROUP level, not per row: sum each group's raw interest,
+// round that sum to ₹10, then hand each row its ₹1-rounded raw with the leftover
+// put on the group's biggest row — so rows still sum exactly to the ₹10 total.
+// Used so a customer/depositor/lender with several loans is rounded once overall.
+export function distributeRounding<T>(items: T[], rawOf: (t: T) => number, keyOf: (t: T) => string): Map<T, number> {
+  const groups = new Map<string, T[]>()
+  for (const it of items) {
+    const k = keyOf(it)
+    if (!groups.has(k)) groups.set(k, [])
+    groups.get(k)!.push(it)
+  }
+  const out = new Map<T, number>()
+  for (const arr of groups.values()) {
+    const target = roundTo10(arr.reduce((s, it) => s + rawOf(it), 0))
+    const assigned = arr.map(it => Math.round(rawOf(it)))
+    const diff = target - assigned.reduce((s, a) => s + a, 0)
+    if (arr.length && diff !== 0) {
+      let mi = 0
+      for (let i = 1; i < arr.length; i++) if (rawOf(arr[i]) > rawOf(arr[mi])) mi = i
+      assigned[mi] += diff
+    }
+    arr.forEach((it, i) => out.set(it, Math.max(0, assigned[i])))
+  }
+  return out
+}
+
 // Build interest rows for every ACTIVE loan for a given billing window — the
 // server-side "posting" run, previewable before it commits.
 export function previewPosting(

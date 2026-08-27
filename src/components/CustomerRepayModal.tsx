@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { repo, repayCustomer, repayLoan, getSettings } from '../data/repository'
+import { repo, repayCustomer, getSettings } from '../data/repository'
 import { accrueOnRepaidPrincipal } from '../lib/interestEngine'
 import { Modal, Field, AmountHint } from './ui'
 import { inr, num, fmtDate } from '../lib/format'
@@ -59,9 +59,9 @@ export default function CustomerRepayModal({
 
   const targetLoans = target === 'ALL' ? loans : loans.filter(l => l.Loan_No === target)
   const selOutstanding = target === 'ALL' ? outstanding : targetLoans.reduce((s, l) => s + num(l.Outstand_Amount), 0)
-  const selPending = target === 'ALL'
-    ? pendingInterest
-    : targetLoans.reduce((s, l) => s + repo.interestByLoan(l.Loan_No).reduce((t, i) => t + num(i.Interest_Pending), 0), 0)
+  // Previous pending is always the CUSTOMER's total (by STL), even when repaying a
+  // single loan — the settlement clears the customer's oldest pending first.
+  const selPending = pendingInterest
   const rateLabel = target === 'ALL' ? (allSameRate && loans[0] ? rateLabelOf(loans[0]) : 'mixed') : (targetLoans[0] ? rateLabelOf(targetLoans[0]) : '')
 
   // Interest on the repaid principal only, for the targeted loan(s), oldest first.
@@ -88,28 +88,25 @@ export default function CustomerRepayModal({
   async function save() {
     if (!valid || busy) return
     setBusy(true)
-    if (target === 'ALL') {
-      const accrualRows: InterestRow[] = raw.map(a => {
-        const l = loans.find(x => x.Loan_No === a.key)!
-        return {
-          ID: `${l.Customer_Name}-${l.Customer_STL_NO}-${l.Loan_No}-${a.month}-repay-${Date.now()}-${l.Loan_No}`,
-          Finance_Name: l.Finance_Name, Loan_No: l.Loan_No,
-          Customer_STL_NO: l.Customer_STL_NO, Customer_Name: l.Customer_Name,
-          From_Date: a.from, To_Date: a.to, Interest_Amount: a.amount, Loan_Amount: a.base, Month: a.month,
-          Description: `Interest on ₹${a.base.toLocaleString('en-IN')} repaid — ${l.Loan_No}`,
-          Amount_Received: 0, Status: 'Pending', Interest_Pending: a.amount,
-          Referred_Partner: l.Referred_Partner, Interest_Type: l.Interest_Type,
-        }
-      })
-      await repayCustomer({ stl, principal: p, interest: interestPaid, date, payType, note: note.trim() || undefined, accruals: accrualRows })
-    } else {
-      const a = raw[0]
-      await repayLoan({
-        loanNo: target, principal: p, date, paymentType: payType,
-        accrue: a ? { from: a.from, to: a.to, amount: a.amount, month: a.month } : undefined,
-        payInterest: interestPaid > 0, interestPaid, note: note.trim() || undefined,
-      })
-    }
+    // Fresh interest on the repaid amount (at the chosen loan's rate) is posted as
+    // pending rows; principal goes to the chosen loan (or oldest-first for ALL);
+    // interest settles the customer's oldest pending first.
+    const accrualRows: InterestRow[] = raw.map(a => {
+      const l = loans.find(x => x.Loan_No === a.key)!
+      return {
+        ID: `${l.Customer_Name}-${l.Customer_STL_NO}-${l.Loan_No}-${a.month}-repay-${Date.now()}-${l.Loan_No}`,
+        Finance_Name: l.Finance_Name, Loan_No: l.Loan_No,
+        Customer_STL_NO: l.Customer_STL_NO, Customer_Name: l.Customer_Name,
+        From_Date: a.from, To_Date: a.to, Interest_Amount: a.amount, Loan_Amount: a.base, Month: a.month,
+        Description: `Interest on ₹${a.base.toLocaleString('en-IN')} repaid — ${l.Loan_No}`,
+        Amount_Received: 0, Status: 'Pending', Interest_Pending: a.amount,
+        Referred_Partner: l.Referred_Partner, Interest_Type: l.Interest_Type,
+      }
+    })
+    await repayCustomer({
+      stl, principal: p, interest: interestPaid, date, payType, note: note.trim() || undefined,
+      accruals: accrualRows, targetLoanNo: target === 'ALL' ? undefined : target,
+    })
     onSaved()
   }
 

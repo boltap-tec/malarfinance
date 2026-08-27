@@ -1585,8 +1585,8 @@ export function customerRisk(stl: string): { level: 'low' | 'medium' | 'high'; m
 // One-shot customer repayment — no loan picker. Principal is applied to the
 // customer's outstanding loans oldest-first; interest settles pending interest
 // oldest-first. The ledger gets TWO separate entries (principal + interest).
-export async function repayCustomer(opts: { stl: string; principal: number; interest: number; date: string; payType?: string; note?: string; accruals?: InterestRow[] }): Promise<void> {
-  const { stl, principal, interest, date, payType, note, accruals } = opts
+export async function repayCustomer(opts: { stl: string; principal: number; interest: number; date: string; payType?: string; note?: string; accruals?: InterestRow[]; targetLoanNo?: string }): Promise<void> {
+  const { stl, principal, interest, date, payType, note, accruals, targetLoanNo } = opts
   const noteSuffix = note ? ` · ${note}` : ''
   const cust = (db.STL_CRM ?? []).find(c => c.Customer_STL_NO === stl)
   if (!cust) return
@@ -1599,10 +1599,10 @@ export async function repayCustomer(opts: { stl: string; principal: number; inte
     await sInsert('Interest_Details', accruals)
   }
 
-  // 1) Principal → oldest loan first.
+  // 1) Principal → the chosen loan only, or oldest loan first when none chosen.
   let leftP = principal
   const loans = (db.Loan_Processing ?? [])
-    .filter(l => l.Customer_STL_NO === stl && num(l.Outstand_Amount) > 0)
+    .filter(l => l.Customer_STL_NO === stl && num(l.Outstand_Amount) > 0 && (!targetLoanNo || l.Loan_No === targetLoanNo))
     .sort((a, b) => new Date(a.Loan_Given_Date ?? 0).getTime() - new Date(b.Loan_Given_Date ?? 0).getTime())
   for (const l of loans) {
     if (leftP <= 0) break

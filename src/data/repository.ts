@@ -602,32 +602,10 @@ async function reverseLinkedRecord(row: LedgerRow): Promise<string> {
       recomputeCustomer(stl || rows[0]?.Customer_STL_NO || '')
       return `made ${inrTxt(back)} interest pending again`
     }
-    case 'Loan_To_Customer': {
-      // Reverse a disbursal → remove the loan and its interest rows.
-      const loan = (db.Loan_Processing ?? []).find(l => l.Loan_No === code)
-      if (!loan) return ''
-      db.Loan_Processing = (db.Loan_Processing ?? []).filter(l => l.Loan_No !== code)
-      await sDelete('Loan_Processing', code)
-      const its = (db.Interest_Details ?? []).filter(i => String(i.Loan_No) === code)
-      db.Interest_Details = (db.Interest_Details ?? []).filter(i => String(i.Loan_No) !== code)
-      for (const i of its) await sDelete('Interest_Details', i.ID)
-      recomputeCustomer(loan.Customer_STL_NO)
-      return `removed loan ${code} (disbursal cancelled)`
-    }
-    case 'Deposit_From_Customer': {
-      const before = (db.Deposit_Amount ?? []).find(d => d.Deposit_No === code && num(d.Deposit_Amount) === amt)
-      if (!before) return ''
-      db.Deposit_Amount = (db.Deposit_Amount ?? []).filter(d => d !== before)
-      await sReplaceFinance('Deposit_Amount', finance, (db.Deposit_Amount ?? []).filter(d => d.Finance_Name === finance))
-      return `removed deposit ${code} of ${inrTxt(amt)}`
-    }
-    case 'Other_Receipt': {
-      const before = (db.Other_Finance_Loan ?? []).find(o => o.Loan_No === code && num(o.Loan_Amount) === amt)
-      if (!before) return ''
-      db.Other_Finance_Loan = (db.Other_Finance_Loan ?? []).filter(o => o !== before)
-      await sReplaceFinance('Other_Finance_Loan', finance, (db.Other_Finance_Loan ?? []).filter(o => o.Finance_Name === finance))
-      return `removed borrowing ${code} of ${inrTxt(amt)}`
-    }
+    // Loan_To_Customer / Deposit_From_Customer / Other_Receipt (the disbursal /
+    // deposit-taken / borrowing-taken CREATION entries) are intentionally left
+    // cash-only — deleting the ledger row does NOT remove the loan/deposit/
+    // borrowing. Cancel those from their own page instead. They fall to default.
     case 'Deposit_Prin_Refund': {
       let left = amt
       db.Deposit_Amount = (db.Deposit_Amount ?? []).map(d => {

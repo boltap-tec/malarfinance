@@ -4,7 +4,7 @@ import { PiggyBank, Plus, HandCoins, Percent, Trash2 } from 'lucide-react'
 import { repo, addDeposit, deleteDeposit, missingRequired, FORM_FIELDS } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import {
-  PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal,
+  PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal, AmountHint,
 } from '../components/ui'
 import { inr, phone, num } from '../lib/format'
 import { useCreateParam } from '../lib/useCreateParam'
@@ -250,6 +250,7 @@ function DepositForm({ finance, initialCode, onClose, onSaved }: { finance: stri
         <Field label="Amount (₹)"><input className="input" inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} /></Field>
         <Field label="Bought date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
       </div>
+      <AmountHint value={amount} />
       <div className="grid grid-cols-2 gap-3">
         <Field label="Rate (₹ / lakh / month)"><input className="input" inputMode="numeric" value={rate} onChange={e => setRate(e.target.value)} /></Field>
         <Field label="Payment type">

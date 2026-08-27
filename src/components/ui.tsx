@@ -1,5 +1,19 @@
 import { ReactNode } from 'react'
 import { X } from 'lucide-react'
+import { inr, amountWords } from '../lib/format'
+
+// Live helper under a money input: shows the value in Indian grouping (₹1,50,000)
+// and spelled out in words, so large amounts are easy to confirm while typing.
+export function AmountHint({ value }: { value: string | number }) {
+  const n = typeof value === 'number' ? value : Number(String(value).replace(/[^\d.]/g, ''))
+  if (!n || isNaN(n) || n <= 0) return null
+  return (
+    <p className="mt-1 text-xs text-slate-400">
+      <span className="font-semibold text-slate-200 tabular-nums">{inr(n)}</span>
+      <span className="text-slate-500"> · {amountWords(n)} rupees</span>
+    </p>
+  )
+}
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <div className={`card p-4 sm:p-5 ${className}`}>{children}</div>

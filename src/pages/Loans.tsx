@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Search, Plus, Trash2 } from 'lucide-react'
 import { repo, addLoan, addCustomer, deleteLoan, missingRequired, FORM_FIELDS } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
-import { PageHeader, Card, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal } from '../components/ui'
+import { PageHeader, Card, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal, AmountHint } from '../components/ui'
 import { inr, fmtDate, num, phone } from '../lib/format'
 import { useCreateParam } from '../lib/useCreateParam'
 import type { Loan, Customer } from '../data/types'
@@ -315,6 +315,7 @@ function LoanForm({ finance, initialStl, onClose, onSaved }: { finance: string; 
         <Field label="Loan amount (₹)"><input className="input" inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} /></Field>
         <Field label="Given date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
       </div>
+      <AmountHint value={amount} />
       <div className="grid grid-cols-2 gap-3">
         <Field label="Interest type">
           <select className="input" value={type} onChange={e => setType(e.target.value as any)}>

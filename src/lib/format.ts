@@ -23,6 +23,31 @@ export const num = (v: unknown): number => {
   return isNaN(n) ? 0 : n
 }
 
+// Amount spelled out in the Indian system, e.g. 150000 -> "One Lakh Fifty
+// Thousand", 6073050 -> "Sixty Lakh Seventy Three Thousand Fifty".
+export const amountWords = (v: number | string | undefined | null): string => {
+  let n = Math.round(Number(v ?? 0))
+  if (!n || isNaN(n)) return ''
+  if (n < 0) return 'Minus ' + amountWords(-n)
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+    'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
+  const two = (x: number): string => x < 20 ? ones[x] : (tens[Math.floor(x / 10)] + (x % 10 ? ' ' + ones[x % 10] : ''))
+  const three = (x: number): string => {
+    const h = Math.floor(x / 100), r = x % 100
+    return (h ? ones[h] + ' Hundred' + (r ? ' ' : '') : '') + (r ? two(r) : '')
+  }
+  const parts: string[] = []
+  const crore = Math.floor(n / 10000000); n %= 10000000
+  const lakh = Math.floor(n / 100000); n %= 100000
+  const thousand = Math.floor(n / 1000); n %= 1000
+  if (crore) parts.push(three(crore) + ' Crore')
+  if (lakh) parts.push(two(lakh) + ' Lakh')
+  if (thousand) parts.push(two(thousand) + ' Thousand')
+  if (n) parts.push(three(n))
+  return parts.join(' ').trim()
+}
+
 // Friendly label from a "MM-YYYY" month (e.g. "07-2026" -> "Jul 2026").
 export const monthName = (m?: string): string => {
   const [mm, yy] = String(m ?? '').split('-')

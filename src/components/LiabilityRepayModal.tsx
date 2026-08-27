@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { accrueOnRepaidPrincipal, type DebtLine, type RepayAccrual } from '../lib/interestEngine'
-import { Modal, Field } from './ui'
+import { Modal, Field, AmountHint } from './ui'
 import { inr, num, fmtDate } from '../lib/format'
 
 const shiftDay = (d: string, days: number) => {
@@ -102,6 +102,7 @@ export default function LiabilityRepayModal({
         {showPrincipal && (
           <Field label="Principal paid (₹)"><input className="input" inputMode="numeric" placeholder="Enter amount" value={principal} onChange={e => setPrincipal(e.target.value)} /></Field>
         )}
+        {showPrincipal && <AmountHint value={principal} />}
         {p > selOutstanding && <p className="text-xs text-rose-300">Principal cannot exceed the outstanding ({inr(selOutstanding)}).</p>}
 
         {showPrincipal && (

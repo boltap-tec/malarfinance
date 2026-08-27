@@ -1,11 +1,12 @@
 // Builds the pending-amount reminder text sent to a party over WhatsApp, e.g.
 //
-//   Mal-STL22-Pradeep
-//   Total Interest Pending Rs 5,425,
-//   07-2026 - Int_Amount Rs 5,425 - Pending Rs 5,425
+//   Mal-STL21-Mahesh Manmangalam
+//   Total Interest Pending Rs 60,730,
+//   Aug-2025 - Pending Rs 2,275
+//   Sep-2025 - Pending Rs 5,250
 //
 // Used for customers, depositors, other-finance parties and chit members.
-import { monthKey } from './format'
+import { monthKey, monthName } from './format'
 
 export interface ReminderItem {
   month?: string   // label for the period, usually "MM-YYYY"
@@ -23,11 +24,11 @@ export function buildReminder(o: {
   footer?: string
 }): string {
   const totalLabel = o.totalLabel ?? 'Total Interest Pending'
-  const amountWord = o.amountWord ?? 'Int_Amount'
   const pending = o.items
     .filter(i => Math.round(i.pending) > 0)
     .sort((a, b) => monthKey(a.month) - monthKey(b.month))
 
+  const monthLabel = (m?: string) => monthName(m).replace(' ', '-') // "Aug 2025" -> "Aug-2025"
   const lines = [o.header]
   if (pending.length === 0) {
     lines.push('No pending amount. Thank you.')
@@ -35,7 +36,7 @@ export function buildReminder(o: {
     const total = pending.reduce((s, i) => s + i.pending, 0)
     lines.push(`${totalLabel} ${rs(total)},`)
     for (const i of pending) {
-      lines.push(`${i.month ?? '—'} - ${amountWord} ${rs(i.amount)} - Pending ${rs(i.pending)}`)
+      lines.push(`${monthLabel(i.month)} - Pending ${rs(i.pending)}`)
     }
   }
   if (o.footer) lines.push('', o.footer)

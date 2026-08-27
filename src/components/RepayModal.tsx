@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { repo, repayLoan, getSettings } from '../data/repository'
 import { computeInterest } from '../lib/interestEngine'
-import { Modal, Field } from './ui'
+import { Modal, Field, AmountHint } from './ui'
 import { inr, num, fmtDate } from '../lib/format'
 import type { Loan } from '../data/types'
 
@@ -79,6 +79,7 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
         <Field label="Principal repaid (₹)"><input className="input" inputMode="numeric" placeholder="Enter amount" value={principal} onChange={e => setPrincipal(e.target.value)} /></Field>
         <Field label="Repay date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
       </div>
+      <AmountHint value={principal} />
 
       <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
         <input type="checkbox" className="accent-brand-500" checked={includeToday} onChange={e => setIncludeToday(e.target.checked)} />

@@ -4,7 +4,7 @@ import { Building2, Plus, HandCoins, Percent, Trash2 } from 'lucide-react'
 import { repo, addOtherFinanceLoan, deleteOtherFinance, missingRequired, FORM_FIELDS } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import {
-  PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal,
+  PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal, AmountHint,
 } from '../components/ui'
 import { inr, fmtDate, num, phone } from '../lib/format'
 import { useCreateParam } from '../lib/useCreateParam'
@@ -253,6 +253,7 @@ function BorrowForm({ finance, initialCode, onClose, onSaved }: { finance: strin
         <Field label="Amount (₹)"><input className="input" inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} /></Field>
         <Field label="Bought date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
       </div>
+      <AmountHint value={amount} />
       <div className="grid grid-cols-2 gap-3">
         <Field label="Interest type">
           <select className="input" value={type} onChange={e => setType(e.target.value as any)}>

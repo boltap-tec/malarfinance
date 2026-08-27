@@ -84,15 +84,19 @@ export function Modal({
   title, onClose, children, footer,
 }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="card relative z-10 max-h-[90vh] w-full max-w-lg min-w-0 overflow-hidden p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-hd">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200"><X size={18} /></button>
+    // Scroll-container pattern: the backdrop is a fixed, scrollable layer. A tall
+    // dialog (or a short window) then scrolls the WHOLE card into view instead of
+    // clipping its top off-screen; it still centers when it fits.
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="flex min-h-full items-center justify-center">
+        <div className="card relative w-full max-w-lg min-w-0 p-5" onClick={e => e.stopPropagation()}>
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-bold text-hd">{title}</h3>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-200"><X size={18} /></button>
+          </div>
+          <div className="space-y-3">{children}</div>
+          {footer && <div className="mt-5 flex justify-end gap-2">{footer}</div>}
         </div>
-        <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-1">{children}</div>
-        {footer && <div className="mt-5 flex justify-end gap-2">{footer}</div>}
       </div>
     </div>
   )

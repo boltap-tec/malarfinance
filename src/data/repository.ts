@@ -548,13 +548,134 @@ export async function deleteLoan(loanNo: string): Promise<void> {
   persist()
 }
 
+// Undo the business effect of a ledger entry when it is deleted, so the linked
+// loan / deposit / borrowing / interest record is cancelled too — not just the
+// cash row. Returns a short label of what was reversed (for the Activity Log),
+// or '' when the entry was cash-only (expense, income, correction, chit, …).
+const inrTxt = (n: number) => '₹' + Math.round(n).toLocaleString('en-IN')
+
+async function reverseLinkedRecord(row: LedgerRow): Promise<string> {
+  const nature = String(row.Nature_Transaction ?? '')
+  const amt = num(row.Receipt_Amount) || num(row.Payment_Amount)
+  const stl = row.STL_No != null ? String(row.STL_No) : ''
+  const code = row.Loan_No != null ? String(row.Loan_No) : '' // also holds deposit / other-finance codes
+  const finance = String(row.Finance_Name ?? '')
+  if (amt <= 0) return ''
+
+  // Push `amount` back onto pending interest, newest settled rows first.
+  const giveBackInterest = async (table: keyof Dataset, rows: any[]): Promise<number> => {
+    let left = amt
+    const changed: any[] = []
+    for (const r of rows.filter(r => num(r.Amount_Received) > 0)
+      .sort((a, b) => String(b.To_Date ?? b.Month ?? '').localeCompare(String(a.To_Date ?? a.Month ?? '')))) {
+      if (left <= 0) break
+      const give = Math.min(num(r.Amount_Received), left); left -= give
+      r.Amount_Received = num(r.Amount_Received) - give
+      r.Interest_Pending = num(r.Interest_Pending) + give
+      r.Status = num(r.Amount_Received) > 0 ? 'Partial' : 'Pending'
+      changed.push(r)
+    }
+    for (const r of changed) await sUpdate(table, r.ID, { Amount_Received: r.Amount_Received, Interest_Pending: r.Interest_Pending, Status: r.Status })
+    return amt - left
+  }
+
+  switch (nature) {
+    case 'Customer_Loan_Prin_Repayment': {
+      // Put the principal back onto the loan(s) it was repaid from (oldest first).
+      const loans = (db.Loan_Processing ?? [])
+        .filter(l => (code ? l.Loan_No === code : l.Customer_STL_NO === stl) && num(l.Repaid_Amount) > 0)
+        .sort((a, b) => new Date(a.Loan_Given_Date ?? 0).getTime() - new Date(b.Loan_Given_Date ?? 0).getTime())
+      let left = amt, sc = stl
+      for (const l of loans) {
+        if (left <= 0) break
+        const give = Math.min(num(l.Repaid_Amount), left); left -= give
+        await updateLoan(l.Loan_No, { Repaid_Amount: num(l.Repaid_Amount) - give, Outstand_Amount: num(l.Outstand_Amount) + give, Loan_Status: 'Active' })
+        sc = l.Customer_STL_NO
+      }
+      if (sc) recomputeCustomer(sc)
+      return `restored ${inrTxt(amt - left)} principal to loan${code ? ' ' + code : 's'}`
+    }
+    case 'Customer_Interest': {
+      const loanRows = code ? (db.Interest_Details ?? []).filter(i => String(i.Loan_No) === code) : []
+      const rows = loanRows.length ? loanRows : (db.Interest_Details ?? []).filter(i => i.Customer_STL_NO === stl)
+      const back = await giveBackInterest('Interest_Details', rows)
+      recomputeCustomer(stl || rows[0]?.Customer_STL_NO || '')
+      return `made ${inrTxt(back)} interest pending again`
+    }
+    case 'Loan_To_Customer': {
+      // Reverse a disbursal → remove the loan and its interest rows.
+      const loan = (db.Loan_Processing ?? []).find(l => l.Loan_No === code)
+      if (!loan) return ''
+      db.Loan_Processing = (db.Loan_Processing ?? []).filter(l => l.Loan_No !== code)
+      await sDelete('Loan_Processing', code)
+      const its = (db.Interest_Details ?? []).filter(i => String(i.Loan_No) === code)
+      db.Interest_Details = (db.Interest_Details ?? []).filter(i => String(i.Loan_No) !== code)
+      for (const i of its) await sDelete('Interest_Details', i.ID)
+      recomputeCustomer(loan.Customer_STL_NO)
+      return `removed loan ${code} (disbursal cancelled)`
+    }
+    case 'Deposit_From_Customer': {
+      const before = (db.Deposit_Amount ?? []).find(d => d.Deposit_No === code && num(d.Deposit_Amount) === amt)
+      if (!before) return ''
+      db.Deposit_Amount = (db.Deposit_Amount ?? []).filter(d => d !== before)
+      await sReplaceFinance('Deposit_Amount', finance, (db.Deposit_Amount ?? []).filter(d => d.Finance_Name === finance))
+      return `removed deposit ${code} of ${inrTxt(amt)}`
+    }
+    case 'Other_Receipt': {
+      const before = (db.Other_Finance_Loan ?? []).find(o => o.Loan_No === code && num(o.Loan_Amount) === amt)
+      if (!before) return ''
+      db.Other_Finance_Loan = (db.Other_Finance_Loan ?? []).filter(o => o !== before)
+      await sReplaceFinance('Other_Finance_Loan', finance, (db.Other_Finance_Loan ?? []).filter(o => o.Finance_Name === finance))
+      return `removed borrowing ${code} of ${inrTxt(amt)}`
+    }
+    case 'Deposit_Prin_Refund': {
+      let left = amt
+      db.Deposit_Amount = (db.Deposit_Amount ?? []).map(d => {
+        if (left <= 0 || d.Deposit_No !== code || num(d.Repaid_Amount) <= 0) return d
+        const give = Math.min(num(d.Repaid_Amount), left); left -= give
+        const newOut = num(d.Outstand_Amount) + give
+        return { ...d, Repaid_Amount: num(d.Repaid_Amount) - give, Outstand_Amount: newOut, Deposit_Status: newOut > 0 ? 'Active' : d.Deposit_Status }
+      })
+      await sReplaceFinance('Deposit_Amount', finance, (db.Deposit_Amount ?? []).filter(d => d.Finance_Name === finance))
+      return `restored ${inrTxt(amt - left)} to deposit ${code}`
+    }
+    case 'Other_Finance_Loan_Refund': {
+      let left = amt
+      db.Other_Finance_Loan = (db.Other_Finance_Loan ?? []).map(o => {
+        if (left <= 0 || o.Loan_No !== code || num(o.Repaid_Amount) <= 0) return o
+        const give = Math.min(num(o.Repaid_Amount), left); left -= give
+        const newOut = num(o.Outstand_Amount) + give
+        return { ...o, Repaid_Amount: num(o.Repaid_Amount) - give, Outstand_Amount: newOut, Loan_Status: newOut > 0 ? 'Active' : o.Loan_Status }
+      })
+      await sReplaceFinance('Other_Finance_Loan', finance, (db.Other_Finance_Loan ?? []).filter(o => o.Finance_Name === finance))
+      return `restored ${inrTxt(amt - left)} to borrowing ${code}`
+    }
+    case 'Depositer_Interest': {
+      const back = await giveBackInterest('Depositer_Interest', (db.Depositer_Interest ?? []).filter((i: any) => i.Deposit_No === code))
+      return `made ${inrTxt(back)} deposit interest pending again`
+    }
+    case 'Other_Finance_Interest': {
+      const back = await giveBackInterest('Other_Finance_Interest', (db.Other_Finance_Interest ?? []).filter((i: any) => i.Loan_No === code))
+      return `made ${inrTxt(back)} other-finance interest pending again`
+    }
+    default:
+      return '' // Expense / Other income / Balance correction / chit / opening balance — cash only
+  }
+}
+
 export async function deleteLedgerEntry(refId: string): Promise<void> {
   const row = (db.Transaction_Ledger ?? []).find(t => String(t.Ref_ID) === String(refId))
   if (!row) return
+  // Cancel the linked business record first (loan/deposit/interest), then the cash row.
+  const reversed = await reverseLinkedRecord(row)
   db.Transaction_Ledger = (db.Transaction_Ledger ?? []).filter(t => String(t.Ref_ID) !== String(refId))
   await sDelete('Transaction_Ledger', String(refId))
   recomputeBalances(String(row.Finance_Name ?? ''))
-  writeLog({ Action: 'delete', Entity: 'Transaction_Ledger', Entity_Label: `Ref ${refId} · ${row.Description ?? row.Nature_Transaction}`, Before: row })
+  writeLog({
+    Action: 'delete', Entity: 'Transaction_Ledger',
+    Entity_Label: `Ref ${refId} · ${row.Description ?? row.Nature_Transaction}${reversed ? ` — ${reversed}` : ''}`,
+    Before: row,
+  })
   persist()
 }
 

@@ -66,7 +66,7 @@ export default function LedgerTable({
       {del && (
         <ConfirmModal
           title="Delete ledger entry"
-          message={<>Delete <b className="text-hd">{del.Description ?? del.Nature_Transaction}</b> (Ref {del.Ref_ID})? The finance balance will recompute.</>}
+          message={<>Delete <b className="text-hd">{del.Description ?? del.Nature_Transaction}</b> (Ref {del.Ref_ID})? This also <b className="text-amber-300">reverses the linked record</b> — a repayment adds the principal back, interest becomes pending again. The balance recomputes and it's logged.</>}
           onConfirm={async () => { await deleteLedgerEntry(String(del.Ref_ID)); setDel(null); onChanged?.() }}
           onClose={() => setDel(null)}
         />

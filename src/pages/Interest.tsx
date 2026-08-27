@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react'
 import { Zap, Check, Percent } from 'lucide-react'
 import {
   repo, appendInterestRows, appendDepositInterest, appendOtherFinanceInterest,
+  markCustomerPostedUpto, markDepositPostedUpto, markOtherFinancePostedUpto,
   getSettings, setSettings,
 } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
-import { previewPosting, toInterestRow, computeInterest, isMonthEnd, distributeRounding } from '../lib/interestEngine'
+import { previewPosting, toInterestRow, computeInterest, isMonthEnd, distributeRounding, resumeFrom } from '../lib/interestEngine'
 import { PageHeader, Card, StatCard, Badge, Th, Td, EmptyState } from '../components/ui'
 import { inr, num } from '../lib/format'
 import type { Loan } from '../data/types'
@@ -42,7 +43,10 @@ export default function Interest() {
   // Customer loan interest. Rounding is applied per CUSTOMER (not per loan): each
   // loan's raw interest is summed for the customer and that total rounded to ₹10.
   const custPreview = useMemo(() => {
-    const raw = previewPosting(repo.loans(f), from, to, (loanNo, month) => repo.postedMonths(loanNo).has(month))
+    // Interest is charged on the OUTSTANDING principal (not the original loan
+    // amount), and each loan resumes from its own stored posted-till date.
+    const loans = repo.loans(f).map(l => ({ ...l, Loan_Amount: num(l.Outstand_Amount) }))
+    const raw = previewPosting(loans, from, to, l => repo.loanPostedUpto(l.Loan_No))
     const rounded = distributeRounding(raw, p => p.rawInterest, p => p.loan.Customer_STL_NO)
     return raw.map(p => ({ ...p, interest: rounded.get(p) ?? p.interest })).filter(p => p.interest > 0)
   }, [f, from, to, posted])
@@ -55,7 +59,7 @@ export default function Interest() {
       .map(d => {
         // Use the deposit's stored rate, or derive it from past interest when blank.
         const rate = num(d.Interest_Per_Month_Per_Lakh) || repo.derivedDepositRate(d.Deposit_No)
-        const pseudo = { Loan_Amount: num(d.Outstand_Amount), Interest_Type: 'Per_Month', Interest_Per_Month_Per_Lakh: rate, Loan_Given_Date: d.Deposit_Bought_Date } as Loan
+        const pseudo = { Loan_Amount: num(d.Outstand_Amount), Interest_Type: 'Per_Month', Interest_Per_Month_Per_Lakh: rate, Loan_Given_Date: resumeFrom(d.Deposit_Bought_Date, repo.depositPostedUpto(d.Deposit_No)) } as Loan
         const p = computeInterest(pseudo, from, to)
         return { d, p, rate, id: `${d.Deposit_No}-${num(d.Deposit_Amount)}-${p.month}` }
       })
@@ -71,7 +75,7 @@ export default function Interest() {
     const items = repo.otherFinanceLoans(f)
       .filter(o => (o.Loan_Status ?? '').toLowerCase() === 'active' && num(o.Outstand_Amount) > 0)
       .map(o => {
-        const pseudo = { Loan_Amount: num(o.Outstand_Amount), Interest_Type: o.Interest_Type || 'Per_Day', Interest_Per_day_Per_Lakh: num(o.Interest_Per_day_Per_Lakh), Interest_Per_Month_Per_Lakh: num(o.Interest_Per_Month_Per_Lakh), Loan_Given_Date: o.Loan_Bought_Date } as Loan
+        const pseudo = { Loan_Amount: num(o.Outstand_Amount), Interest_Type: o.Interest_Type || 'Per_Day', Interest_Per_day_Per_Lakh: num(o.Interest_Per_day_Per_Lakh), Interest_Per_Month_Per_Lakh: num(o.Interest_Per_Month_Per_Lakh), Loan_Given_Date: resumeFrom(o.Loan_Bought_Date, repo.otherFinancePostedUpto(o.Loan_No)) } as Loan
         const p = computeInterest(pseudo, from, to)
         return { o, p, id: `${o.Loan_No}-${num(o.Loan_Amount)}-${p.month}` }
       })
@@ -100,6 +104,12 @@ export default function Interest() {
       Month: p.month, Description: p.description, Amount_Received: 0, Status: 'Pending', Interest_Pending: p.interest,
       Interest_Type: o.Interest_Type || 'Per_Day',
     })))
+    // Advance each posted item's posted-till to this month end. A posting is the
+    // ONLY thing that moves it — repayments deliberately leave it alone, so a
+    // remaining balance still bills its pre-repay days at the next monthly run.
+    for (const stl of [...new Set(custPreview.map(p => p.loan.Customer_STL_NO))]) await markCustomerPostedUpto(stl, to)
+    for (const x of depPreview) await markDepositPostedUpto(x.d.Deposit_No, to)
+    for (const x of othPreview) await markOtherFinancePostedUpto(x.o.Loan_No, to)
     setSettings({ lastPostedDate: to })
     setPosted(`Posted ${custPreview.length} customer, ${depPreview.length} deposit and ${othPreview.length} other-finance interest lines.`)
   }

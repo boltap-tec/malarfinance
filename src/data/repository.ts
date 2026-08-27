@@ -198,23 +198,32 @@ export const repo = {
   depositPostedMonths(code: string): Set<string> {
     return new Set((db.Depositer_Interest ?? []).filter((i: any) => i.Deposit_No === code && i.Month).map((i: any) => i.Month as string))
   },
-  // Interest "posted up to" for an entity — the LATER of: its last posted
-  // interest To_Date, its stored Interest_Posted_Upto column, and the global
-  // Settings cut-over. Used as the start reference for repay & posting.
+  // Interest "posted up to" for an entity — the LATER of its stored
+  // Interest_Posted_Upto column and the global Settings cut-over. This is the
+  // single source of truth for both posting (its resume date) and repayment.
+  // It is advanced ONLY by a monthly posting (which stamps the column); a
+  // repayment deliberately does NOT move it, so the remaining outstanding still
+  // bills the pre-repay days at the next monthly run. Interest rows are NOT
+  // consulted here — repay writes rows too, and reading them would let a repay
+  // silently push the posted-till forward.
+  // Posted-till for a CUSTOMER (shared by all their loans) — read from the
+  // customer master (STL_CRM), not the loan row.
+  customerPostedUpto(stl: string): string | undefined {
+    const cust = (db.STL_CRM ?? []).find(c => c.Customer_STL_NO === stl)
+    return laterD(cust?.Interest_Posted_Upto, getSettings().lastPostedDate || undefined)
+  },
   loanPostedUpto(loanNo: string): string | undefined {
-    const rowsLast = (db.Interest_Details ?? []).filter(i => String(i.Loan_No) === loanNo).map(i => i.To_Date).filter(Boolean).sort().slice(-1)[0]
     const loan = (db.Loan_Processing ?? []).find(l => l.Loan_No === loanNo)
-    return laterD(laterD(rowsLast, loan?.Interest_Posted_Upto), getSettings().lastPostedDate || undefined)
+    const cust = loan ? (db.STL_CRM ?? []).find(c => c.Customer_STL_NO === loan.Customer_STL_NO) : undefined
+    return laterD(cust?.Interest_Posted_Upto, getSettings().lastPostedDate || undefined)
   },
   depositPostedUpto(code: string): string | undefined {
-    const rowsLast = (db.Depositer_Interest ?? []).filter((i: any) => i.Deposit_No === code).map((i: any) => i.To_Date).filter(Boolean).sort().slice(-1)[0]
     const col = (db.Deposit_Amount ?? []).filter(d => d.Deposit_No === code).map(d => d.Interest_Posted_Upto).filter(Boolean).sort().slice(-1)[0]
-    return laterD(laterD(rowsLast, col), getSettings().lastPostedDate || undefined)
+    return laterD(col, getSettings().lastPostedDate || undefined)
   },
   otherFinancePostedUpto(code: string): string | undefined {
-    const rowsLast = (db.Other_Finance_Interest ?? []).filter((i: any) => i.Loan_No === code).map((i: any) => i.To_Date).filter(Boolean).sort().slice(-1)[0]
     const col = (db.Other_Finance_Loan ?? []).filter(o => o.Loan_No === code).map(o => o.Interest_Posted_Upto).filter(Boolean).sort().slice(-1)[0]
-    return laterD(laterD(rowsLast, col), getSettings().lastPostedDate || undefined)
+    return laterD(col, getSettings().lastPostedDate || undefined)
   },
   // The effective ₹/lakh/month rate for a depositor when it's not stored on the
   // deposit — derived from a full-month past interest row (Interest ÷ amount).
@@ -795,11 +804,28 @@ export async function editLoan(loanNo: string, patch: Partial<Loan>): Promise<vo
   persist()
 }
 
-// The "interest posted up to" per entity is derived from the interest rows
-// (each posting / repay stamps a To_Date) — see repo.loanPostedUpto etc. — so no
-// separate stored column is written (that would risk the delete-then-insert sync
-// used for deposits/other). The optional Interest_Posted_Upto column is still
-// read when present, so a value set directly in the DB is honoured.
+// The "interest posted up to" date lives in the Interest_Posted_Upto column on
+// the CUSTOMER master (STL_CRM) — shared by all that customer's loans — and on
+// each deposit / other-finance record (which are their own masters). A monthly
+// posting stamps it (below); a repayment never touches it. repo.customerPostedUpto
+// etc. read it (falling back to the Settings cut-over when blank). These stamps
+// use a targeted column update (sUpdate by primary key), NOT the delete-then-insert
+// replace, so they're safe to write on the deposit/other tables too.
+export async function markCustomerPostedUpto(stl: string, date: string): Promise<void> {
+  db.STL_CRM = (db.STL_CRM ?? []).map(c => c.Customer_STL_NO === stl ? { ...c, Interest_Posted_Upto: date } : c)
+  await sUpdate('STL_CRM', stl, { Interest_Posted_Upto: date })
+  persist()
+}
+export async function markDepositPostedUpto(code: string, date: string): Promise<void> {
+  db.Deposit_Amount = (db.Deposit_Amount ?? []).map(d => d.Deposit_No === code ? { ...d, Interest_Posted_Upto: date } : d)
+  await sUpdate('Deposit_Amount', code, { Interest_Posted_Upto: date })
+  persist()
+}
+export async function markOtherFinancePostedUpto(code: string, date: string): Promise<void> {
+  db.Other_Finance_Loan = (db.Other_Finance_Loan ?? []).map(o => o.Loan_No === code ? { ...o, Interest_Posted_Upto: date } : o)
+  await sUpdate('Other_Finance_Loan', code, { Interest_Posted_Upto: date })
+  persist()
+}
 
 export async function addCustomer(c: Customer): Promise<void> {
   db.STL_CRM = [c, ...(db.STL_CRM ?? [])]

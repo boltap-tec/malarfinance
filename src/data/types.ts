@@ -36,6 +36,9 @@ export interface Customer {
   Total_Interest_Paid?: number
   Outstanding_Interest?: number
   Status?: string
+  Interest_Posted_Upto?: string   // interest billed up to this date for ALL this
+                                   // customer's loans; only a monthly posting moves
+                                   // it (a repayment never does)
 }
 
 export interface Loan {
@@ -56,7 +59,6 @@ export interface Loan {
   Repaid_Amount?: number
   Outstand_Amount?: number
   Loan_Status?: string
-  Interest_Posted_Upto?: string   // interest billed up to this date (posting or repay)
   Referred_Partner?: string
   Payment_Type?: string
   Remarks?: string

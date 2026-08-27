@@ -101,21 +101,39 @@ export function distributeRounding<T>(items: T[], rawOf: (t: T) => number, keyOf
   return out
 }
 
+// The date a monthly posting should RESUME interest from: the day after the
+// item's stored "posted till" date, but never before the item itself existed
+// (its given date). Returns the effective given-date to hand to computeInterest,
+// which then floors the accrual at max(monthStart, thisDate). This is the rule
+//   start = max(givenDate, postedTill + 1)
+// — the same one repayment uses (see accrueOnRepaidPrincipal).
+export function resumeFrom(givenDate?: string, postedTill?: string): string | undefined {
+  if (!postedTill) return givenDate
+  const resume = dayAfter(postedTill)
+  if (!givenDate) return resume
+  return new Date(resume) > new Date(givenDate) ? resume : givenDate
+}
+
 // Build interest rows for every ACTIVE loan for a given billing window — the
-// server-side "posting" run, previewable before it commits.
+// server-side "posting" run, previewable before it commits. `fromDate`/`toDate`
+// are the calendar-month window (from = the per-month proration denominator);
+// each loan's accrual instead starts from its own posted-till via `postedUptoOf`,
+// so an already-billed period can't be posted twice and a new/partly-billed loan
+// bills only the days it owes.
 export function previewPosting(
   loans: Loan[],
   fromDate: string,
   toDate: string,
-  isPosted?: (loanNo: string, month: string) => boolean,
+  postedUptoOf?: (loan: Loan) => string | undefined,
 ): InterestPreview[] {
   return loans
     .filter(l => (l.Loan_Status ?? '').toLowerCase() === 'active')
     .filter(l => !l.Loan_Given_Date || new Date(l.Loan_Given_Date) <= new Date(toDate))
-    .map(l => computeInterest(l, fromDate, toDate))
+    .map(l => computeInterest(
+      { ...l, Loan_Given_Date: resumeFrom(l.Loan_Given_Date, postedUptoOf?.(l)) },
+      fromDate, toDate,
+    ))
     .filter(p => p.interest > 0)
-    // Skip loans already billed for this month (no double-posting a period).
-    .filter(p => !isPosted || !isPosted(p.loan.Loan_No, p.month))
 }
 
 // ── Interest on a repayment ──────────────────────────────────────────────────

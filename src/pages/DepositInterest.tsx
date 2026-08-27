@@ -19,7 +19,10 @@ export default function DepositInterest() {
   const [del, setDel] = useState<any | null>(null)
   const [adding, setAdding] = useState(false)
 
-  const { rows, monthTotals, billed, paid, pending } = useMemo(() => {
+  const { rows, monthTotals, outMap, billed, paid, pending } = useMemo(() => {
+    // Current outstanding per deposit (summed across its rows), shown per line.
+    const outMap = new Map<string, number>()
+    for (const d of repo.deposits(financeFilter(finance))) outMap.set(d.Deposit_No, (outMap.get(d.Deposit_No) ?? 0) + num(d.Outstand_Amount))
     let list = repo.depositInterest(financeFilter(finance))
     const s = q.trim().toLowerCase()
     if (s) list = list.filter((i: any) =>
@@ -33,7 +36,7 @@ export default function DepositInterest() {
       const t = monthTotals[m] ?? (monthTotals[m] = { interest: 0, received: 0, pending: 0 })
       t.interest += num(r.Interest_Amount); t.received += num(r.Amount_Received); t.pending += num(r.Interest_Pending)
     }
-    return { monthTotals,
+    return { monthTotals, outMap,
       rows: list,
       billed: list.reduce((s2: number, i: any) => s2 + num(i.Interest_Amount), 0),
       paid: list.reduce((s2: number, i: any) => s2 + num(i.Amount_Received), 0),
@@ -64,13 +67,13 @@ export default function DepositInterest() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Depositor</Th><Th>DEP no.</Th><Th>Period</Th><Th right>Interest</Th><Th right>Paid</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Pay</Th>}{isMd && <Th>Edit</Th>}</tr>
+                <tr><Th>Depositor</Th><Th>DEP no.</Th><Th right>Outstanding</Th><Th>Period</Th><Th right>Interest</Th><Th right>Paid</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Pay</Th>}{isMd && <Th>Edit</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.slice(0, 300).map((i: any, k: number, arr: any[]) => (
                   <Fragment key={k}>
                     {(k === 0 || arr[k - 1].Month !== i.Month) && (
-                      <tr className="bg-slate-900/80"><td colSpan={7 + (editable ? 1 : 0) + (isMd ? 1 : 0)} className="px-3 py-1.5">
+                      <tr className="bg-slate-900/80"><td colSpan={8 + (editable ? 1 : 0) + (isMd ? 1 : 0)} className="px-3 py-1.5">
                         <div className="flex flex-wrap items-center gap-3">
                           <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">{i.Month}</span>
                           <span className="text-xs text-slate-400">Interest <b className="text-hd">{inr(monthTotals[i.Month ?? '—']?.interest ?? 0)}</b> · Received <b className="text-emerald-300">{inr(monthTotals[i.Month ?? '—']?.received ?? 0)}</b> · Pending <b className="text-amber-300">{inr(monthTotals[i.Month ?? '—']?.pending ?? 0)}</b></span>
@@ -80,6 +83,7 @@ export default function DepositInterest() {
                     <tr className="hover:bg-slate-800/40">
                       <Td className="text-slate-200">{i.Depositer_Name}</Td>
                       <Td className="text-slate-400">{i.Deposit_No}</Td>
+                      <Td right className="text-slate-300">{inr(outMap.get(i.Deposit_No) ?? 0)}</Td>
                       <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>
                       <Td right className="text-hd">{inr(num(i.Interest_Amount))}</Td>
                       <Td right className="text-emerald-400">{inr(num(i.Amount_Received))}</Td>

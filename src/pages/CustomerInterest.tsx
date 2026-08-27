@@ -20,7 +20,10 @@ export default function CustomerInterest() {
   const [del, setDel] = useState<InterestRow | null>(null)
   const [adding, setAdding] = useState(false)
 
-  const { rows, monthTotals, billed, paid, pending } = useMemo(() => {
+  const { rows, monthTotals, outMap, billed, paid, pending } = useMemo(() => {
+    // Current outstanding per loan, to show alongside each interest line.
+    const outMap = new Map<string, number>()
+    for (const l of repo.loans(financeFilter(finance))) outMap.set(l.Loan_No, num(l.Outstand_Amount))
     let list = repo.interest(financeFilter(finance))
     const s = q.trim().toLowerCase()
     if (s) list = list.filter(i =>
@@ -35,7 +38,7 @@ export default function CustomerInterest() {
       t.interest += num(r.Interest_Amount); t.received += num(r.Amount_Received); t.pending += num(r.Interest_Pending)
     }
     return {
-      rows: list, monthTotals,
+      rows: list, monthTotals, outMap,
       billed: list.reduce((s2, i) => s2 + num(i.Interest_Amount), 0),
       paid: list.reduce((s2, i) => s2 + num(i.Amount_Received), 0),
       pending: list.reduce((s2, i) => s2 + num(i.Interest_Pending), 0),
@@ -65,13 +68,13 @@ export default function CustomerInterest() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Customer</Th><Th>Loan</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Collect</Th>}{isMd && <Th>Edit</Th>}</tr>
+                <tr><Th>Customer</Th><Th>Loan</Th><Th right>Outstanding</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Collect</Th>}{isMd && <Th>Edit</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.slice(0, 300).map((i, k, arr) => (
                   <Fragment key={k}>
                     {(k === 0 || arr[k - 1].Month !== i.Month) && (
-                      <tr className="bg-slate-900/80"><td colSpan={7 + (editable ? 1 : 0) + (isMd ? 1 : 0)} className="px-3 py-1.5">
+                      <tr className="bg-slate-900/80"><td colSpan={8 + (editable ? 1 : 0) + (isMd ? 1 : 0)} className="px-3 py-1.5">
                         <div className="flex flex-wrap items-center gap-3">
                           <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">{monthName(i.Month)}</span>
                           <span className="text-xs text-slate-400">Interest <b className="text-hd">{inr(monthTotals[i.Month ?? '—']?.interest ?? 0)}</b> · Received <b className="text-emerald-300">{inr(monthTotals[i.Month ?? '—']?.received ?? 0)}</b> · Pending <b className="text-amber-300">{inr(monthTotals[i.Month ?? '—']?.pending ?? 0)}</b></span>
@@ -81,6 +84,7 @@ export default function CustomerInterest() {
                     <tr className="hover:bg-slate-800/40">
                       <Td className="text-slate-200">{i.Customer_Name}</Td>
                       <Td className="text-slate-400">{i.Loan_No}</Td>
+                      <Td right className="text-slate-300">{inr(outMap.get(i.Loan_No) ?? 0)}</Td>
                       <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>
                       <Td right className="text-hd">{inr(num(i.Interest_Amount))}</Td>
                       <Td right className="text-emerald-400">{inr(num(i.Amount_Received))}</Td>

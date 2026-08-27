@@ -35,7 +35,10 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
   // customer shouldn't be charged for today. The ledger still uses the repay date.
   const calcTo = includeToday ? date : shiftDay(date, -1)
   const accrue = useMemo(() => {
-    const from = lastTo ? nextDay(lastTo) : (loan.Loan_Given_Date ?? calcTo)
+    let from = lastTo ? nextDay(lastTo) : (loan.Loan_Given_Date ?? calcTo)
+    // Never bill before the loan existed — a loan given after the last-posted /
+    // Settings cut-over date starts from its own given date.
+    if (loan.Loan_Given_Date && new Date(loan.Loan_Given_Date) > new Date(from)) from = loan.Loan_Given_Date
     if (new Date(from) > new Date(calcTo)) return null
     const pr = computeInterest({ ...loan, Loan_Amount: base }, from, calcTo)
     return pr.interest > 0 ? { from: pr.actualFromDate, to: pr.toDate, amount: pr.interest, month: pr.month } : null
@@ -70,7 +73,7 @@ export default function RepayModal({ loan, onClose, onSaved, interestOnly }: { l
         <div className="flex justify-between"><span className="text-slate-400">Outstanding principal</span><span className="font-semibold text-hd">{inr(outstanding)}</span></div>
         <div className="mt-1 flex justify-between"><span className="text-slate-400">Pending interest</span><span className="font-semibold text-amber-300">{inr(pendingInterest)}</span></div>
         <div className="mt-1 flex justify-between">
-          <span className="text-slate-400">Interest on repaid amount (to {fmtDate(calcTo)}{lastTo ? `, since ${fmtDate(lastTo)}` : ''})</span>
+          <span className="text-slate-400">Interest on repaid amount (to {fmtDate(calcTo)}{accrue ? `, since ${fmtDate(accrue.from)}` : ''})</span>
           <span className="font-semibold text-amber-300">{inr(accrued)}</span>
         </div>
       </div>

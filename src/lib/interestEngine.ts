@@ -129,7 +129,11 @@ export function accrueOnRepaidPrincipal(lines: DebtLine[], principal: number, ca
     if (out <= 0) continue
     const slice = Math.min(out, left)
     left -= slice
-    const from = l.lastTo ? dayAfter(l.lastTo) : (l.givenDate ?? calcTo)
+    // Start billing the day after the last interest (or the Settings cut-over
+    // date when none). But never before the loan/deposit existed: if it was
+    // given AFTER that fallback date, bill from its own given date instead.
+    let from = l.lastTo ? dayAfter(l.lastTo) : (l.givenDate ?? calcTo)
+    if (l.givenDate && new Date(l.givenDate) > new Date(from)) from = l.givenDate
     if (new Date(from) > new Date(calcTo)) continue
     const pr = computeInterest({
       Loan_Amount: slice,

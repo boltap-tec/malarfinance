@@ -31,8 +31,39 @@ export default function PartnerDetail() {
       t.billed += num(i.Interest_Amount); t.pending += num(i.Interest_Pending)
     }
     const months = Object.entries(byMonth).sort((a, b) => monthKey(b[0]) - monthKey(a[0]))
+
+    // Per-customer OUTSTANDING loan (referred by this partner), only where > 0.
+    const outMap = new Map<string, { name: string; outstanding: number; count: number }>()
+    for (const l of loans) {
+      const key = l.Customer_STL_NO || l.Customer_Name || '—'
+      const c = outMap.get(key) ?? { name: l.Customer_Name ?? key, outstanding: 0, count: 0 }
+      c.outstanding += num(l.Outstand_Amount); c.count++
+      outMap.set(key, c)
+    }
+    const custOutstanding = [...outMap.values()].filter(c => c.outstanding > 0).sort((a, b) => b.outstanding - a.outstanding)
+
+    // Per-customer INTEREST PENDING, only where > 0.
+    const pendMap = new Map<string, { name: string; pending: number }>()
+    for (const i of interest) {
+      const key = i.Customer_STL_NO || i.Customer_Name || '—'
+      const c = pendMap.get(key) ?? { name: i.Customer_Name ?? key, pending: 0 }
+      c.pending += num(i.Interest_Pending)
+      pendMap.set(key, c)
+    }
+    const custPending = [...pendMap.values()].filter(c => c.pending > 0).sort((a, b) => b.pending - a.pending)
+
+    // Interest-pending LEDGER: every interest line still carrying a balance,
+    // newest month first (then largest pending).
+    const pendingLedger = interest
+      .filter(i => num(i.Interest_Pending) > 0)
+      .map(i => ({
+        name: i.Customer_Name ?? '', loanNo: i.Loan_No ?? '', month: i.Month ?? '—',
+        billed: num(i.Interest_Amount), received: num(i.Amount_Received), pending: num(i.Interest_Pending),
+      }))
+      .sort((a, b) => monthKey(b.month) - monthKey(a.month) || b.pending - a.pending)
+
     return {
-      partner, loans, interest, months, pendingPrev,
+      partner, loans, interest, months, pendingPrev, custOutstanding, custPending, pendingLedger,
       given: loans.reduce((s, l) => s + num(l.Loan_Amount), 0),
       outstanding: loans.reduce((s, l) => s + num(l.Outstand_Amount), 0),
       pendingTotal: interest.reduce((s, i) => s + num(i.Interest_Pending), 0),
@@ -122,6 +153,9 @@ interface PartnerPdf {
   partner: import('../data/types').Partner
   loans: import('../data/types').Loan[]
   months: [string, { billed: number; pending: number }][]
+  custOutstanding: { name: string; outstanding: number; count: number }[]
+  custPending: { name: string; pending: number }[]
+  pendingLedger: { name: string; loanNo: string; month: string; billed: number; received: number; pending: number }[]
   given: number; outstanding: number; pendingTotal: number; received: number; pendingPrev: number
 }
 function sharePartnerPdf(d: PartnerPdf): void {
@@ -141,6 +175,29 @@ function sharePartnerPdf(d: PartnerPdf): void {
     <td>${esc(monthName(m))}</td>
     <td class="r">${rup(v.billed)}</td>
     <td class="r ${v.pending > 0 ? 'amber' : ''}">${v.pending ? rup(v.pending) : '—'}</td></tr>`).join('')
+
+  // Customers with outstanding loan > 0.
+  const outTotal = d.custOutstanding.reduce((s, c) => s + c.outstanding, 0)
+  const custOutRows = d.custOutstanding.map(c => `<tr>
+    <td>${esc(c.name)}</td>
+    <td class="r">${c.count}</td>
+    <td class="r amber">${rup(c.outstanding)}</td></tr>`).join('')
+
+  // Customers with interest pending > 0.
+  const pendTotal = d.custPending.reduce((s, c) => s + c.pending, 0)
+  const custPendRows = d.custPending.map(c => `<tr>
+    <td>${esc(c.name)}</td>
+    <td class="r amber">${rup(c.pending)}</td></tr>`).join('')
+
+  // Interest-pending ledger (line by line).
+  const ledgerTotal = d.pendingLedger.reduce((s, r) => s + r.pending, 0)
+  const ledgerRows = d.pendingLedger.map(r => `<tr>
+    <td>${esc(r.name)}</td>
+    <td>${esc(r.loanNo)}</td>
+    <td>${esc(monthName(r.month))}</td>
+    <td class="r">${rup(r.billed)}</td>
+    <td class="r">${rup(r.received)}</td>
+    <td class="r amber">${rup(r.pending)}</td></tr>`).join('')
 
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Partner statement — ${esc(p.Partner_Name)}</title>
   <style>
@@ -191,6 +248,18 @@ function sharePartnerPdf(d: PartnerPdf): void {
         ${d.months.length ? `<h3>Interest by month</h3>
         <table><thead><tr><th>Month</th><th class="r">Billed</th><th class="r">Pending</th></tr></thead>
         <tbody>${monthRows}</tbody></table>` : ''}
+
+        <h3>Customers with outstanding loan &gt; 0 · ${rup(outTotal)}</h3>
+        <table><thead><tr><th>Customer</th><th class="r">Loans</th><th class="r">Outstanding</th></tr></thead>
+        <tbody>${custOutRows || '<tr><td colspan="3">No customer has an outstanding loan.</td></tr>'}</tbody></table>
+
+        <h3>Customers with interest pending &gt; 0 · ${rup(pendTotal)}</h3>
+        <table><thead><tr><th>Customer</th><th class="r">Interest pending</th></tr></thead>
+        <tbody>${custPendRows || '<tr><td colspan="2">No customer has pending interest.</td></tr>'}</tbody></table>
+
+        <h3>Interest pending ledger · ${rup(ledgerTotal)}</h3>
+        <table><thead><tr><th>Customer</th><th>Loan</th><th>Month</th><th class="r">Billed</th><th class="r">Received</th><th class="r">Pending</th></tr></thead>
+        <tbody>${ledgerRows || '<tr><td colspan="6">No pending interest lines.</td></tr>'}</tbody></table>
       </div>
       <div class="foot"><span>Generated ${today}</span><span>Arul Finance</span></div>
     </div>

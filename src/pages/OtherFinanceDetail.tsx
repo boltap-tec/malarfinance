@@ -16,10 +16,13 @@ export default function OtherFinanceDetail() {
   const { code = '' } = useParams()
   const id = decodeURIComponent(code)
   const role = useApp(s => s.user?.role)
+  const finance = useApp(s => s.finance)
   const setFinance = useApp(s => s.setFinance)
   const navigate = useNavigate()
-  const editable = canEdit(role)
-  const isMd = role === 'md'
+  // "All finances" is view-only — switch to this borrowing's finance to transact.
+  const viewOnly = finance === 'ALL'
+  const editable = canEdit(role) && !viewOnly
+  const isMd = role === 'md' && !viewOnly
   const [sp] = useSearchParams()
   const doParam = sp.get('do')
   const [tick, setTick] = useState(0)
@@ -76,6 +79,13 @@ export default function OtherFinanceDetail() {
           </div>
         }
       />
+
+      {canEdit(role) && viewOnly && (
+        <p className="mb-4 text-xs text-amber-300/80">
+          Viewing all finances (read-only).{' '}
+          <button className="font-semibold text-brand-300 underline hover:text-brand-200" onClick={() => setFinance(first.Finance_Name)}>Switch to {first.Finance_Name}</button>{' '}to repay or pay interest.
+        </p>
+      )}
 
       <div className="mb-4 flex flex-wrap gap-4 text-sm text-slate-400">
         <span>{phone(first.Loan_bought_Finance_Phone_No)}</span>

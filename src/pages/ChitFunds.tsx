@@ -10,8 +10,9 @@ import { inr, fmtDate, num } from '../lib/format'
 
 export default function ChitFunds() {
   const financeSel = useApp(s => s.finance)
+  const viewOnly = financeSel === 'ALL'  // combined view is read-only
   const role = useApp(s => s.user?.role)
-  const editable = canEdit(role)
+  const editable = canEdit(role) && !viewOnly
   const finance = financeFilter(financeSel)
   const [tick, setTick] = useState(0)
   const [creating, setCreating] = useCreateParam()
@@ -34,6 +35,8 @@ export default function ChitFunds() {
         subtitle="Chit funds your finance runs — open a fund to manage members, auctions and dues."
         action={editable && <button className="btn-primary !py-1.5" onClick={() => setCreating(true)}><Plus size={15} /> New chit</button>}
       />
+
+      {canEdit(role) && viewOnly && <p className="mb-4 text-xs text-amber-300/80">Viewing all finances (read-only). Pick a single finance in the switcher to run chit transactions.</p>}
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Chit funds" value={chits.length} tone="blue" icon={<Boxes size={18} />} />

@@ -11,7 +11,7 @@ import { inr, fmtDate, num } from '../lib/format'
 export default function ChitTransactions() {
   const financeSel = useApp(s => s.finance)
   const role = useApp(s => s.user?.role)
-  const editable = canEdit(role)
+  const editable = canEdit(role) && financeSel !== 'ALL'  // combined view is read-only
   const finance = financeFilter(financeSel)
   const [tick, setTick] = useState(0)
   const [collect, setCollect] = useState<ChitLedgerRow | null>(null)

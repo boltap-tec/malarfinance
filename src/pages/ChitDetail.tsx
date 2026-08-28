@@ -23,7 +23,8 @@ export default function ChitDetail() {
   const { chitId = '' } = useParams()
   const id = decodeURIComponent(chitId)
   const role = useApp(s => s.user?.role)
-  const editable = canEdit(role)
+  const financeSel = useApp(s => s.finance)
+  const editable = canEdit(role) && financeSel !== 'ALL'  // combined view is read-only
   const [tick, setTick] = useState(0)
   const [modal, setModal] = useState<ModalState>(null)
   const refresh = () => { setModal(null); setTick(t => t + 1) }

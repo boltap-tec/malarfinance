@@ -17,9 +17,12 @@ export default function CustomerDetail() {
   const id = decodeURIComponent(stl)
   const navigate = useNavigate()
   const role = useApp(s => s.user?.role)
+  const finance = useApp(s => s.finance)
   const setFinance = useApp(s => s.setFinance)
-  const editable = canEdit(role)
-  const isMd = role === 'md'
+  // "All finances" is view-only — switch to this customer's finance to transact.
+  const viewOnly = finance === 'ALL'
+  const editable = canEdit(role) && !viewOnly
+  const isMd = role === 'md' && !viewOnly
   const [sp] = useSearchParams()
   const doParam = sp.get('do')
   const [tick, setTick] = useState(0)
@@ -88,6 +91,13 @@ export default function CustomerDetail() {
           </div>
         }
       />
+
+      {canEdit(role) && viewOnly && (
+        <p className="mb-4 text-xs text-amber-300/80">
+          Viewing all finances (read-only).{' '}
+          <button className="font-semibold text-brand-300 underline hover:text-brand-200" onClick={() => setFinance(customer.Finance_Name)}>Switch to {customer.Finance_Name}</button>{' '}to give a loan, repay or pay interest.
+        </p>
+      )}
 
       <div className="mb-4 flex flex-wrap gap-4 text-sm text-slate-400">
         <span className="flex items-center gap-1.5"><Phone size={14} /> {phone(customer.Customer_Phone_No)}</span>

@@ -10,8 +10,10 @@ import { inr, fmtDate, num, monthKey, monthName } from '../lib/format'
 export default function DepositInterest() {
   const finance = useApp(s => s.finance)
   const role = useApp(s => s.user?.role)
-  const editable = canEdit(role)
-  const isMd = role === 'md'
+  // "All finances" is view-only — gate every transaction on a single finance.
+  const viewOnly = finance === 'ALL'
+  const editable = canEdit(role) && !viewOnly
+  const isMd = role === 'md' && !viewOnly
   const [q, setQ] = useState('')
   const [monthSel, setMonthSel] = useState('all')
   const [tick, setTick] = useState(0)
@@ -55,6 +57,8 @@ export default function DepositInterest() {
         subtitle="Interest you owe depositors — maintained like customer interest."
         action={isMd && <button className="btn-primary !py-1.5" onClick={() => setAdding(true)}><Plus size={15} /> Add interest</button>}
       />
+
+      {canEdit(role) && viewOnly && <p className="mb-3 text-xs text-amber-300/80">Viewing all finances. Pick a single finance in the switcher to add or pay interest.</p>}
 
       <div className="mb-4 grid grid-cols-3 gap-3">
         <StatCard label="Total interest" value={inr(billed)} tone="blue" icon={<Percent size={18} />} />

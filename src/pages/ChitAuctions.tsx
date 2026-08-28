@@ -12,7 +12,7 @@ type Modal = { kind: 'post' } | { kind: 'taker'; auction: ChitAuction } | null
 export default function ChitAuctions() {
   const financeSel = useApp(s => s.finance)
   const role = useApp(s => s.user?.role)
-  const editable = canEdit(role)
+  const editable = canEdit(role) && financeSel !== 'ALL'  // combined view is read-only
   const finance = financeFilter(financeSel)
   const [tick, setTick] = useState(0)
   const [modal, setModal] = useState<Modal>(null)

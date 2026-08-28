@@ -52,6 +52,8 @@ export default function Loans() {
         }
       />
 
+      {canEdit(role) && finance === 'ALL' && <p className="mb-3 text-xs text-amber-300/80">Pick a single finance in the switcher to give a loan.</p>}
+
       <Card className="mb-4 !p-3">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[220px]">

@@ -12,9 +12,11 @@ import type { Loan } from '../data/types'
 export default function LoanDetail() {
   const { loanNo = '' } = useParams()
   const role = useApp(s => s.user?.role)
+  const finance = useApp(s => s.finance)
   const id = decodeURIComponent(loanNo)
   const [tick, setTick] = useState(0)
-  const isMd = role === 'md'
+  // "All finances" is view-only — no editing until a single finance is picked.
+  const isMd = role === 'md' && finance !== 'ALL'
   const loan = useMemo(() => repo.loan(id), [id, tick])
   const interest = useMemo(() => repo.interestByLoan(id), [id, tick])
   const [repayOpen, setRepayOpen] = useState(false)

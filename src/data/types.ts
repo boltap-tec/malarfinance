@@ -308,6 +308,7 @@ export interface ChitLedgerRow {
 // Net "they owe you" per person = sum(out) − sum(in).
 export interface HandExchange {
   ID: string
+  Finance_Name?: string        // which finance firm this hand-exchange book belongs to
   Date?: string
   Person: string
   Person_Phone?: number | string
@@ -423,4 +424,14 @@ export interface Dataset {
   Hand_Exchange: HandExchange[]
   Jewel_Loan: any[]
   Interest_Posting_Log: PostingLog[]
+  App_Credential: AppCredential[]
+}
+
+// One login PIN per phone number, shared across every role that phone holds (an
+// MD of one finance who is also a partner in another uses the same PIN). Stored
+// in Supabase so it works on every device; defaults to '1234' until changed.
+export interface AppCredential {
+  Phone: string
+  PIN: string
+  Updated_On?: string
 }

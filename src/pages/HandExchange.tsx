@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Handshake, Plus, ArrowUpRight, ArrowDownLeft, Trash2, Pencil, Search } from 'lucide-react'
 import { repo, addHandEntry, updateHandEntry, deleteHandEntry } from '../data/repository'
-import { useApp, canEdit } from '../store/app'
+import { useApp, canEdit, financeFilter } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, Th, Td, EmptyState, Modal, Field, ConfirmModal } from '../components/ui'
 import type { HandExchange } from '../data/types'
 import { inr, inrShort, fmtDate, phone as fmtPhone, num } from '../lib/format'
@@ -53,7 +53,11 @@ function withRunningBalance(history: HandExchange[]): { e: HandExchange; balance
 
 export default function HandExchange() {
   const role = useApp(s => s.user?.role)
+  const finance = useApp(s => s.finance)
   const editable = canEdit(role)
+  // New entries must land in a specific finance firm's book, so adding needs a
+  // single finance picked in the switcher (not the combined 'ALL' view).
+  const canAdd = editable && finance !== 'ALL'
   const [tick, setTick] = useState(0)
   const [entry, setEntry] = useState<EntrySeed | null>(null)
   const [openPerson, setOpenPerson] = useState<string | null>(null)
@@ -61,8 +65,8 @@ export default function HandExchange() {
   const [q, setQ] = useState('')
   const [sort, setSort] = useState<'balance' | 'name' | 'recent'>('balance')
 
-  const people = useMemo(() => repo.handPeople(), [tick])
-  const summary = useMemo(() => repo.handSummary(), [tick])
+  const people = useMemo(() => repo.handPeople(financeFilter(finance)), [tick, finance])
+  const summary = useMemo(() => repo.handSummary(financeFilter(finance)), [tick, finance])
   const refresh = () => { setEntry(null); setTick(t => t + 1) }
 
   const counts = useMemo(() => ({
@@ -93,9 +97,13 @@ export default function HandExchange() {
     <div>
       <PageHeader
         title="Hand exchange"
-        subtitle="Personal money you give and take with people you know — a separate module, kept entirely out of your finance ledger and balances."
-        action={editable && <button className="btn-primary !py-1.5" onClick={() => setEntry({})}><Plus size={15} /> New entry</button>}
+        subtitle="Money given and taken with people you know — a separate book per finance firm, kept entirely out of that firm's ledger and balances."
+        action={canAdd && <button className="btn-primary !py-1.5" onClick={() => setEntry({})}><Plus size={15} /> New entry</button>}
       />
+
+      {editable && finance === 'ALL' && (
+        <p className="mb-4 text-xs text-amber-300/80">Showing all firms combined. Pick a single finance in the switcher to add a hand-exchange entry.</p>
+      )}
 
       <div className="mb-4 grid grid-cols-3 gap-3">
         <StatCard label="They owe you" value={inrShort(summary.theyOwe)} tone="green" icon={<ArrowDownLeft size={18} />} />
@@ -130,7 +138,7 @@ export default function HandExchange() {
       </div>
 
       {people.length === 0 ? (
-        <EmptyState title="No hand-exchange records yet" hint={editable ? 'Use “New entry” to record giving or taking money.' : undefined} />
+        <EmptyState title="No hand-exchange records yet" hint={canAdd ? 'Use “New entry” to record giving or taking money.' : editable ? 'Pick a single finance in the switcher to add an entry.' : undefined} />
       ) : shown.length === 0 ? (
         <EmptyState title="No matches" hint="Try a different tab or search." />
       ) : (
@@ -138,12 +146,12 @@ export default function HandExchange() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Person</Th><Th>Last</Th><Th right>Entries</Th><Th right>Net balance</Th>{editable && <Th>Actions</Th>}</tr>
+                <tr><Th sticky>Person</Th><Th>Last</Th><Th right>Entries</Th><Th right>Net balance</Th>{canAdd && <Th>Actions</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {shown.map(p => (
-                  <tr key={p.name} className="hover:bg-slate-800/40">
-                    <Td>
+                  <tr key={p.name} className="group hover:bg-slate-800/40">
+                    <Td sticky>
                       <button className="flex items-center gap-2.5 text-left" onClick={() => setOpenPerson(p.name)}>
                         <Avatar name={p.name} />
                         <span className="min-w-0">
@@ -164,7 +172,7 @@ export default function HandExchange() {
                             {inr(Math.abs(p.net))} <span className="text-xs font-normal text-slate-500">{p.net > 0 ? 'owes you' : 'you owe'}</span>
                           </span>}
                     </Td>
-                    {editable && (
+                    {canAdd && (
                       <Td>
                         <div className="flex gap-1.5">
                           <button title="Give" onClick={() => setEntry({ person: p.name, phone: p.phone, category: p.category, type: 'Give' })} className="btn-ghost !px-2 !py-1 text-xs text-rose-300 ring-1 ring-inset ring-rose-500/30"><ArrowUpRight size={13} /> Give</button>
@@ -180,16 +188,16 @@ export default function HandExchange() {
         </Card>
       )}
 
-      {entry && <EntryModal seed={entry} onClose={() => setEntry(null)} onSaved={refresh} />}
-      {openPerson && <PersonModal person={openPerson} editable={editable} onClose={() => setOpenPerson(null)} onChanged={() => setTick(t => t + 1)} />}
+      {entry && <EntryModal seed={entry} finance={finance} onClose={() => setEntry(null)} onSaved={refresh} />}
+      {openPerson && <PersonModal person={openPerson} finance={finance} editable={editable} canAdd={canAdd} onClose={() => setOpenPerson(null)} onChanged={() => setTick(t => t + 1)} />}
     </div>
   )
 }
 
 // Record or edit a give / get / borrow / return, for an existing or brand-new person.
-function EntryModal({ seed, onClose, onSaved }: { seed: EntrySeed; onClose: () => void; onSaved: () => void }) {
+function EntryModal({ seed, finance, onClose, onSaved }: { seed: EntrySeed; finance: string; onClose: () => void; onSaved: () => void }) {
   const editing = seed.edit
-  const known = repo.handPeople()
+  const known = repo.handPeople(financeFilter(finance))
   const lockedPerson = !!editing || !!seed.person
   const [personMode, setPersonMode] = useState<'existing' | 'new'>(known.length ? 'existing' : 'new')
   const [person, setPerson] = useState(seed.person ?? known[0]?.name ?? '')
@@ -216,7 +224,7 @@ function EntryModal({ seed, onClose, onSaved }: { seed: EntrySeed; onClose: () =
     } else {
       const cat = usingNew ? category : (seed.category ?? known.find(k => k.name.toLowerCase() === finalName.toLowerCase())?.category ?? 'Customer')
       await addHandEntry({
-        Date: date, Person: finalName, Person_Phone: usingNew && newPhone ? newPhone : seed.phone, Category: cat,
+        Finance_Name: finance, Date: date, Person: finalName, Person_Phone: usingNew && newPhone ? newPhone : seed.phone, Category: cat,
         Amount: num(amount), Direction: dir, Type: type, Mode: mode, Note: note.trim() || undefined,
       })
     }
@@ -283,12 +291,12 @@ function EntryModal({ seed, onClose, onSaved }: { seed: EntrySeed; onClose: () =
 }
 
 // One person's full history as a running-balance statement + quick add / edit.
-function PersonModal({ person, editable, onClose, onChanged }: { person: string; editable: boolean; onClose: () => void; onChanged: () => void }) {
+function PersonModal({ person, finance, editable, canAdd, onClose, onChanged }: { person: string; finance: string; editable: boolean; canAdd: boolean; onClose: () => void; onChanged: () => void }) {
   const [tick, setTick] = useState(0)
   const [del, setDel] = useState<HandExchange | null>(null)
   const [form, setForm] = useState<EntrySeed | null>(null)
-  const history = useMemo(() => repo.handHistory(person), [person, tick])
-  const category = useMemo(() => repo.handPeople().find(p => p.name.toLowerCase() === person.toLowerCase())?.category ?? 'Customer', [person, tick])
+  const history = useMemo(() => repo.handHistory(person, financeFilter(finance)), [person, finance, tick])
+  const category = useMemo(() => repo.handPeople(financeFilter(finance)).find(p => p.name.toLowerCase() === person.toLowerCase())?.category ?? 'Customer', [person, finance, tick])
   const rows = useMemo(() => withRunningBalance(history), [history])
   const net = rows.length ? rows[0].balance : 0
   const afterChange = () => { setForm(null); setTick(t => t + 1); onChanged() }
@@ -297,7 +305,7 @@ function PersonModal({ person, editable, onClose, onChanged }: { person: string;
     <Modal
       title={person}
       onClose={onClose}
-      footer={editable ? <>
+      footer={canAdd ? <>
         <button className="btn-ghost text-rose-300 ring-1 ring-inset ring-rose-500/30" onClick={() => setForm({ person, category, type: 'Give' })}><ArrowUpRight size={15} /> Give</button>
         <button className="btn-ghost text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setForm({ person, category, type: 'Get' })}><ArrowDownLeft size={15} /> Get</button>
         <button className="btn-ghost" onClick={() => setForm({ person, category, type: 'Borrow' })}>Borrow</button>
@@ -344,7 +352,7 @@ function PersonModal({ person, editable, onClose, onChanged }: { person: string;
         {rows.length === 0 && <p className="py-3 text-sm text-slate-500">No entries.</p>}
       </div>
 
-      {form && <EntryModal seed={form} onClose={() => setForm(null)} onSaved={afterChange} />}
+      {form && <EntryModal seed={form} finance={finance} onClose={() => setForm(null)} onSaved={afterChange} />}
       {del && (
         <ConfirmModal
           title="Delete entry"

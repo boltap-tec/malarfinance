@@ -393,22 +393,26 @@ export const repo = {
     }
   },
 
-  // ── Hand exchange (personal give & take — outside all finance data) ────────
-  handEntries(): HandExchange[] {
-    return (db.Hand_Exchange ?? []).slice().sort((a, b) => new Date(b.Date ?? 0).getTime() - new Date(a.Date ?? 0).getTime())
+  // ── Hand exchange (personal give & take — its own book PER FINANCE FIRM,
+  // kept outside every finance ledger). Pass a finance name to scope to that
+  // firm's book; omit (undefined) to see all firms combined.
+  handEntries(finance?: string): HandExchange[] {
+    return (db.Hand_Exchange ?? []).filter(e => !finance || e.Finance_Name === finance)
+      .slice().sort((a, b) => new Date(b.Date ?? 0).getTime() - new Date(a.Date ?? 0).getTime())
   },
-  handHistory(person: string): HandExchange[] {
+  handHistory(person: string, finance?: string): HandExchange[] {
     const key = person.trim().toLowerCase()
-    return (db.Hand_Exchange ?? []).filter(e => (e.Person ?? '').trim().toLowerCase() === key)
+    return (db.Hand_Exchange ?? []).filter(e => (e.Person ?? '').trim().toLowerCase() === key && (!finance || e.Finance_Name === finance))
       .sort((a, b) => new Date(b.Date ?? 0).getTime() - new Date(a.Date ?? 0).getTime())
   },
   // One row per person, with the net balance (net > 0 → they owe you).
   // `category` (Customer / Supplier) is taken from the person's most recent
   // entry that carries one — a cosmetic grouping, defaults to 'Customer'.
-  handPeople(): { name: string; phone?: number | string; category: string; net: number; count: number; last?: string }[] {
+  handPeople(finance?: string): { name: string; phone?: number | string; category: string; net: number; count: number; last?: string }[] {
     type Row = { name: string; phone?: number | string; category: string; net: number; count: number; last?: string; _catAt?: string }
     const map = new Map<string, Row>()
     for (const e of db.Hand_Exchange ?? []) {
+      if (finance && e.Finance_Name !== finance) continue
       const key = (e.Person ?? '').trim().toLowerCase()
       if (!key) continue
       const cur = map.get(key) ?? { name: e.Person, phone: e.Person_Phone ?? undefined, category: 'Customer', net: 0, count: 0, last: e.Date }
@@ -424,30 +428,33 @@ export const repo = {
       .map(({ _catAt, ...r }) => r)
       .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
   },
-  handSummary(): { theyOwe: number; youOwe: number } {
+  handSummary(finance?: string): { theyOwe: number; youOwe: number } {
     let theyOwe = 0, youOwe = 0
-    for (const p of this.handPeople()) { if (p.net > 0) theyOwe += p.net; else youOwe += -p.net }
+    for (const p of this.handPeople(finance)) { if (p.net > 0) theyOwe += p.net; else youOwe += -p.net }
     return { theyOwe, youOwe }
   },
 
   raw<K extends keyof Dataset>(key: K): Dataset[K] { return db[key] },
 }
 
-// ── Credentials (local demo) ─────────────────────────────────────────────────
-// Passwords live in their own localStorage map, default '1234', changeable.
-const CRED_KEY = 'arul-finance:cred:v1'
-function loadCreds(): Record<string, string> {
-  try { return JSON.parse(localStorage.getItem(CRED_KEY) || '{}') } catch { return {} }
-}
+// ── Credentials ──────────────────────────────────────────────────────────────
+// One login PIN per PHONE (not per role), stored in Supabase so it works on every
+// device and stays the same across every role that phone holds. Defaults to
+// '1234' until the person changes it. The App_Credential rows load with the rest
+// of the dataset at startup, so verifyCred can read them synchronously at login.
 export function verifyCred(phone: string, password: string): boolean {
-  const creds = loadCreds()
-  const stored = creds[phone] ?? '1234' // default password until changed
+  const row = (db.App_Credential ?? []).find(c => String(c.Phone) === phone)
+  const stored = String(row?.PIN ?? '1234') // default PIN until changed
   return stored === password
 }
-export function setCred(phone: string, password: string): void {
-  const creds = loadCreds()
-  creds[phone] = password
-  localStorage.setItem(CRED_KEY, JSON.stringify(creds))
+export async function setCred(phone: string, pin: string): Promise<void> {
+  const rows = (db.App_Credential ?? (db.App_Credential = []))
+  const now = new Date().toISOString()
+  const existing = rows.find(c => String(c.Phone) === phone)
+  if (existing) { existing.PIN = pin; existing.Updated_On = now }
+  else rows.unshift({ Phone: phone, PIN: pin, Updated_On: now })
+  await sUpsert('App_Credential', { Phone: phone, PIN: pin, Updated_On: now })
+  persist()
 }
 
 // ── Refresh ──────────────────────────────────────────────────────────────────
@@ -516,7 +523,7 @@ const PK: Partial<Record<keyof Dataset, string>> = {
   Chit_Creation: 'Chit_ID', Chit_Member: 'Member_ID', Chit_Auction: 'Chit_Auction_ID',
   Chit_Taken_Member: 'Chit_Taken_ID', Chit_Ledger: 'ID',
   Invested_Chit: 'Chit_ID', Invested_Chit_Trans: 'ID',
-  Hand_Exchange: 'ID', Interest_Posting_Log: 'ID',
+  Hand_Exchange: 'ID', Interest_Posting_Log: 'ID', App_Credential: 'Phone',
 }
 export let lastWriteError = ''
 function noteErr(where: string, msg?: string) {
@@ -542,6 +549,16 @@ async function sUpdate(table: keyof Dataset, keyVal: string, patch: any): Promis
   const k = PK[table]; if (!k) return
   const { error } = await supabase.from(table as string).update(clean(patch)).eq(k, keyVal)
   noteErr(`update ${table}`, error?.message)
+}
+// Insert-or-update on the primary key — used where a row may or may not exist yet
+// (e.g. a phone's PIN row that Supabase might not have until first change).
+async function sUpsert(table: keyof Dataset, rows: any): Promise<void> {
+  if (!supabase) return
+  const arr = (Array.isArray(rows) ? rows : [rows]).map(clean)
+  if (!arr.length) return
+  const pk = PK[table]
+  const { error } = await supabase.from(table as string).upsert(arr, pk ? { onConflict: pk } : undefined)
+  noteErr(`upsert ${String(table)}`, error?.message)
 }
 async function sDelete(table: keyof Dataset, keyVal: string): Promise<void> {
   if (!supabase) return

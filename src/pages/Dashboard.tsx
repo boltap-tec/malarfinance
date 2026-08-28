@@ -81,8 +81,8 @@ export default function Dashboard() {
       chitDuePending += s.duePending; chitCollected += s.collected; chitPayoutPending += s.payoutPending
     }
 
-    // Hand exchange is personal & not finance-scoped — a simple net owed both ways.
-    const hand = repo.handSummary()
+    // Hand exchange is a separate book PER finance firm — scope to the current one.
+    const hand = repo.handSummary(f)
 
     return {
       activeLoans: activeLoans.length, loanCount: loans.length,

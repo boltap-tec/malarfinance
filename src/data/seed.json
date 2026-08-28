@@ -1,4 +1,5 @@
 {
+"App_Credential": [],
 "Interest_Posting_Log": [],
 "Finance_Details": [
 {
@@ -30626,7 +30627,8 @@
 "Type": "Give",
 "Mode": "Other",
 "Note": "7500+5000 advocate fee",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "67e76b92",
@@ -30638,7 +30640,8 @@
 "Type": "Give",
 "Mode": "Cash",
 "Note": "by finance kannan chit amount 1l-80k",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "a47e6430",
@@ -30650,7 +30653,8 @@
 "Type": "Give",
 "Mode": "Cash",
 "Note": "Valarmathi Chit amount",
-"Remarks": "Given arun  prakash"
+"Remarks": "Given arun  prakash",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "a47e6430-got",
@@ -30662,7 +30666,8 @@
 "Type": "Get",
 "Mode": "Cash",
 "Note": "Received back — Valarmathi Chit amount",
-"Remarks": "Given arun  prakash"
+"Remarks": "Given arun  prakash",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "3d801040",
@@ -30674,7 +30679,8 @@
 "Type": "Give",
 "Mode": "Cash",
 "Note": "Suresh annan loan amount",
-"Remarks": "Paid to ravi loan"
+"Remarks": "Paid to ravi loan",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "3d801040-got",
@@ -30686,7 +30692,8 @@
 "Type": "Get",
 "Mode": "Cash",
 "Note": "Received back — Suresh annan loan amount",
-"Remarks": "Paid to ravi loan"
+"Remarks": "Paid to ravi loan",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "83586402",
@@ -30698,7 +30705,8 @@
 "Type": "Give",
 "Mode": "Cash",
 "Note": "tyre changed for fascino",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "83586402-got",
@@ -30710,7 +30718,8 @@
 "Type": "Get",
 "Mode": "Cash",
 "Note": "Received back — tyre changed for fascino",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "f966b134",
@@ -30722,7 +30731,8 @@
 "Type": "Give",
 "Mode": "Cash",
 "Note": "Posb account at Pugalur",
-"Remarks": "Given to arun prakash"
+"Remarks": "Given to arun prakash",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "f966b134-got",
@@ -30734,7 +30744,8 @@
 "Type": "Get",
 "Mode": "Cash",
 "Note": "Received back — Posb account at Pugalur",
-"Remarks": "Given to arun prakash"
+"Remarks": "Given to arun prakash",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "906d4679",
@@ -30746,7 +30757,8 @@
 "Type": "Give",
 "Mode": "Cash",
 "Note": "Loan",
-"Remarks": "50k adjusted and 50k pending out of 1l"
+"Remarks": "50k adjusted and 50k pending out of 1l",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "63a36117",
@@ -30758,7 +30770,8 @@
 "Type": "Give",
 "Mode": "Cash",
 "Note": "kovil vari",
-"Remarks": "by gpay"
+"Remarks": "by gpay",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "63a36117-got",
@@ -30770,7 +30783,8 @@
 "Type": "Get",
 "Mode": "Cash",
 "Note": "Received back — kovil vari",
-"Remarks": "by gpay"
+"Remarks": "by gpay",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "c79cbcd7",
@@ -30782,7 +30796,8 @@
 "Type": "Give",
 "Mode": "Cash",
 "Note": "ac",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "c79cbcd7-got",
@@ -30794,7 +30809,8 @@
 "Type": "Get",
 "Mode": "Cash",
 "Note": "Received back — ac",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "b7a854ae",
@@ -30806,7 +30822,8 @@
 "Type": "Give",
 "Mode": "Cash",
 "Note": "Loan",
-"Remarks": "As loan"
+"Remarks": "As loan",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "b7a854ae-got",
@@ -30818,7 +30835,8 @@
 "Type": "Get",
 "Mode": "Cash",
 "Note": "Received back — Loan",
-"Remarks": "As loan"
+"Remarks": "As loan",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "62a95b80",
@@ -30830,7 +30848,8 @@
 "Type": "Give",
 "Mode": "Upi",
 "Note": "By upo",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "62a95b80-got",
@@ -30842,7 +30861,8 @@
 "Type": "Get",
 "Mode": "Upi",
 "Note": "Received back — By upo",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "cca189cc",
@@ -30854,7 +30874,8 @@
 "Type": "Give",
 "Mode": "Cash",
 "Note": "Given to palkarar mama",
-"Remarks": "appa got it"
+"Remarks": "appa got it",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "cca189cc-got",
@@ -30866,7 +30887,8 @@
 "Type": "Get",
 "Mode": "Cash",
 "Note": "Received back — Given to palkarar mama",
-"Remarks": "appa got it"
+"Remarks": "appa got it",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "ec77c07f",
@@ -30878,7 +30900,8 @@
 "Type": "Give",
 "Mode": "Cash",
 "Note": "given as cash",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "ec77c07f-got",
@@ -30890,7 +30913,8 @@
 "Type": "Get",
 "Mode": "Cash",
 "Note": "Received back — given as cash",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "af552e8f",
@@ -30902,7 +30926,8 @@
 "Type": "Give",
 "Mode": "Upi",
 "Note": "Through vellaiyan",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "af552e8f-got",
@@ -30914,7 +30939,8 @@
 "Type": "Get",
 "Mode": "Upi",
 "Note": "Received back — Through vellaiyan",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "d57ae31d",
@@ -30926,7 +30952,8 @@
 "Type": "Give",
 "Mode": "Cash",
 "Note": "Appa",
-"Remarks": "Adjusted 5k for mohan gpay remin5k, 5k chit adjusted"
+"Remarks": "Adjusted 5k for mohan gpay remin5k, 5k chit adjusted",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "d57ae31d-got",
@@ -30938,7 +30965,8 @@
 "Type": "Get",
 "Mode": "Cash",
 "Note": "Received back — Appa",
-"Remarks": "Adjusted 5k for mohan gpay remin5k, 5k chit adjusted"
+"Remarks": "Adjusted 5k for mohan gpay remin5k, 5k chit adjusted",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "70e45f4a",
@@ -30950,7 +30978,8 @@
 "Type": "Give",
 "Mode": "Upi",
 "Note": "To இளமதி",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "70e45f4a-got",
@@ -30962,7 +30991,8 @@
 "Type": "Get",
 "Mode": "Upi",
 "Note": "Received back — To இளமதி",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "21185931",
@@ -30974,7 +31004,8 @@
 "Type": "Give",
 "Mode": "Other",
 "Note": "Bottle 800, 800, 1000 by cash",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "21185931-got",
@@ -30986,7 +31017,8 @@
 "Type": "Get",
 "Mode": "Other",
 "Note": "Received back — Bottle 800, 800, 1000 by cash",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "0cc84c54",
@@ -30998,7 +31030,8 @@
 "Type": "Give",
 "Mode": "Upi",
 "Note": "Kavi",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "7b623850",
@@ -31010,7 +31043,8 @@
 "Type": "Give",
 "Mode": "Upi",
 "Note": "Upi",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "36967f20",
@@ -31022,7 +31056,8 @@
 "Type": "Borrow",
 "Mode": "Cash",
 "Note": "advance chit for april by tharun",
-"Remarks": "20000"
+"Remarks": "20000",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "36967f20-ret",
@@ -31034,7 +31069,8 @@
 "Type": "Return",
 "Mode": "Cash",
 "Note": "Returned — advance chit for april by tharun",
-"Remarks": "20000"
+"Remarks": "20000",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "e799bd41",
@@ -31046,7 +31082,8 @@
 "Type": "Borrow",
 "Mode": "Other",
 "Note": "for ac",
-"Remarks": "for ac"
+"Remarks": "for ac",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "e799bd41-ret",
@@ -31058,7 +31095,8 @@
 "Type": "Return",
 "Mode": "Other",
 "Note": "Returned — for ac",
-"Remarks": "for ac"
+"Remarks": "for ac",
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "742b7c3f",
@@ -31070,7 +31108,8 @@
 "Type": "Borrow",
 "Mode": "Account",
 "Note": "112200 out of which 90k given to ganesh jewellery",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "2d1124fe",
@@ -31082,7 +31121,8 @@
 "Type": "Borrow",
 "Mode": "Account",
 "Note": "10-6=4l, 20k account, 20k account, 50 account = total 490000",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 },
 {
 "ID": "75c7280c",
@@ -31094,7 +31134,8 @@
 "Type": "Borrow",
 "Mode": "Other",
 "Note": "Cash",
-"Remarks": null
+"Remarks": null,
+"Finance_Name": "Malar_Finance"
 }
 ]
 }

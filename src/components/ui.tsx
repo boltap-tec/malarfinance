@@ -1,4 +1,5 @@
 import { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { inr, amountWords } from '../lib/format'
 
@@ -83,11 +84,15 @@ export function EmptyState({ title, hint }: { title: string; hint?: string }) {
 export function Modal({
   title, onClose, children, footer,
 }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
-  return (
-    // Scroll-container pattern: the backdrop is a fixed, scrollable layer. A tall
-    // dialog (or a short window) then scrolls the WHOLE card into view instead of
-    // clipping its top off-screen; it still centers when it fits.
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+  // Scroll-container pattern: the backdrop is a fixed, scrollable layer. A tall
+  // dialog (or a short window) then scrolls the WHOLE card into view instead of
+  // clipping its top off-screen; it still centers when it fits.
+  // Rendered through a portal to <body> so it escapes any ancestor stacking
+  // context (e.g. the header's backdrop-blur) that would otherwise trap its
+  // fixed positioning and paint it behind the toolbar. z-[70] clears the sticky
+  // header (z-20) and the top status banner (z-[60]).
+  const overlay = (
+    <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="flex min-h-full items-center justify-center">
         <div className="card relative w-full max-w-lg min-w-0 p-5" onClick={e => e.stopPropagation()}>
           <div className="mb-4 flex items-center justify-between">
@@ -100,6 +105,7 @@ export function Modal({
       </div>
     </div>
   )
+  return typeof document !== 'undefined' ? createPortal(overlay, document.body) : overlay
 }
 
 export function ConfirmModal({

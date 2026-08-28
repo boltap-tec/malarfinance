@@ -438,22 +438,35 @@ export const repo = {
 }
 
 // ── Credentials ──────────────────────────────────────────────────────────────
-// One login PIN per PHONE (not per role), stored in Supabase so it works on every
-// device and stays the same across every role that phone holds. Defaults to
-// '1234' until the person changes it. The App_Credential rows load with the rest
-// of the dataset at startup, so verifyCred can read them synchronously at login.
-export function verifyCred(phone: string, password: string): boolean {
-  const row = (db.App_Credential ?? []).find(c => String(c.Phone) === phone)
-  const stored = String(row?.PIN ?? '1234') // default PIN until changed
-  return stored === password
+// The login PIN lives on each person's own row (visible in Supabase): an MD's PIN
+// on their Finance_Details row(s), a partner's on their Partner row, a worker's on
+// their Worker row. You pick your role on the login screen, so the PIN is read
+// from the respective table. Defaults to '1234' until changed.
+export type LoginRole = 'md' | 'partner' | 'worker'
+
+// The stored PIN for a phone in a given role's table (undefined → use default).
+export function pinFor(role: LoginRole, phone: string): string | undefined {
+  if (role === 'md') return (db.Finance_Details ?? []).find(f => f.Phone_Number != null && String(f.Phone_Number) === phone)?.PIN
+  if (role === 'partner') return (db.Partner ?? []).find(p => String(p.Phone_Number) === phone)?.PIN
+  return (db.Worker ?? []).find(w => String(w.Phone_Number) === phone)?.PIN
 }
-export async function setCred(phone: string, pin: string): Promise<void> {
-  const rows = (db.App_Credential ?? (db.App_Credential = []))
-  const now = new Date().toISOString()
-  const existing = rows.find(c => String(c.Phone) === phone)
-  if (existing) { existing.PIN = pin; existing.Updated_On = now }
-  else rows.unshift({ Phone: phone, PIN: pin, Updated_On: now })
-  await sUpsert('App_Credential', { Phone: phone, PIN: pin, Updated_On: now })
+export function verifyPin(role: LoginRole, phone: string, pin: string): boolean {
+  return String(pinFor(role, phone) || '1234') === pin // blank/missing → default 1234
+}
+// Change the PIN for the current user's role. An MD who runs several finances has
+// one row per finance (same phone) — update them all so the PIN stays in sync.
+export async function setPin(role: LoginRole, phone: string, pin: string): Promise<void> {
+  if (role === 'md') {
+    for (const f of (db.Finance_Details ?? []).filter(f => f.Phone_Number != null && String(f.Phone_Number) === phone)) {
+      f.PIN = pin; await sUpdate('Finance_Details', f.Finance_Name, { PIN: pin })
+    }
+  } else if (role === 'partner') {
+    const p = (db.Partner ?? []).find(p => String(p.Phone_Number) === phone)
+    if (p) { p.PIN = pin; await sUpdate('Partner', p.Partner_ID, { PIN: pin }) }
+  } else {
+    const w = (db.Worker ?? []).find(w => String(w.Phone_Number) === phone)
+    if (w) { w.PIN = pin; await sUpdate('Worker', w.Worker_ID, { PIN: pin }) }
+  }
   persist()
 }
 
@@ -523,7 +536,7 @@ const PK: Partial<Record<keyof Dataset, string>> = {
   Chit_Creation: 'Chit_ID', Chit_Member: 'Member_ID', Chit_Auction: 'Chit_Auction_ID',
   Chit_Taken_Member: 'Chit_Taken_ID', Chit_Ledger: 'ID',
   Invested_Chit: 'Chit_ID', Invested_Chit_Trans: 'ID',
-  Hand_Exchange: 'ID', Interest_Posting_Log: 'ID', App_Credential: 'Phone',
+  Hand_Exchange: 'ID', Interest_Posting_Log: 'ID',
 }
 export let lastWriteError = ''
 function noteErr(where: string, msg?: string) {
@@ -549,16 +562,6 @@ async function sUpdate(table: keyof Dataset, keyVal: string, patch: any): Promis
   const k = PK[table]; if (!k) return
   const { error } = await supabase.from(table as string).update(clean(patch)).eq(k, keyVal)
   noteErr(`update ${table}`, error?.message)
-}
-// Insert-or-update on the primary key — used where a row may or may not exist yet
-// (e.g. a phone's PIN row that Supabase might not have until first change).
-async function sUpsert(table: keyof Dataset, rows: any): Promise<void> {
-  if (!supabase) return
-  const arr = (Array.isArray(rows) ? rows : [rows]).map(clean)
-  if (!arr.length) return
-  const pk = PK[table]
-  const { error } = await supabase.from(table as string).upsert(arr, pk ? { onConflict: pk } : undefined)
-  noteErr(`upsert ${String(table)}`, error?.message)
 }
 async function sDelete(table: keyof Dataset, keyVal: string): Promise<void> {
   if (!supabase) return

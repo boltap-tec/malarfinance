@@ -1,16 +1,12 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { repo, setViewer, verifyCred, setCred } from '../data/repository'
+import { repo, setViewer, verifyPin, setPin } from '../data/repository'
 
 export type Role = 'md' | 'partner' | 'worker'
 
 // The one phone allowed to see EVERY finance ("all finances"), during build-out.
 // Every other MD is scoped to only the finance(s) they run.
 export const SUPER_PHONE = '9626262427'
-
-// Special login result: the phone is registered as BOTH an MD and a partner, so
-// the UI must ask which role to enter as.
-export const CHOOSE_ROLE = 'CHOOSE_ROLE'
 
 export interface AppUser {
   name: string
@@ -27,7 +23,9 @@ export interface AppUser {
 interface AppState {
   user: AppUser | null
   finance: string
-  login: (phone: string, password: string, prefer?: Role) => string | null // error | CHOOSE_ROLE | null(success)
+  // You pick your role on the login screen; the PIN is checked against that role's
+  // table. Returns an error string, or null on success.
+  login: (role: Role, phone: string, pin: string) => string | null
   logout: () => void
   setFinance: (f: string) => void
   changePassword: (newPassword: string) => void
@@ -43,53 +41,39 @@ export const useApp = create<AppState>()(
     (set, get) => ({
       user: null,
       finance: 'ALL',
-      login: (phoneRaw, password, prefer) => {
+      login: (role, phoneRaw, pin) => {
         const phone = phoneRaw.trim()
+        if (!role) return 'Choose whether you are an MD, partner or worker.'
         if (!phone) return 'Enter your phone number.'
-        if (!verifyCred(phone, password)) return 'Wrong password. (Default is 1234.)'
 
-        const isSuper = phone === SUPER_PHONE
-        const mdFinances = repo.financesByMdPhone(phone)
-        const isMd = isSuper || mdFinances.length > 0
-        const partner = repo.partnerByPhone(phone)
-        const worker = repo.workerByPhone(phone)
-
-        // Same number is both an MD and a partner → ask which to enter as.
-        if (isMd && partner && !prefer) return CHOOSE_ROLE
-
-        function loginMd(): null {
-          const names = isSuper
-            ? repo.finances().map(f => f.Finance_Name)
-            : mdFinances.map(f => f.Finance_Name)
+        if (role === 'md') {
+          const isSuper = phone === SUPER_PHONE
+          const mdFinances = repo.financesByMdPhone(phone)
+          if (!isSuper && mdFinances.length === 0) return 'No MD found with this phone number.'
+          if (!verifyPin('md', phone, pin)) return 'Wrong PIN. (Default is 1234.)'
+          const names = isSuper ? repo.finances().map(f => f.Finance_Name) : mdFinances.map(f => f.Finance_Name)
           const scope = isSuper ? 'ALL' : (names[0] ?? 'ALL')
-          const u: AppUser = {
-            name: (mdFinances[0]?.MD_Name) || 'MD', role: 'md', phone,
-            finance: scope, finances: names, isSuper,
-          }
+          const u: AppUser = { name: mdFinances[0]?.MD_Name || 'MD', role: 'md', phone, finance: scope, finances: names, isSuper }
           applyViewer(u); set({ user: u, finance: scope }); return null
         }
 
-        if (prefer === 'partner' && partner) {
+        if (role === 'partner') {
+          const partner = repo.partnerByPhone(phone)
+          if (!partner) return 'No partner found with this phone number.'
+          if (!verifyPin('partner', phone, pin)) return 'Wrong PIN. (Default is 1234.)'
           const u: AppUser = { name: partner.Partner_Name, role: 'partner', phone, finance: partner.Finance_Name, partnerId: partner.Partner_ID }
           applyViewer(u); set({ user: u, finance: partner.Finance_Name }); return null
         }
-        if (prefer === 'md' && isMd) return loginMd()
 
-        // Auto-resolve when unambiguous: MD → worker → partner.
-        if (isMd) return loginMd()
-        if (worker) {
-          const u: AppUser = {
-            name: worker.Worker_Name, role: 'worker', phone,
-            finance: worker.Finance_Name, workerId: worker.Worker_ID,
-            allowedMenus: worker.Allowed_Menus ?? [],
-          }
-          applyViewer(u); set({ user: u, finance: worker.Finance_Name }); return null
+        // worker
+        const worker = repo.workerByPhone(phone)
+        if (!worker) return 'No worker found with this phone number.'
+        if (!verifyPin('worker', phone, pin)) return 'Wrong PIN. (Default is 1234.)'
+        const u: AppUser = {
+          name: worker.Worker_Name, role: 'worker', phone,
+          finance: worker.Finance_Name, workerId: worker.Worker_ID, allowedMenus: worker.Allowed_Menus ?? [],
         }
-        if (partner) {
-          const u: AppUser = { name: partner.Partner_Name, role: 'partner', phone, finance: partner.Finance_Name, partnerId: partner.Partner_ID }
-          applyViewer(u); set({ user: u, finance: partner.Finance_Name }); return null
-        }
-        return 'No MD, worker or partner found with this phone number.'
+        applyViewer(u); set({ user: u, finance: worker.Finance_Name }); return null
       },
       logout: () => { applyViewer(null); set({ user: null, finance: 'ALL' }) },
       setFinance: (f) => {
@@ -101,12 +85,12 @@ export const useApp = create<AppState>()(
       },
       changePassword: (newPassword) => {
         const u = get().user
-        if (u && newPassword) setCred(u.phone, newPassword)
+        if (u && newPassword) setPin(u.role, u.phone, newPassword)
       },
     }),
     {
       name: 'arul-finance:session',
-      version: 3, // bumped: MD finance scoping + role choice
+      version: 4, // bumped: per-role PIN on each table + explicit role login
       migrate: () => ({ user: null, finance: 'ALL' }) as Partial<AppState>,
       onRehydrateStorage: () => (state) => { applyViewer(state?.user ?? null) },
     },

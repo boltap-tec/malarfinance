@@ -1,23 +1,30 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Phone, Lock, ShieldCheck, Users } from 'lucide-react'
-import { useApp, CHOOSE_ROLE, type Role } from '../store/app'
+import { Phone, Lock, ShieldCheck, Users, HardHat, ArrowLeft } from 'lucide-react'
+import { useApp, type Role } from '../store/app'
+
+const ROLES: { key: Role; label: string; hint: string; icon: typeof ShieldCheck }[] = [
+  { key: 'md', label: 'MD', hint: 'Full control', icon: ShieldCheck },
+  { key: 'partner', label: 'Partner', hint: 'Their loans', icon: Users },
+  { key: 'worker', label: 'Worker', hint: 'Chosen menus', icon: HardHat },
+]
 
 export default function Login() {
   const login = useApp(s => s.login)
   const navigate = useNavigate()
+  const [role, setRole] = useState<Role | null>(null)   // pick MD / Partner / Worker first
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [choose, setChoose] = useState(false) // phone is both MD and partner
 
-  const attempt = (prefer?: Role) => {
-    const err = login(phone, password, prefer)
-    if (err === CHOOSE_ROLE) { setChoose(true); setError(null); return }
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!role) return
+    const err = login(role, phone, password)
     if (err) { setError(err); return }
     navigate('/')
   }
-  const submit = (e: React.FormEvent) => { e.preventDefault(); attempt() }
+  const roleLabel = ROLES.find(r => r.key === role)?.label
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
@@ -49,54 +56,64 @@ export default function Login() {
             <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-brand-400 to-brand-700 text-2xl font-black text-white">₹</div>
           </div>
           <h2 className="text-2xl font-bold text-hd">Sign in</h2>
-          <p className="mt-1 text-sm text-slate-400">Use your registered phone number.</p>
 
-          {choose && (
-            <div className="mt-5 rounded-2xl border border-brand-500/40 bg-brand-500/10 p-4">
-              <p className="text-sm font-semibold text-hd">This number is both an MD and a partner.</p>
-              <p className="mt-0.5 text-xs text-slate-400">How do you want to sign in?</p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => attempt('md')} className="flex flex-col items-center gap-1 rounded-xl border border-slate-700 bg-slate-900 py-3 text-sm font-semibold text-hd hover:border-brand-500">
-                  <ShieldCheck size={20} /> As MD
-                </button>
-                <button type="button" onClick={() => attempt('partner')} className="flex flex-col items-center gap-1 rounded-xl border border-slate-700 bg-slate-900 py-3 text-sm font-semibold text-hd hover:border-brand-500">
-                  <Users size={20} /> As Partner
-                </button>
+          {!role ? (
+            <>
+              <p className="mt-1 text-sm text-slate-400">Who are you signing in as?</p>
+              <div className="mt-6 grid gap-3">
+                {ROLES.map(r => (
+                  <button
+                    key={r.key} type="button"
+                    onClick={() => { setRole(r.key); setError(null) }}
+                    className="flex items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900 p-4 text-left hover:border-brand-500"
+                  >
+                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-500/15 text-brand-300"><r.icon size={20} /></span>
+                    <span>
+                      <span className="block text-sm font-semibold text-hd">{r.label}</span>
+                      <span className="block text-xs text-slate-400">{r.hint}</span>
+                    </span>
+                  </button>
+                ))}
               </div>
-              <button type="button" onClick={() => setChoose(false)} className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-300">Back</button>
-            </div>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={() => { setRole(null); setError(null) }} className="mt-2 inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200">
+                <ArrowLeft size={13} /> Signing in as <span className="font-semibold text-brand-300">{roleLabel}</span> — change
+              </button>
+
+              <div className="mt-5">
+                <label className="label">Phone number</label>
+                <div className="relative mt-1.5">
+                  <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input
+                    className="input pl-9" inputMode="tel" value={phone} autoFocus
+                    onChange={e => { setPhone(e.target.value); setError(null) }}
+                    placeholder="e.g. 9626262427"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <label className="label">PIN</label>
+                <div className="relative mt-1.5">
+                  <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input
+                    className="input pl-9" type="password" inputMode="numeric" value={password}
+                    onChange={e => { setPassword(e.target.value); setError(null) }}
+                    placeholder="Default 1234"
+                  />
+                </div>
+              </div>
+
+              {error && <p className="mt-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300 ring-1 ring-rose-500/30">{error}</p>}
+
+              <button className="btn-primary mt-6 w-full">Sign in</button>
+              <p className="mt-4 text-center text-xs text-slate-500">
+                First time? Your PIN is <span className="font-semibold text-slate-400">1234</span> — change it after signing in.
+              </p>
+            </>
           )}
-
-          <div className={`mt-6 ${choose ? 'pointer-events-none opacity-40' : ''}`}>
-            <label className="label">Phone number</label>
-            <div className="relative mt-1.5">
-              <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input
-                className="input pl-9" inputMode="tel" value={phone}
-                onChange={e => { setPhone(e.target.value); setError(null) }}
-                placeholder="e.g. 9626262427"
-              />
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <label className="label">Password</label>
-            <div className="relative mt-1.5">
-              <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input
-                className="input pl-9" type="password" value={password}
-                onChange={e => { setPassword(e.target.value); setError(null) }}
-                placeholder="Default 1234"
-              />
-            </div>
-          </div>
-
-          {error && <p className="mt-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300 ring-1 ring-rose-500/30">{error}</p>}
-
-          <button className="btn-primary mt-6 w-full">Sign in</button>
-          <p className="mt-4 text-center text-xs text-slate-500">
-            First time? Your password is <span className="font-semibold text-slate-400">1234</span> — change it after signing in.
-          </p>
         </form>
       </div>
     </div>

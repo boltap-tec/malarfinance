@@ -11,6 +11,7 @@ export interface Finance {
   Initial_Capital_Partner?: number
   Phone_Number?: number | string
   MD_Name?: string
+  PIN?: string               // MD login PIN for this finance's phone; default '1234'
 }
 
 export interface Partner {
@@ -21,6 +22,7 @@ export interface Partner {
   Email_Address?: string
   Photo?: string
   Pending_Message?: string
+  PIN?: string               // partner login PIN; default '1234'
 }
 
 export interface Customer {
@@ -336,6 +338,7 @@ export interface Worker {
   Allowed_Menus: string[] // route paths, e.g. ['/loans','/ledger']
   Status?: string
   Created_By?: string
+  PIN?: string               // worker login PIN; default '1234'
 }
 
 // Audit trail. Every create / update / delete / revoke is recorded here; delete
@@ -424,14 +427,4 @@ export interface Dataset {
   Hand_Exchange: HandExchange[]
   Jewel_Loan: any[]
   Interest_Posting_Log: PostingLog[]
-  App_Credential: AppCredential[]
-}
-
-// One login PIN per phone number, shared across every role that phone holds (an
-// MD of one finance who is also a partner in another uses the same PIN). Stored
-// in Supabase so it works on every device; defaults to '1234' until changed.
-export interface AppCredential {
-  Phone: string
-  PIN: string
-  Updated_On?: string
 }

@@ -64,12 +64,12 @@ export default function Customers() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Customer</Th><Th>STL No.</Th><Th right>Outstanding loan</Th><Th right>Outstanding interest</Th><Th>Risk</Th><Th>Status</Th>{canEdit(role) && <Th>Actions</Th>}</tr>
+                <tr><Th sticky>Customer</Th><Th>STL No.</Th><Th right>Outstanding loan</Th><Th right>Outstanding interest</Th><Th>Risk</Th><Th>Status</Th>{canEdit(role) && <Th>Actions</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map(c => (
-                  <tr key={c.Customer_STL_NO} className="hover:bg-slate-800/40">
-                    <Td>
+                  <tr key={c.Customer_STL_NO} className="group hover:bg-slate-800/40">
+                    <Td sticky>
                       <Link to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}`} className="font-medium text-brand-300 hover:text-brand-200">
                         {c.Customer_Name}
                       </Link>

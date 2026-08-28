@@ -72,12 +72,12 @@ export default function Loans() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Loan no.</Th><Th>Customer</Th><Th>Given</Th><Th right>Amount</Th><Th>Rate</Th><Th right>Outstanding</Th><Th>Status</Th>{isMd && <Th>Del</Th>}</tr>
+                <tr><Th sticky>Loan no.</Th><Th>Customer</Th><Th>Given</Th><Th right>Amount</Th><Th>Rate</Th><Th right>Outstanding</Th><Th>Status</Th>{isMd && <Th>Del</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map(l => (
-                  <tr key={l.Loan_No} className="hover:bg-slate-800/40">
-                    <Td><Link to={`/loans/${encodeURIComponent(l.Loan_No)}`} className="font-medium text-brand-300">{l.Loan_No}</Link></Td>
+                  <tr key={l.Loan_No} className="group hover:bg-slate-800/40">
+                    <Td sticky><Link to={`/loans/${encodeURIComponent(l.Loan_No)}`} className="font-medium text-brand-300">{l.Loan_No}</Link></Td>
                     <Td>
                       <p className="text-slate-200">{l.Customer_Name}</p>
                       <p className="text-xs text-slate-500">{l.Customer_STL_NO}</p>

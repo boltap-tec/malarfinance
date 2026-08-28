@@ -14,13 +14,14 @@ export default function CustomerInterest() {
   const editable = canEdit(role)
   const isMd = role === 'md'
   const [q, setQ] = useState('')
+  const [monthSel, setMonthSel] = useState('all')
   const [tick, setTick] = useState(0)
   const [pay, setPay] = useState<any | null>(null)
   const [edit, setEdit] = useState<InterestRow | null>(null)
   const [del, setDel] = useState<InterestRow | null>(null)
   const [adding, setAdding] = useState(false)
 
-  const { rows, monthTotals, outMap, billed, paid, pending } = useMemo(() => {
+  const { rows, monthTotals, outMap, billed, paid, pending, monthOptions } = useMemo(() => {
     // Current outstanding per loan, to show alongside each interest line.
     const outMap = new Map<string, number>()
     for (const l of repo.loans(financeFilter(finance))) outMap.set(l.Loan_No, num(l.Outstand_Amount))
@@ -30,6 +31,9 @@ export default function CustomerInterest() {
       String(i.Customer_Name ?? '').toLowerCase().includes(s) ||
       String(i.Loan_No ?? '').toLowerCase().includes(s) ||
       String(i.Month ?? '').toLowerCase().includes(s))
+    // Distinct months present (newest first) for the month picker.
+    const monthOptions = [...new Set(list.map(i => i.Month ?? '—'))].sort((a, b) => monthKey(b) - monthKey(a))
+    if (monthSel !== 'all') list = list.filter(i => (i.Month ?? '—') === monthSel)
     list = list.slice().sort((a, b) => monthKey(b.Month) - monthKey(a.Month) || num(b.Interest_Pending) - num(a.Interest_Pending))
     const monthTotals: Record<string, { interest: number; received: number; pending: number }> = {}
     for (const r of list) {
@@ -38,12 +42,12 @@ export default function CustomerInterest() {
       t.interest += num(r.Interest_Amount); t.received += num(r.Amount_Received); t.pending += num(r.Interest_Pending)
     }
     return {
-      rows: list, monthTotals, outMap,
+      rows: list, monthTotals, outMap, monthOptions,
       billed: list.reduce((s2, i) => s2 + num(i.Interest_Amount), 0),
       paid: list.reduce((s2, i) => s2 + num(i.Amount_Received), 0),
       pending: list.reduce((s2, i) => s2 + num(i.Interest_Pending), 0),
     }
-  }, [finance, q, tick])
+  }, [finance, q, tick, monthSel])
 
   return (
     <div>
@@ -60,7 +64,13 @@ export default function CustomerInterest() {
       </div>
 
       <Card className="mb-4 !p-3">
-        <input className="input" placeholder="Search customer, loan no., month…" value={q} onChange={e => setQ(e.target.value)} />
+        <div className="flex flex-wrap items-center gap-2">
+          <input className="input min-w-[12rem] flex-1" placeholder="Search customer, loan no., month…" value={q} onChange={e => setQ(e.target.value)} />
+          <select className="input !w-auto" value={monthSel} onChange={e => setMonthSel(e.target.value)}>
+            <option value="all">All months</option>
+            {monthOptions.map(m => <option key={m} value={m}>{monthName(m)}</option>)}
+          </select>
+        </div>
       </Card>
 
       {rows.length === 0 ? <EmptyState title="No customer interest yet" hint="Run Interest posting to generate lines." /> : (
@@ -68,7 +78,7 @@ export default function CustomerInterest() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Customer</Th><Th>Loan</Th><Th right>Outstanding</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Collect</Th>}{isMd && <Th>Edit</Th>}</tr>
+                <tr><Th sticky>Customer</Th><Th>Loan</Th><Th right>Outstanding</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Collect</Th>}{isMd && <Th>Edit</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.slice(0, 300).map((i, k, arr) => (
@@ -81,8 +91,8 @@ export default function CustomerInterest() {
                         </div>
                       </td></tr>
                     )}
-                    <tr className="hover:bg-slate-800/40">
-                      <Td className="text-slate-200">{i.Customer_Name}</Td>
+                    <tr className="group hover:bg-slate-800/40">
+                      <Td sticky className="text-slate-200">{i.Customer_Name}</Td>
                       <Td className="text-slate-400">{i.Loan_No}</Td>
                       <Td right className="text-slate-300">{inr(outMap.get(i.Loan_No) ?? 0)}</Td>
                       <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>

@@ -54,12 +54,12 @@ export default function Deposits() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Deposit no.</Th><Th>Depositor</Th><Th>Phone</Th><Th right>Amount</Th><Th>Rate/L·mo</Th><Th right>Outstanding</Th><Th>Status</Th>{canEdit(role) && <Th>Actions</Th>}</tr>
+                <tr><Th sticky>Deposit no.</Th><Th>Depositor</Th><Th>Phone</Th><Th right>Amount</Th><Th>Rate/L·mo</Th><Th right>Outstanding</Th><Th>Status</Th>{canEdit(role) && <Th>Actions</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map((d, i) => (
-                  <tr key={i} className="hover:bg-slate-800/40">
-                    <Td><Link to={`/deposits/${encodeURIComponent(d.Deposit_No)}`} className="font-medium text-brand-300">{d.Deposit_No}</Link></Td>
+                  <tr key={i} className="group hover:bg-slate-800/40">
+                    <Td sticky><Link to={`/deposits/${encodeURIComponent(d.Deposit_No)}`} className="font-medium text-brand-300">{d.Deposit_No}</Link></Td>
                     <Td className="text-slate-200">{d.Depositer_Name}</Td>
                     <Td className="text-slate-400">{phone(d.Depositer_Phone_No)}</Td>
                     <Td right className="text-hd">{inr(num(d.Deposit_Amount))}</Td>

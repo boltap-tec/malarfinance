@@ -23,7 +23,15 @@ export default function Interest() {
   const finance = useApp(s => s.finance)
   const role = useApp(s => s.user?.role)
   const userName = useApp(s => s.user?.name)
-  const f = financeFilter(finance)
+  const financeList = useApp(s => s.user?.finances) ?? []
+  const isSuper = useApp(s => s.user?.isSuper)
+
+  // Interest can be run one finance at a time (finance-wise) or, for the super MD,
+  // all finances at once ('ALL'). Defaults to the finance in the top switcher.
+  const [scope, setScope] = useState(finance)
+  // Which finances the user may post for: their own, plus 'ALL' for the super MD.
+  const scopeOptions = isSuper ? ['ALL', ...financeList] : financeList
+  const f = financeFilter(scope)
 
   const now = new Date()
   const todayStr = now.toISOString().slice(0, 10)
@@ -48,7 +56,7 @@ export default function Interest() {
   const monthEndOk = settings.postingAnyDate || new Date(to) <= new Date(todayStr)
   // Already posted? Block re-running a completed month (belt-and-braces with each
   // entity's posted-till). `posted` is a dep so this refreshes after a run.
-  const priorRun = repo.postingLog(finance).find(r => r.Month === month)
+  const priorRun = repo.postingLog(scope).find(r => r.Month === month)
   const alreadyPosted = !!priorRun && posted === null
 
   // Customer loan interest. Rounding is applied per CUSTOMER (not per loan): each
@@ -124,7 +132,7 @@ export default function Interest() {
     setSettings({ lastPostedDate: to })
     // Record the run in the posting register so this month reads as "posted".
     await appendPostingLog({
-      ID: `${finance}-${month}`, Finance_Name: finance, Month: month, From_Date: from, To_Date: to,
+      ID: `${scope}-${month}`, Finance_Name: scope, Month: month, From_Date: from, To_Date: to,
       Posted_On: new Date().toISOString(), Posted_By: userName || role || 'md',
       Customer_Lines: custPreview.length, Deposit_Lines: depPreview.length, Other_Lines: othPreview.length,
       Customer_Amount: custTotal, Deposit_Amount: depTotal, Other_Amount: othTotal,
@@ -136,7 +144,7 @@ export default function Interest() {
 
   return (
     <div>
-      <PageHeader title="Interest posting" subtitle="Run customer, deposit and other-finance interest for a whole month — in one click." />
+      <PageHeader title="Interest posting" subtitle="Run customer, deposit and other-finance interest for a whole month — per finance, or all at once." />
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard label="Customer interest" value={inr(custTotal)} tone="green" sub={`${custPreview.length} loans · earned`} icon={<Percent size={18} />} />
@@ -148,6 +156,14 @@ export default function Interest() {
 
       <Card className="mb-4">
         <div className="flex flex-wrap items-end gap-4">
+          {scopeOptions.length > 1 && (
+            <div>
+              <label className="label">Finance to post</label>
+              <select className="input mt-1" value={scope} onChange={e => { setScope(e.target.value); setPosted(null) }}>
+                {scopeOptions.map(s => <option key={s} value={s}>{s === 'ALL' ? 'All finances' : s}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label className="label">Month to post</label>
             <input type="month" max={monthStr(now)} className="input mt-1" value={month} onChange={e => { setMonth(e.target.value); setPosted(null) }} />
@@ -188,7 +204,7 @@ export default function Interest() {
         </div>
       )}
 
-      <PostingRegister rows={repo.postingLog(finance)} />
+      <PostingRegister rows={repo.postingLog(scope)} />
     </div>
   )
 }

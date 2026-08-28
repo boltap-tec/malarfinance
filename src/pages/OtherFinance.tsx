@@ -57,14 +57,14 @@ export default function OtherFinance() {
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
                 <tr>
-                  <Th>Loan no.</Th><Th>Lender</Th><Th>Phone</Th><Th>Bought</Th>
+                  <Th sticky>Loan no.</Th><Th>Lender</Th><Th>Phone</Th><Th>Bought</Th>
                   <Th right>Amount</Th><Th>Rate</Th><Th right>Outstanding</Th><Th>Status</Th>{canEdit(role) && <Th>Actions</Th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map((o, i) => (
-                  <tr key={i} className="hover:bg-slate-800/40">
-                    <Td><Link to={`/other-finance/${encodeURIComponent(o.Loan_No)}`} className="font-medium text-brand-300">{o.Loan_No}</Link></Td>
+                  <tr key={i} className="group hover:bg-slate-800/40">
+                    <Td sticky><Link to={`/other-finance/${encodeURIComponent(o.Loan_No)}`} className="font-medium text-brand-300">{o.Loan_No}</Link></Td>
                     <Td className="text-slate-200">{o.Loan_bought_Finance_Name}</Td>
                     <Td className="text-slate-400">{phone(o.Loan_bought_Finance_Phone_No)}</Td>
                     <Td className="text-slate-400">{fmtDate(o.Loan_Bought_Date)}</Td>

@@ -56,14 +56,14 @@ export default function OtherFinances() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Finance</Th><Th>FIN no.</Th><Th>Phone</Th><Th right>Loans</Th><Th right>Borrowed</Th><Th right>Outstanding</Th>{canEdit(role) && <Th>Actions</Th>}</tr>
+                <tr><Th sticky>Finance</Th><Th>FIN no.</Th><Th>Phone</Th><Th right>Loans</Th><Th right>Borrowed</Th><Th right>Outstanding</Th>{canEdit(role) && <Th>Actions</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map((l, i) => {
                   const intPending = repo.otherFinanceInterestPending(l.code)
                   return (
-                  <tr key={i} className="hover:bg-slate-800/40">
-                    <Td><Link to={`/other-finance/${encodeURIComponent(l.code)}`} className="font-medium text-brand-300">{l.name}</Link><p className="text-xs text-slate-500">{l.finance}</p></Td>
+                  <tr key={i} className="group hover:bg-slate-800/40">
+                    <Td sticky><Link to={`/other-finance/${encodeURIComponent(l.code)}`} className="font-medium text-brand-300">{l.name}</Link><p className="text-xs text-slate-500">{l.finance}</p></Td>
                     <Td className="text-slate-400">{l.code}</Td>
                     <Td className="text-slate-400">{phone(l.phone)}</Td>
                     <Td right className="text-slate-300">{l.count}</Td>

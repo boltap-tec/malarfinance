@@ -4,7 +4,7 @@ import { repo, payOtherFinanceInterest, addOtherFinanceInterestRow, updateOtherF
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal } from '../components/ui'
 import InterestPayModal from '../components/InterestPayModal'
-import { inr, fmtDate, num, monthKey } from '../lib/format'
+import { inr, fmtDate, num, monthKey, monthName } from '../lib/format'
 
 // Interest the finance OWES the finances it borrowed from, from the schedule.
 export default function OtherFinanceInterest() {
@@ -13,13 +13,14 @@ export default function OtherFinanceInterest() {
   const editable = canEdit(role)
   const isMd = role === 'md'
   const [q, setQ] = useState('')
+  const [monthSel, setMonthSel] = useState('all')
   const [tick, setTick] = useState(0)
   const [pay, setPay] = useState<any | null>(null)
   const [edit, setEdit] = useState<any | null>(null)
   const [del, setDel] = useState<any | null>(null)
   const [adding, setAdding] = useState(false)
 
-  const { rows, monthTotals, outMap, billed, paid, pending } = useMemo(() => {
+  const { rows, monthTotals, outMap, billed, paid, pending, monthOptions } = useMemo(() => {
     // Current outstanding per borrowing (summed across its rows), shown per line.
     const outMap = new Map<string, number>()
     for (const l of repo.otherFinanceLoans(financeFilter(finance))) outMap.set(l.Loan_No, (outMap.get(l.Loan_No) ?? 0) + num(l.Outstand_Amount))
@@ -29,6 +30,9 @@ export default function OtherFinanceInterest() {
       String(i.Loan_bought_Finance_Name ?? '').toLowerCase().includes(s) ||
       String(i.Loan_No ?? '').toLowerCase().includes(s) ||
       String(i.Month ?? '').toLowerCase().includes(s))
+    // Distinct months present (newest first) for the month picker.
+    const monthOptions = [...new Set(list.map((i: any) => i.Month ?? '—'))].sort((a, b) => monthKey(b) - monthKey(a))
+    if (monthSel !== 'all') list = list.filter((i: any) => (i.Month ?? '—') === monthSel)
     list = list.slice().sort((a: any, b: any) => monthKey(b.Month) - monthKey(a.Month) || num(b.Interest_Pending) - num(a.Interest_Pending))
     const monthTotals: Record<string, { interest: number; received: number; pending: number }> = {}
     for (const r of list) {
@@ -36,13 +40,13 @@ export default function OtherFinanceInterest() {
       const t = monthTotals[m] ?? (monthTotals[m] = { interest: 0, received: 0, pending: 0 })
       t.interest += num(r.Interest_Amount); t.received += num(r.Amount_Received); t.pending += num(r.Interest_Pending)
     }
-    return { monthTotals, outMap,
+    return { monthTotals, outMap, monthOptions,
       rows: list,
       billed: list.reduce((s2: number, i: any) => s2 + num(i.Interest_Amount), 0),
       paid: list.reduce((s2: number, i: any) => s2 + num(i.Amount_Received), 0),
       pending: list.reduce((s2: number, i: any) => s2 + num(i.Interest_Pending), 0),
     }
-  }, [finance, q, tick])
+  }, [finance, q, tick, monthSel])
 
   return (
     <div>
@@ -59,7 +63,13 @@ export default function OtherFinanceInterest() {
       </div>
 
       <Card className="mb-4 !p-3">
-        <input className="input" placeholder="Search finance, FIN no., month…" value={q} onChange={e => setQ(e.target.value)} />
+        <div className="flex flex-wrap items-center gap-2">
+          <input className="input min-w-[12rem] flex-1" placeholder="Search finance, FIN no., month…" value={q} onChange={e => setQ(e.target.value)} />
+          <select className="input !w-auto" value={monthSel} onChange={e => setMonthSel(e.target.value)}>
+            <option value="all">All months</option>
+            {monthOptions.map((m: string) => <option key={m} value={m}>{monthName(m)}</option>)}
+          </select>
+        </div>
       </Card>
 
       {rows.length === 0 ? <EmptyState title="No other-finance interest yet" hint="Run Interest posting to generate lines." /> : (
@@ -67,7 +77,7 @@ export default function OtherFinanceInterest() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Finance</Th><Th>FIN no.</Th><Th right>Outstanding</Th><Th>Period</Th><Th right>Interest</Th><Th right>Paid</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Pay</Th>}{isMd && <Th>Edit</Th>}</tr>
+                <tr><Th sticky>Finance</Th><Th>FIN no.</Th><Th right>Outstanding</Th><Th>Period</Th><Th right>Interest</Th><Th right>Paid</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Pay</Th>}{isMd && <Th>Edit</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.slice(0, 300).map((i: any, k: number, arr: any[]) => (
@@ -80,8 +90,8 @@ export default function OtherFinanceInterest() {
                         </div>
                       </td></tr>
                     )}
-                    <tr className="hover:bg-slate-800/40">
-                      <Td className="text-slate-200">{i.Loan_bought_Finance_Name}</Td>
+                    <tr className="group hover:bg-slate-800/40">
+                      <Td sticky className="text-slate-200">{i.Loan_bought_Finance_Name}</Td>
                       <Td className="text-slate-400">{i.Loan_No}</Td>
                       <Td right className="text-slate-300">{inr(outMap.get(i.Loan_No) ?? 0)}</Td>
                       <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>

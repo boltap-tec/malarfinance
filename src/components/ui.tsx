@@ -157,9 +157,13 @@ export function Field({ label, children, hint }: { label: string; children: Reac
   )
 }
 
-export function Th({ children, right }: { children: ReactNode; right?: boolean }) {
-  return <th className={`px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400 ${right ? 'text-right' : 'text-left'}`}>{children}</th>
+// `sticky` freezes the cell to the left edge so it stays visible while the rest
+// of the row scrolls sideways. It must stay opaque (solid bg) or the scrolled
+// cells would show through; the body cell also follows the row's hover tint via
+// the `group` on each <tr>.
+export function Th({ children, right, sticky }: { children: ReactNode; right?: boolean; sticky?: boolean }) {
+  return <th className={`px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400 ${right ? 'text-right' : 'text-left'} ${sticky ? 'sticky left-0 z-20 bg-slate-900' : ''}`}>{children}</th>
 }
-export function Td({ children, right, className = '' }: { children: ReactNode; right?: boolean; className?: string }) {
-  return <td className={`px-3 py-2.5 text-sm ${right ? 'text-right tabular-nums' : ''} ${className}`}>{children}</td>
+export function Td({ children, right, className = '', sticky }: { children: ReactNode; right?: boolean; className?: string; sticky?: boolean }) {
+  return <td className={`px-3 py-2.5 text-sm ${right ? 'text-right tabular-nums' : ''} ${sticky ? 'sticky left-0 z-10 bg-slate-900 group-hover:bg-slate-800' : ''} ${className}`}>{children}</td>
 }

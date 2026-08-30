@@ -28,7 +28,14 @@ export default function Partners() {
       const int = interest.filter(i => i.Referred_Partner === p.Partner_ID).reduce((s, i) => s + num(i.Interest_Pending), 0)
       totals[p.Partner_ID] = { loan, interest: int }
     }
-    return { rows: list, totals }
+    // Group active partners (still carrying outstanding loan or interest) first,
+    // then by outstanding loan. Partners have no explicit status column.
+    const active = (p: Partner) => (totals[p.Partner_ID]?.loan ?? 0) > 0 || (totals[p.Partner_ID]?.interest ?? 0) > 0
+    const sorted = list.slice().sort((a, b) =>
+      (Number(active(b)) - Number(active(a))) ||
+      ((totals[b.Partner_ID]?.loan ?? 0) - (totals[a.Partner_ID]?.loan ?? 0)),
+    )
+    return { rows: sorted, totals }
   }, [finance, tick])
   const finances = repo.finances()
 

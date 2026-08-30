@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Phone, Lock, ShieldCheck, Users, HardHat, ArrowLeft } from 'lucide-react'
+import { User, Lock, ShieldCheck, Users, HardHat, ArrowLeft } from 'lucide-react'
 import { useApp, type Role } from '../store/app'
 
 const ROLES: { key: Role; label: string; hint: string; icon: typeof ShieldCheck }[] = [
@@ -13,14 +13,14 @@ export default function Login() {
   const login = useApp(s => s.login)
   const navigate = useNavigate()
   const [role, setRole] = useState<Role | null>(null)   // pick MD / Partner / Worker first
-  const [phone, setPhone] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!role) return
-    const err = login(role, phone, password)
+    const err = login(role, username, password)
     if (err) { setError(err); return }
     navigate('/')
   }
@@ -83,23 +83,23 @@ export default function Login() {
               </button>
 
               <div className="mt-5">
-                <label className="label">Phone number</label>
+                <label className="label">Username</label>
                 <div className="relative mt-1.5">
-                  <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                   <input
-                    className="input pl-9" inputMode="tel" value={phone} autoFocus
-                    onChange={e => { setPhone(e.target.value); setError(null) }}
-                    placeholder="e.g. 9626262427"
+                    className="input pl-9" value={username} autoFocus autoCapitalize="none" autoCorrect="off"
+                    onChange={e => { setUsername(e.target.value); setError(null) }}
+                    placeholder={`Your ${roleLabel} name`}
                   />
                 </div>
               </div>
 
               <div className="mt-4">
-                <label className="label">PIN</label>
+                <label className="label">Password</label>
                 <div className="relative mt-1.5">
                   <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                   <input
-                    className="input pl-9" type="password" inputMode="numeric" value={password}
+                    className="input pl-9" type="password" value={password}
                     onChange={e => { setPassword(e.target.value); setError(null) }}
                     placeholder="Default 1234"
                   />
@@ -110,7 +110,7 @@ export default function Login() {
 
               <button className="btn-primary mt-6 w-full">Sign in</button>
               <p className="mt-4 text-center text-xs text-slate-500">
-                First time? Your PIN is <span className="font-semibold text-slate-400">1234</span> — change it after signing in.
+                First time? Your password is <span className="font-semibold text-slate-400">1234</span> — change it after signing in.
               </p>
             </>
           )}

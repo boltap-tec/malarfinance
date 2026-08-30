@@ -7,15 +7,16 @@ import { buildReminder, waLink, waPhone, type ReminderItem } from '../lib/remind
 // pending-amount message (editable) — the user reviews, then taps to open
 // WhatsApp (they still send it themselves) or copies the text.
 export default function ReminderButton({
-  header, phone, items, totalLabel, amountWord, footer,
+  header, phone, items, totalLabel, amountWord, footer, message,
   label = 'WhatsApp', className,
 }: {
   header: string
   phone?: number | string
-  items: ReminderItem[]
+  items?: ReminderItem[]
   totalLabel?: string
   amountWord?: string
   footer?: string
+  message?: string        // ready-made body — used instead of the per-month builder
   label?: string
   className?: string
 }) {
@@ -25,13 +26,13 @@ export default function ReminderButton({
       <button
         className={className ?? 'btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30'}
         onClick={() => setOpen(true)}
-        title="Send a pending-amount reminder on WhatsApp"
+        title="Send a WhatsApp update"
       >
         <MessageCircle size={15} /> {label}
       </button>
       {open && (
         <ReminderModal
-          initial={buildReminder({ header, items, totalLabel, amountWord, footer })}
+          initial={message ?? buildReminder({ header, items: items ?? [], totalLabel, amountWord, footer })}
           phone={phone}
           onClose={() => setOpen(false)}
         />

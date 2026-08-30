@@ -1,9 +1,11 @@
 import { useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Users2, Phone, Mail, HandCoins, Percent, Share2, Building2 } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, HandCoins, Percent, Share2, Building2 } from 'lucide-react'
 import { repo } from '../data/repository'
+import { accrueOnRepaidPrincipal, type DebtLine } from '../lib/interestEngine'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
-import { inr, fmtDate, phone as fmtPhone, num, monthKey, monthName } from '../lib/format'
+import ReminderButton from '../components/ReminderButton'
+import { inr, fmtDate, phone as fmtPhone, num, monthKey, monthName, isActive } from '../lib/format'
 
 // Clicking a partner name opens this 360° view: the loans they referred, the
 // interest still pending (with the amount owed up to the previous month called
@@ -32,38 +34,42 @@ export default function PartnerDetail() {
     }
     const months = Object.entries(byMonth).sort((a, b) => monthKey(b[0]) - monthKey(a[0]))
 
-    // Per-customer OUTSTANDING loan (referred by this partner), only where > 0.
-    const outMap = new Map<string, { name: string; outstanding: number; count: number }>()
-    for (const l of loans) {
-      const key = l.Customer_STL_NO || l.Customer_Name || '—'
-      const c = outMap.get(key) ?? { name: l.Customer_Name ?? key, outstanding: 0, count: 0 }
-      c.outstanding += num(l.Outstand_Amount); c.count++
-      outMap.set(key, c)
-    }
-    const custOutstanding = [...outMap.values()].filter(c => c.outstanding > 0).sort((a, b) => b.outstanding - a.outstanding)
-
-    // Per-customer INTEREST PENDING, only where > 0.
-    const pendMap = new Map<string, { name: string; pending: number }>()
+    // Interest-pending LEDGER, one row PER CUSTOMER (unique by STL number): the
+    // billed and pending amounts are summed across all their loans/months, and
+    // the covered months live in a single Description column (no Loan No / Month).
+    const ledgerMap = new Map<string, { name: string; stl: string; descs: Set<string>; billed: number; received: number; pending: number }>()
     for (const i of interest) {
+      if (num(i.Interest_Pending) <= 0) continue
       const key = i.Customer_STL_NO || i.Customer_Name || '—'
-      const c = pendMap.get(key) ?? { name: i.Customer_Name ?? key, pending: 0 }
-      c.pending += num(i.Interest_Pending)
-      pendMap.set(key, c)
+      const c = ledgerMap.get(key) ?? { name: i.Customer_Name ?? key, stl: i.Customer_STL_NO ?? '', descs: new Set<string>(), billed: 0, received: 0, pending: 0 }
+      const desc = (i.Description || monthName(i.Month) || '').trim()
+      if (desc && desc !== '—') c.descs.add(desc)
+      c.billed += num(i.Interest_Amount); c.received += num(i.Amount_Received); c.pending += num(i.Interest_Pending)
+      ledgerMap.set(key, c)
     }
-    const custPending = [...pendMap.values()].filter(c => c.pending > 0).sort((a, b) => b.pending - a.pending)
+    const pendingLedger = [...ledgerMap.values()]
+      .map(c => ({ name: c.name, stl: c.stl, description: [...c.descs].join(', '), billed: c.billed, received: c.received, pending: c.pending }))
+      .sort((a, b) => b.pending - a.pending)
 
-    // Interest-pending LEDGER: every interest line still carrying a balance,
-    // newest month first (then largest pending).
-    const pendingLedger = interest
-      .filter(i => num(i.Interest_Pending) > 0)
-      .map(i => ({
-        name: i.Customer_Name ?? '', loanNo: i.Loan_No ?? '', month: i.Month ?? '—',
-        billed: num(i.Interest_Amount), received: num(i.Amount_Received), pending: num(i.Interest_Pending),
+    // Unbilled (accrued-but-not-yet-posted) interest on the ACTIVE referred loans,
+    // computed from each loan's posted-till date up to today — the same rule the
+    // repay screens use. Charged on the full current outstanding.
+    const today = new Date().toISOString().slice(0, 10)
+    const lines: DebtLine[] = loans
+      .filter(l => isActive(l.Loan_Status) && num(l.Outstand_Amount) > 0)
+      .map(l => ({
+        key: l.Loan_No,
+        outstanding: num(l.Outstand_Amount),
+        type: l.Interest_Type,
+        perDay: num(l.Interest_Per_day_Per_Lakh),
+        perMonth: num(l.Interest_Per_Month_Per_Lakh),
+        lastTo: repo.loanPostedUpto(l.Loan_No),
+        givenDate: l.Loan_Given_Date,
       }))
-      .sort((a, b) => monthKey(b.month) - monthKey(a.month) || b.pending - a.pending)
+    const unbilled = accrueOnRepaidPrincipal(lines, lines.reduce((s, l) => s + l.outstanding, 0), today).total
 
     return {
-      partner, loans, interest, months, pendingPrev, custOutstanding, custPending, pendingLedger,
+      partner, loans, interest, months, pendingPrev, pendingLedger, unbilled,
       given: loans.reduce((s, l) => s + num(l.Loan_Amount), 0),
       outstanding: loans.reduce((s, l) => s + num(l.Outstand_Amount), 0),
       pendingTotal: interest.reduce((s, i) => s + num(i.Interest_Pending), 0),
@@ -80,7 +86,15 @@ export default function PartnerDetail() {
       <PageHeader
         title={p.Partner_Name}
         subtitle={`${p.Partner_ID} · ${p.Finance_Name}`}
-        action={<button className="btn-primary !py-1.5" onClick={() => sharePartnerPdf({ ...d, partner: p })}><Share2 size={15} /> Share PDF</button>}
+        action={<div className="flex items-center gap-2">
+          <ReminderButton
+            label="WhatsApp"
+            phone={p.Phone_Number}
+            header={`${p.Partner_Name} (${p.Finance_Name})`}
+            message={partnerWaMessage(p.Partner_Name, p.Finance_Name, d.outstanding, d.unbilled)}
+          />
+          <button className="btn-primary !py-1.5" onClick={() => sharePartnerPdf({ ...d, partner: p })}><Share2 size={15} /> Share PDF</button>
+        </div>}
       />
 
       <div className="mb-4 flex flex-wrap gap-4 text-sm text-slate-400">
@@ -93,7 +107,7 @@ export default function PartnerDetail() {
         <StatCard label="Referred loans" value={d.loans.length} tone="blue" icon={<HandCoins size={18} />} sub={`${inr(d.given)} given`} />
         <StatCard label="Outstanding loan" value={inr(d.outstanding)} tone="amber" />
         <StatCard label="Interest received" value={inr(d.received)} tone="green" icon={<Percent size={18} />} />
-        <StatCard label="Interest pending" value={inr(d.pendingTotal)} tone="red" sub={`${inr(d.pendingPrev)} up to last month`} />
+        <StatCard label="Interest pending" value={inr(d.pendingTotal)} tone="red" sub={`Unbilled so far ${inr(d.unbilled)}`} />
       </div>
 
       <h3 className="mb-2 mt-6 flex items-center gap-2 font-semibold text-hd"><HandCoins size={16} /> Referred loans</h3>
@@ -148,14 +162,23 @@ export default function PartnerDetail() {
   )
 }
 
+// The WhatsApp update sent to a partner: their total outstanding loan and the
+// interest that has accrued but not yet been billed (unbilled) so far.
+function partnerWaMessage(name: string, finance: string, outstanding: number, unbilled: number): string {
+  const rs = (n: number) => 'Rs ' + Math.round(n).toLocaleString('en-IN')
+  const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  return [
+    `${name} (${finance})`,
+    `Total Outstanding Loan: ${rs(outstanding)}`,
+    `Unbilled Interest (to ${today}): ${rs(unbilled)}`,
+  ].join('\n')
+}
+
 // ── Colourful, shareable PDF of the partner's position ──────────────────────
 interface PartnerPdf {
   partner: import('../data/types').Partner
   loans: import('../data/types').Loan[]
-  months: [string, { billed: number; pending: number }][]
-  custOutstanding: { name: string; outstanding: number; count: number }[]
-  custPending: { name: string; pending: number }[]
-  pendingLedger: { name: string; loanNo: string; month: string; billed: number; received: number; pending: number }[]
+  pendingLedger: { name: string; stl: string; description: string; billed: number; received: number; pending: number }[]
   given: number; outstanding: number; pendingTotal: number; received: number; pendingPrev: number
 }
 function sharePartnerPdf(d: PartnerPdf): void {
@@ -164,37 +187,21 @@ function sharePartnerPdf(d: PartnerPdf): void {
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
   const p = d.partner
 
-  const loanRows = d.loans.map(l => `<tr>
+  // Referred loans — excluding fully-closed ones.
+  const openLoans = d.loans.filter(l => (l.Loan_Status ?? '').toLowerCase() !== 'closed')
+  const loanRows = openLoans.map(l => `<tr>
     <td>${esc(l.Loan_No)}</td><td>${esc(l.Customer_Name)}</td>
     <td>${esc(fmtDate(l.Loan_Given_Date))}</td>
     <td class="r">${rup(num(l.Loan_Amount))}</td>
     <td class="r amber">${rup(num(l.Outstand_Amount))}</td>
     <td>${esc(l.Loan_Status ?? '')}</td></tr>`).join('')
 
-  const monthRows = d.months.map(([m, v]) => `<tr>
-    <td>${esc(monthName(m))}</td>
-    <td class="r">${rup(v.billed)}</td>
-    <td class="r ${v.pending > 0 ? 'amber' : ''}">${v.pending ? rup(v.pending) : '—'}</td></tr>`).join('')
-
-  // Customers with outstanding loan > 0.
-  const outTotal = d.custOutstanding.reduce((s, c) => s + c.outstanding, 0)
-  const custOutRows = d.custOutstanding.map(c => `<tr>
-    <td>${esc(c.name)}</td>
-    <td class="r">${c.count}</td>
-    <td class="r amber">${rup(c.outstanding)}</td></tr>`).join('')
-
-  // Customers with interest pending > 0.
-  const pendTotal = d.custPending.reduce((s, c) => s + c.pending, 0)
-  const custPendRows = d.custPending.map(c => `<tr>
-    <td>${esc(c.name)}</td>
-    <td class="r amber">${rup(c.pending)}</td></tr>`).join('')
-
-  // Interest-pending ledger (line by line).
+  // Interest-pending ledger — one row per customer (unique by STL), billed and
+  // pending summed, the covered months carried in the Description column.
   const ledgerTotal = d.pendingLedger.reduce((s, r) => s + r.pending, 0)
   const ledgerRows = d.pendingLedger.map(r => `<tr>
     <td>${esc(r.name)}</td>
-    <td>${esc(r.loanNo)}</td>
-    <td>${esc(monthName(r.month))}</td>
+    <td>${esc(r.description)}</td>
     <td class="r">${rup(r.billed)}</td>
     <td class="r">${rup(r.received)}</td>
     <td class="r amber">${rup(r.pending)}</td></tr>`).join('')
@@ -243,23 +250,11 @@ function sharePartnerPdf(d: PartnerPdf): void {
 
         <h3>Referred loans</h3>
         <table><thead><tr><th>Loan</th><th>Customer</th><th>Given</th><th class="r">Amount</th><th class="r">Outstanding</th><th>Status</th></tr></thead>
-        <tbody>${loanRows || '<tr><td colspan="6">No referred loans.</td></tr>'}</tbody></table>
-
-        ${d.months.length ? `<h3>Interest by month</h3>
-        <table><thead><tr><th>Month</th><th class="r">Billed</th><th class="r">Pending</th></tr></thead>
-        <tbody>${monthRows}</tbody></table>` : ''}
-
-        <h3>Customers with outstanding loan &gt; 0 · ${rup(outTotal)}</h3>
-        <table><thead><tr><th>Customer</th><th class="r">Loans</th><th class="r">Outstanding</th></tr></thead>
-        <tbody>${custOutRows || '<tr><td colspan="3">No customer has an outstanding loan.</td></tr>'}</tbody></table>
-
-        <h3>Customers with interest pending &gt; 0 · ${rup(pendTotal)}</h3>
-        <table><thead><tr><th>Customer</th><th class="r">Interest pending</th></tr></thead>
-        <tbody>${custPendRows || '<tr><td colspan="2">No customer has pending interest.</td></tr>'}</tbody></table>
+        <tbody>${loanRows || '<tr><td colspan="6">No open referred loans.</td></tr>'}</tbody></table>
 
         <h3>Interest pending ledger · ${rup(ledgerTotal)}</h3>
-        <table><thead><tr><th>Customer</th><th>Loan</th><th>Month</th><th class="r">Billed</th><th class="r">Received</th><th class="r">Pending</th></tr></thead>
-        <tbody>${ledgerRows || '<tr><td colspan="6">No pending interest lines.</td></tr>'}</tbody></table>
+        <table><thead><tr><th>Customer</th><th>Description</th><th class="r">Billed</th><th class="r">Received</th><th class="r">Pending</th></tr></thead>
+        <tbody>${ledgerRows || '<tr><td colspan="5">No pending interest.</td></tr>'}</tbody></table>
       </div>
       <div class="foot"><span>Generated ${today}</span><span>Arul Finance</span></div>
     </div>

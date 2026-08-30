@@ -83,3 +83,7 @@ export const phone = (p?: number | string): string => {
   if (!p) return '—'
   return String(p).replace(/\.0$/, '')
 }
+
+// True when a status column reads "active" — used to group lists so live rows
+// sort ahead of closed/settled ones.
+export const isActive = (status?: string): boolean => (status ?? '').trim().toLowerCase() === 'active'

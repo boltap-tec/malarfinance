@@ -4,7 +4,7 @@ import { Search, Plus, HandCoins, Percent, Users } from 'lucide-react'
 import { repo, addCustomer, customerRisk } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
-import { inr, phone, num } from '../lib/format'
+import { inr, phone, num, isActive } from '../lib/format'
 import { useCreateParam } from '../lib/useCreateParam'
 import type { Customer } from '../data/types'
 
@@ -26,7 +26,10 @@ export default function Customers() {
     const filtered = list.filter(c =>
       !s || c.Customer_Name?.toLowerCase().includes(s) || c.Customer_STL_NO?.toLowerCase().includes(s) ||
       String(c.Customer_Phone_No ?? '').includes(s),
-    ).sort((a, b) => num(b.Outstand_Loan) - num(a.Outstand_Loan))
+    ).sort((a, b) =>
+      (Number(isActive(b.Status)) - Number(isActive(a.Status))) ||   // active customers first
+      (num(b.Outstand_Loan) - num(a.Outstand_Loan)),
+    )
     return {
       rows: filtered,
       outLoan: filtered.reduce((s2, c) => s2 + num(c.Outstand_Loan), 0),

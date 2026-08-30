@@ -283,6 +283,18 @@ export const repo = {
   financesByMdPhone(phone: string): Finance[] {
     return (db.Finance_Details ?? []).filter(f => f.Phone_Number != null && String(f.Phone_Number) === phone)
   },
+  // ── Login by name (username) — matched case-insensitively against each role's
+  // own table, so login no longer depends on the phone number (which can change).
+  workerByName(name: string): Worker | undefined {
+    return (db.Worker ?? []).find(w => eqName(w.Worker_Name, name))
+  },
+  partnerByName(name: string): Partner | undefined {
+    return (db.Partner ?? []).find(p => eqName(p.Partner_Name, name))
+  },
+  // Every finance whose MD name matches — an MD may run more than one finance.
+  financesByMdName(name: string): Finance[] {
+    return (db.Finance_Details ?? []).filter(f => eqName(f.MD_Name ?? '', name))
+  },
   notifications(phone?: string): AppNotification[] {
     return (db.Notification ?? [])
       .filter(n => !phone || n.To_Phone === phone)
@@ -444,27 +456,30 @@ export const repo = {
 // from the respective table. Defaults to '1234' until changed.
 export type LoginRole = 'md' | 'partner' | 'worker'
 
-// The stored PIN for a phone in a given role's table (undefined → use default).
-export function pinFor(role: LoginRole, phone: string): string | undefined {
-  if (role === 'md') return (db.Finance_Details ?? []).find(f => f.Phone_Number != null && String(f.Phone_Number) === phone)?.PIN
-  if (role === 'partner') return (db.Partner ?? []).find(p => String(p.Phone_Number) === phone)?.PIN
-  return (db.Worker ?? []).find(w => String(w.Phone_Number) === phone)?.PIN
+// The stored PIN (password) for a username in a given role's table
+// (undefined → use default). Login is by name, not phone, so a changed phone
+// number never locks anyone out.
+export function pinForName(role: LoginRole, name: string): string | undefined {
+  if (role === 'md') return (db.Finance_Details ?? []).find(f => eqName(f.MD_Name ?? '', name))?.PIN
+  if (role === 'partner') return (db.Partner ?? []).find(p => eqName(p.Partner_Name, name))?.PIN
+  return (db.Worker ?? []).find(w => eqName(w.Worker_Name, name))?.PIN
 }
-export function verifyPin(role: LoginRole, phone: string, pin: string): boolean {
-  return String(pinFor(role, phone) || '1234') === pin // blank/missing → default 1234
+export function verifyPinByName(role: LoginRole, name: string, pin: string): boolean {
+  return String(pinForName(role, name) || '1234') === pin // blank/missing → default 1234
 }
-// Change the PIN for the current user's role. An MD who runs several finances has
-// one row per finance (same phone) — update them all so the PIN stays in sync.
-export async function setPin(role: LoginRole, phone: string, pin: string): Promise<void> {
+// Change the password for the current user's role, keyed by their (stable) name.
+// An MD who runs several finances has one row per finance — update them all so the
+// password stays in sync across their finances.
+export async function setPinByName(role: LoginRole, name: string, pin: string): Promise<void> {
   if (role === 'md') {
-    for (const f of (db.Finance_Details ?? []).filter(f => f.Phone_Number != null && String(f.Phone_Number) === phone)) {
+    for (const f of (db.Finance_Details ?? []).filter(f => eqName(f.MD_Name ?? '', name))) {
       f.PIN = pin; await sUpdate('Finance_Details', f.Finance_Name, { PIN: pin })
     }
   } else if (role === 'partner') {
-    const p = (db.Partner ?? []).find(p => String(p.Phone_Number) === phone)
+    const p = (db.Partner ?? []).find(p => eqName(p.Partner_Name, name))
     if (p) { p.PIN = pin; await sUpdate('Partner', p.Partner_ID, { PIN: pin }) }
   } else {
-    const w = (db.Worker ?? []).find(w => String(w.Phone_Number) === phone)
+    const w = (db.Worker ?? []).find(w => eqName(w.Worker_Name, name))
     if (w) { w.PIN = pin; await sUpdate('Worker', w.Worker_ID, { PIN: pin }) }
   }
   persist()
@@ -491,6 +506,8 @@ function nextRef(): string {
 }
 
 const num = (v: unknown) => { const n = Number(v); return isNaN(n) ? 0 : n }
+// Case-insensitive, trimmed name match — used for username login.
+const eqName = (a: unknown, b: unknown) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase()
 const refNum = (r: unknown) => { const n = Number(String(r).replace(/\D/g, '')); return isNaN(n) ? 0 : n }
 // Later of two dates (yyyy-mm-dd / ISO), ignoring blanks.
 const laterD = (a?: string | null, b?: string | null): string | undefined =>

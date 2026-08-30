@@ -1,12 +1,14 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { repo, setViewer, verifyPin, setPin } from '../data/repository'
+import { repo, setViewer, verifyPinByName, setPinByName } from '../data/repository'
 
 export type Role = 'md' | 'partner' | 'worker'
 
-// The one phone allowed to see EVERY finance ("all finances"), during build-out.
-// Every other MD is scoped to only the finance(s) they run.
+// The one MD allowed to see EVERY finance ("all finances"), during build-out.
+// Every other MD is scoped to only the finance(s) they run. Identified by name
+// (and, for older data, phone) so a changed phone number never affects it.
 export const SUPER_PHONE = '9626262427'
+export const SUPER_MD_NAME = 'Malarvizhi'
 
 export interface AppUser {
   name: string
@@ -23,9 +25,10 @@ export interface AppUser {
 interface AppState {
   user: AppUser | null
   finance: string
-  // You pick your role on the login screen; the PIN is checked against that role's
-  // table. Returns an error string, or null on success.
-  login: (role: Role, phone: string, pin: string) => string | null
+  // You pick your role on the login screen, then sign in with your username (name)
+  // and password, both checked against that role's own table. Returns an error
+  // string, or null on success.
+  login: (role: Role, username: string, password: string) => string | null
   logout: () => void
   setFinance: (f: string) => void
   changePassword: (newPassword: string) => void
@@ -41,36 +44,39 @@ export const useApp = create<AppState>()(
     (set, get) => ({
       user: null,
       finance: 'ALL',
-      login: (role, phoneRaw, pin) => {
-        const phone = phoneRaw.trim()
+      login: (role, usernameRaw, password) => {
+        const username = usernameRaw.trim()
         if (!role) return 'Choose whether you are an MD, partner or worker.'
-        if (!phone) return 'Enter your phone number.'
+        if (!username) return 'Enter your username.'
 
         if (role === 'md') {
-          const isSuper = phone === SUPER_PHONE
-          const mdFinances = repo.financesByMdPhone(phone)
-          if (!isSuper && mdFinances.length === 0) return 'No MD found with this phone number.'
-          if (!verifyPin('md', phone, pin)) return 'Wrong PIN. (Default is 1234.)'
+          const mdFinances = repo.financesByMdName(username)
+          if (mdFinances.length === 0) return 'No MD found with this username.'
+          if (!verifyPinByName('md', username, password)) return 'Wrong password. (Default is 1234.)'
+          // Super MD (sees all finances) — matched by name, or by the legacy super phone.
+          const isSuper = username.toLowerCase() === SUPER_MD_NAME.toLowerCase()
+            || mdFinances.some(f => f.Phone_Number != null && String(f.Phone_Number) === SUPER_PHONE)
           const names = isSuper ? repo.finances().map(f => f.Finance_Name) : mdFinances.map(f => f.Finance_Name)
           const scope = isSuper ? 'ALL' : (names[0] ?? 'ALL')
-          const u: AppUser = { name: mdFinances[0]?.MD_Name || 'MD', role: 'md', phone, finance: scope, finances: names, isSuper }
+          const phone = mdFinances.find(f => f.Phone_Number != null)?.Phone_Number
+          const u: AppUser = { name: mdFinances[0]?.MD_Name || 'MD', role: 'md', phone: phone != null ? String(phone) : '', finance: scope, finances: names, isSuper }
           applyViewer(u); set({ user: u, finance: scope }); return null
         }
 
         if (role === 'partner') {
-          const partner = repo.partnerByPhone(phone)
-          if (!partner) return 'No partner found with this phone number.'
-          if (!verifyPin('partner', phone, pin)) return 'Wrong PIN. (Default is 1234.)'
-          const u: AppUser = { name: partner.Partner_Name, role: 'partner', phone, finance: partner.Finance_Name, partnerId: partner.Partner_ID }
+          const partner = repo.partnerByName(username)
+          if (!partner) return 'No partner found with this username.'
+          if (!verifyPinByName('partner', username, password)) return 'Wrong password. (Default is 1234.)'
+          const u: AppUser = { name: partner.Partner_Name, role: 'partner', phone: partner.Phone_Number != null ? String(partner.Phone_Number) : '', finance: partner.Finance_Name, partnerId: partner.Partner_ID }
           applyViewer(u); set({ user: u, finance: partner.Finance_Name }); return null
         }
 
         // worker
-        const worker = repo.workerByPhone(phone)
-        if (!worker) return 'No worker found with this phone number.'
-        if (!verifyPin('worker', phone, pin)) return 'Wrong PIN. (Default is 1234.)'
+        const worker = repo.workerByName(username)
+        if (!worker) return 'No worker found with this username.'
+        if (!verifyPinByName('worker', username, password)) return 'Wrong password. (Default is 1234.)'
         const u: AppUser = {
-          name: worker.Worker_Name, role: 'worker', phone,
+          name: worker.Worker_Name, role: 'worker', phone: worker.Phone_Number != null ? String(worker.Phone_Number) : '',
           finance: worker.Finance_Name, workerId: worker.Worker_ID, allowedMenus: worker.Allowed_Menus ?? [],
         }
         applyViewer(u); set({ user: u, finance: worker.Finance_Name }); return null
@@ -85,12 +91,12 @@ export const useApp = create<AppState>()(
       },
       changePassword: (newPassword) => {
         const u = get().user
-        if (u && newPassword) setPin(u.role, u.phone, newPassword)
+        if (u && newPassword) setPinByName(u.role, u.name, newPassword)
       },
     }),
     {
       name: 'arul-finance:session',
-      version: 4, // bumped: per-role PIN on each table + explicit role login
+      version: 5, // bumped: login by username (name) + password instead of phone + PIN
       migrate: () => ({ user: null, finance: 'ALL' }) as Partial<AppState>,
       onRehydrateStorage: () => (state) => { applyViewer(state?.user ?? null) },
     },

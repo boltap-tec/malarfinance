@@ -2237,7 +2237,7 @@ alter table "Borrowed" enable row level security;
 create policy "read_all_Borrowed" on "Borrowed" for select using (true);
 
 drop table if exists "Hand_Exchange" cascade;
-create table "Hand_Exchange" ("ID" text, "Date" text, "Person" text, "Person_Phone" text, "Category" text, "Amount" numeric, "Direction" text, "Type" text, "Mode" text, "Note" text, "Remarks" text);
+create table "Hand_Exchange" ("ID" text, "Date" text, "Person" text, "Person_Phone" text, "Category" text, "Amount" numeric, "Direction" text, "Type" text, "Mode" text, "Note" text, "Remarks" text, "Finance_Name" text);
 insert into "Hand_Exchange" ("ID", "Date", "Person", "Person_Phone", "Amount", "Direction", "Type", "Mode", "Note", "Remarks") values
 ('b19c2a41', '2026-03-17', 'appa', NULL, 12500.0, 'out', 'Give', 'Other', '7500+5000 advocate fee', NULL),
 ('67e76b92', '2026-03-17', 'Chandrasekar', NULL, 20000.0, 'out', 'Give', 'Cash', 'by finance kannan chit amount 1l-80k', NULL),
@@ -2279,5 +2279,7 @@ insert into "Hand_Exchange" ("ID", "Date", "Person", "Person_Phone", "Amount", "
 ('742b7c3f', '2026-04-21', 'Nagaraj jewel friend', NULL, 22200.0, 'in', 'Borrow', 'Account', '112200 out of which 90k given to ganesh jewellery', NULL),
 ('2d1124fe', '2026-05-25', 'Nagaraj', NULL, 490000.0, 'in', 'Borrow', 'Account', '10-6=4l, 20k account, 20k account, 50 account = total 490000', NULL),
 ('75c7280c', '2026-06-19', 'Tharun', NULL, 15000.0, 'in', 'Borrow', 'Other', 'Cash', NULL);
+-- Existing hand-exchange rows predate finance scoping → file under Malar_Finance.
+update "Hand_Exchange" set "Finance_Name" = 'Malar_Finance' where "Finance_Name" is null;
 alter table "Hand_Exchange" enable row level security;
 create policy "read_all_Hand_Exchange" on "Hand_Exchange" for select using (true);

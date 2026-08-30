@@ -6,7 +6,7 @@ import { useApp, financeFilter, canEdit } from '../store/app'
 import {
   PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal, AmountHint,
 } from '../components/ui'
-import { inr, fmtDate, num, phone } from '../lib/format'
+import { inr, fmtDate, num, phone, isActive } from '../lib/format'
 import { useCreateParam } from '../lib/useCreateParam'
 import type { OtherFinanceLoan } from '../data/types'
 
@@ -23,7 +23,10 @@ export default function OtherFinance() {
   const { rows, borrowed, outstanding } = useMemo(() => {
     const list = repo.otherFinanceLoans(financeFilter(finance))
       .slice()
-      .sort((a, b) => num(b.Outstand_Amount) - num(a.Outstand_Amount))
+      .sort((a, b) =>
+        (Number(isActive(b.Loan_Status)) - Number(isActive(a.Loan_Status))) ||   // active loans first
+        (num(b.Outstand_Amount) - num(a.Outstand_Amount)),
+      )
     return {
       rows: list,
       borrowed: list.reduce((s, o) => s + num(o.Loan_Amount), 0),

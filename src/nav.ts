@@ -40,7 +40,6 @@ export const navGroups: NavGroup[] = [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, desc: 'KPIs & recent activity' },
       { to: '/ledger', label: 'Ledger', icon: BookOpenText, desc: 'All receipts & payments' },
       { to: '/hand', label: 'Hand Exchange', icon: Handshake, desc: 'Personal give & take (private)' },
-      { to: '/profit', label: 'Profit', icon: TrendingUp, desc: 'Profit by month & year' },
     ],
   },
   {
@@ -74,6 +73,12 @@ export const navGroups: NavGroup[] = [
       { to: '/finances', label: 'Finances', icon: Landmark, desc: 'Your finance companies' },
       { to: '/partners', label: 'Partners', icon: Users2, desc: 'Owners & partners' },
       { to: '/workers', label: 'Workers', icon: UserCog, desc: 'Staff & their menus' },
+    ],
+  },
+  {
+    title: 'Profit',
+    items: [
+      { to: '/profit', label: 'Profit', icon: TrendingUp, desc: 'Profit by month & year' },
     ],
   },
   {

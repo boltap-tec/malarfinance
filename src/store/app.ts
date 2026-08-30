@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { repo, setViewer, verifyPinByName, setPinByName } from '../data/repository'
+import { repo, setViewer, setPinByName } from '../data/repository'
 
 export type Role = 'md' | 'partner' | 'worker'
 
@@ -47,14 +47,21 @@ export const useApp = create<AppState>()(
       login: (role, usernameRaw, password) => {
         const username = usernameRaw.trim()
         if (!role) return 'Choose whether you are an MD, partner or worker.'
-        if (!username) return 'Enter your username.'
+        if (!username) return 'Enter your username or phone number.'
+
+        // You may sign in with your NAME or your phone number — either is matched
+        // against your role's table. The default password is 1234.
+        const pinOk = (pin?: string) => String(pin || '1234') === password
 
         if (role === 'md') {
-          const mdFinances = repo.financesByMdName(username)
-          if (mdFinances.length === 0) return 'No MD found with this username.'
-          if (!verifyPinByName('md', username, password)) return 'Wrong password. (Default is 1234.)'
-          // Super MD (sees all finances) — matched by name, or by the legacy super phone.
+          // Match by MD name first, then fall back to phone number.
+          let mdFinances = repo.financesByMdName(username)
+          if (mdFinances.length === 0) mdFinances = repo.financesByMdPhone(username)
+          if (mdFinances.length === 0) return 'No MD found with this username or phone.'
+          if (!pinOk(mdFinances[0]?.PIN)) return 'Wrong password. (Default is 1234.)'
+          // Super MD (sees all finances) — matched by name or by the super phone.
           const isSuper = username.toLowerCase() === SUPER_MD_NAME.toLowerCase()
+            || username === SUPER_PHONE
             || mdFinances.some(f => f.Phone_Number != null && String(f.Phone_Number) === SUPER_PHONE)
           const names = isSuper ? repo.finances().map(f => f.Finance_Name) : mdFinances.map(f => f.Finance_Name)
           const scope = isSuper ? 'ALL' : (names[0] ?? 'ALL')
@@ -64,17 +71,17 @@ export const useApp = create<AppState>()(
         }
 
         if (role === 'partner') {
-          const partner = repo.partnerByName(username)
-          if (!partner) return 'No partner found with this username.'
-          if (!verifyPinByName('partner', username, password)) return 'Wrong password. (Default is 1234.)'
+          const partner = repo.partnerByName(username) ?? repo.partnerByPhone(username)
+          if (!partner) return 'No partner found with this username or phone.'
+          if (!pinOk(partner.PIN)) return 'Wrong password. (Default is 1234.)'
           const u: AppUser = { name: partner.Partner_Name, role: 'partner', phone: partner.Phone_Number != null ? String(partner.Phone_Number) : '', finance: partner.Finance_Name, partnerId: partner.Partner_ID }
           applyViewer(u); set({ user: u, finance: partner.Finance_Name }); return null
         }
 
         // worker
-        const worker = repo.workerByName(username)
-        if (!worker) return 'No worker found with this username.'
-        if (!verifyPinByName('worker', username, password)) return 'Wrong password. (Default is 1234.)'
+        const worker = repo.workerByName(username) ?? repo.workerByPhone(username)
+        if (!worker) return 'No worker found with this username or phone.'
+        if (!pinOk(worker.PIN)) return 'Wrong password. (Default is 1234.)'
         const u: AppUser = {
           name: worker.Worker_Name, role: 'worker', phone: worker.Phone_Number != null ? String(worker.Phone_Number) : '',
           finance: worker.Finance_Name, workerId: worker.Worker_ID, allowedMenus: worker.Allowed_Menus ?? [],

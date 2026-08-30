@@ -83,13 +83,13 @@ export default function Login() {
               </button>
 
               <div className="mt-5">
-                <label className="label">Username</label>
+                <label className="label">Username or phone</label>
                 <div className="relative mt-1.5">
                   <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                   <input
                     className="input pl-9" value={username} autoFocus autoCapitalize="none" autoCorrect="off"
                     onChange={e => { setUsername(e.target.value); setError(null) }}
-                    placeholder={`Your ${roleLabel} name`}
+                    placeholder={`Your ${roleLabel} name or phone`}
                   />
                 </div>
               </div>

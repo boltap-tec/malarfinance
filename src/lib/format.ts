@@ -87,3 +87,9 @@ export const phone = (p?: number | string): string => {
 // True when a status column reads "active" — used to group lists so live rows
 // sort ahead of closed/settled ones.
 export const isActive = (status?: string): boolean => (status ?? '').trim().toLowerCase() === 'active'
+
+// Status derived purely from the outstanding balance: anything still owed is
+// "Active", a zero (or nil) balance is "Inactive". Used for Customers, Depositors
+// and Other-Finance loans so the badge always matches reality.
+export const balanceStatus = (outstanding: number | undefined | null): 'Active' | 'Inactive' =>
+  num(outstanding) > 0 ? 'Active' : 'Inactive'

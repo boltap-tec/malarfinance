@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Phone, Mail, HandCoins, Percent, Share2, Building2 } from 'lucide-react'
 import { repo } from '../data/repository'
@@ -13,6 +13,7 @@ import { inr, fmtDate, phone as fmtPhone, num, monthKey, monthName, isActive } f
 export default function PartnerDetail() {
   const { id = '' } = useParams()
   const pid = decodeURIComponent(id)
+  const [includeCurrent, setIncludeCurrent] = useState(false)  // WhatsApp: include the current month? default no
 
   const d = useMemo(() => {
     const partner = repo.partners().find(p => p.Partner_ID === pid)
@@ -87,11 +88,15 @@ export default function PartnerDetail() {
         title={p.Partner_Name}
         subtitle={`${p.Partner_ID} · ${p.Finance_Name}`}
         action={<div className="flex items-center gap-2">
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400">
+            <input type="checkbox" checked={includeCurrent} onChange={e => setIncludeCurrent(e.target.checked)} className="accent-brand-500" />
+            Include current month
+          </label>
           <ReminderButton
             label="WhatsApp"
             phone={p.Phone_Number}
             header={`${p.Partner_Name} (${p.Finance_Name})`}
-            message={partnerWaMessage(p.Partner_Name, p.Finance_Name, d.outstanding, d.unbilled)}
+            message={partnerWaMessage(p, d.interest, includeCurrent)}
           />
           <button className="btn-primary !py-1.5" onClick={() => sharePartnerPdf({ ...d, partner: p })}><Share2 size={15} /> Share PDF</button>
         </div>}
@@ -162,16 +167,55 @@ export default function PartnerDetail() {
   )
 }
 
-// The WhatsApp update sent to a partner: their total outstanding loan and the
-// interest that has accrued but not yet been billed (unbilled) so far.
-function partnerWaMessage(name: string, finance: string, outstanding: number, unbilled: number): string {
-  const rs = (n: number) => 'Rs ' + Math.round(n).toLocaleString('en-IN')
-  const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-  return [
-    `${name} (${finance})`,
-    `Total Outstanding Loan: ${rs(outstanding)}`,
-    `Unbilled Interest (to ${today}): ${rs(unbilled)}`,
-  ].join('\n')
+// Short month label from a "MM-YYYY" value, e.g. "08-2026" -> "Aug26".
+function monthShort(m?: string): string {
+  const [mm, yy] = String(m ?? '').split('-')
+  const names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const i = Number(mm)
+  return i >= 1 && i <= 12 && yy ? `${names[i]}${String(yy).slice(-2)}` : String(m ?? '')
+}
+
+// The WhatsApp update sent to a partner: total interest pending (by default up to
+// LAST month; optionally including the current month), then a per-customer
+// breakdown of the pending months and amounts.
+function partnerWaMessage(p: import('../data/types').Partner, interest: import('../data/types').InterestRow[], includeCurrent: boolean): string {
+  const rs = (n: number) => Math.round(n).toLocaleString('en-IN')
+  const now = new Date()
+  const curKey = now.getFullYear() * 100 + (now.getMonth() + 1)
+  const inWindow = (m?: string) => { const k = monthKey(m); return includeCurrent ? k <= curKey : k < curKey }
+
+  // Group by customer, then sum pending per month (a customer may have several
+  // loans, each billing the same month) → one line per month.
+  const byCust = new Map<string, { name: string; months: Map<string, number> }>()
+  let total = 0
+  for (const i of interest) {
+    const pend = num(i.Interest_Pending)
+    if (pend <= 0 || !i.Month || !inWindow(i.Month)) continue
+    const key = i.Customer_STL_NO || i.Customer_Name || '—'
+    let c = byCust.get(key)
+    if (!c) { c = { name: i.Customer_Name ?? key, months: new Map<string, number>() }; byCust.set(key, c) }
+    c.months.set(i.Month, (c.months.get(i.Month) ?? 0) + pend)
+    total += pend
+  }
+
+  const label = includeCurrent ? 'Total Interest Pending till this month' : 'Total Interest Pending till last month'
+  const lines = [
+    `Partner No and Name: ${p.Partner_ID} ${p.Partner_Name}`,
+    `${label}: ${rs(total)}`,
+  ]
+  if (byCust.size === 0) {
+    lines.push('No pending interest. Thank you.')
+    return lines.join('\n')
+  }
+  const blocks = [...byCust.values()].map(c => {
+    const monthLines = [...c.months.entries()]
+      .sort((a, b) => monthKey(a[0]) - monthKey(b[0]))
+      .map(([m, amt]) => `${monthShort(m)}-${rs(amt)}`)
+      .join(',\n')
+    return `${c.name}\n${monthLines}`
+  })
+  lines.push('Pending details:\n' + blocks.join('\n\n'))
+  return lines.join('\n')
 }
 
 // ── Colourful, shareable PDF of the partner's position ──────────────────────

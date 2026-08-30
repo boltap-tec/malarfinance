@@ -3,8 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Search, Plus, Users2, HandCoins, Percent } from 'lucide-react'
 import { repo } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
-import { PageHeader, Card, StatCard, Th, Td, EmptyState } from '../components/ui'
-import { inr, phone, num } from '../lib/format'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
+import { inr, phone, num, balanceStatus } from '../lib/format'
 
 export default function Depositors() {
   const finance = useApp(s => s.finance)
@@ -59,7 +59,7 @@ export default function Depositors() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th sticky>Depositor</Th><Th>DEP no.</Th><Th>Phone</Th><Th right>Deposits</Th><Th right>Total</Th><Th right>Outstanding</Th>{canEdit(role) && <Th>Actions</Th>}</tr>
+                <tr><Th sticky>Depositor</Th><Th>DEP no.</Th><Th>Phone</Th><Th right>Deposits</Th><Th right>Total</Th><Th right>Outstanding</Th><Th>Status</Th>{canEdit(role) && <Th>Actions</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map((d, i) => {
@@ -72,6 +72,7 @@ export default function Depositors() {
                     <Td right className="text-slate-300">{d.count}</Td>
                     <Td right className="text-hd">{inr(d.deposited)}</Td>
                     <Td right className={num(d.out) > 0 ? 'font-semibold text-rose-300' : 'text-slate-400'}>{inr(d.out)}</Td>
+                    <Td><Badge tone={statusTone(balanceStatus(d.out))}>{balanceStatus(d.out)}</Badge></Td>
                     {canEdit(role) && (
                       <Td>
                         <div className="flex gap-1.5">

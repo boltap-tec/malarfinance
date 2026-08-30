@@ -6,7 +6,7 @@ import { useApp, financeFilter, canEdit } from '../store/app'
 import {
   PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal, AmountHint,
 } from '../components/ui'
-import { inr, fmtDate, num, phone, isActive } from '../lib/format'
+import { inr, fmtDate, num, phone, balanceStatus } from '../lib/format'
 import { useCreateParam } from '../lib/useCreateParam'
 import type { OtherFinanceLoan } from '../data/types'
 
@@ -24,7 +24,7 @@ export default function OtherFinance() {
     const list = repo.otherFinanceLoans(financeFilter(finance))
       .slice()
       .sort((a, b) =>
-        (Number(isActive(b.Loan_Status)) - Number(isActive(a.Loan_Status))) ||   // active loans first
+        (Number(num(b.Outstand_Amount) > 0) - Number(num(a.Outstand_Amount) > 0)) ||   // active (owing) loans first
         (num(b.Outstand_Amount) - num(a.Outstand_Amount)),
       )
     return {
@@ -78,7 +78,7 @@ export default function OtherFinance() {
                         : `₹${num(o.Interest_Per_day_Per_Lakh)}/L·day`}
                     </Td>
                     <Td right className="text-rose-300">{inr(num(o.Outstand_Amount))}</Td>
-                    <Td><Badge tone={statusTone(o.Loan_Status)}>{o.Loan_Status ?? '—'}</Badge></Td>
+                    <Td><Badge tone={statusTone(balanceStatus(o.Outstand_Amount))}>{balanceStatus(o.Outstand_Amount)}</Badge></Td>
                     {canEdit(role) && (
                       <Td>
                         <div className="flex gap-1.5">

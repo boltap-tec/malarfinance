@@ -4,7 +4,7 @@ import { Search, Plus, HandCoins, Percent, Users } from 'lucide-react'
 import { repo, addCustomer, customerRisk } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
-import { inr, phone, num, isActive } from '../lib/format'
+import { inr, phone, num, balanceStatus } from '../lib/format'
 import { useCreateParam } from '../lib/useCreateParam'
 import type { Customer } from '../data/types'
 
@@ -27,7 +27,7 @@ export default function Customers() {
       !s || c.Customer_Name?.toLowerCase().includes(s) || c.Customer_STL_NO?.toLowerCase().includes(s) ||
       String(c.Customer_Phone_No ?? '').includes(s),
     ).sort((a, b) =>
-      (Number(isActive(b.Status)) - Number(isActive(a.Status))) ||   // active customers first
+      (Number(num(b.Outstand_Loan) > 0) - Number(num(a.Outstand_Loan) > 0)) ||   // active (owing) customers first
       (num(b.Outstand_Loan) - num(a.Outstand_Loan)),
     )
     return {
@@ -82,7 +82,7 @@ export default function Customers() {
                     <Td right className="font-semibold text-hd">{inr(num(c.Outstand_Loan))}</Td>
                     <Td right className={num(c.Outstanding_Interest) > 0 ? 'font-semibold text-amber-400' : 'text-slate-400'}>{inr(num(c.Outstanding_Interest))}</Td>
                     <Td><RiskBadge stl={c.Customer_STL_NO} /></Td>
-                    <Td><Badge tone={statusTone(c.Status)}>{c.Status ?? '—'}</Badge></Td>
+                    <Td><Badge tone={statusTone(balanceStatus(c.Outstand_Loan))}>{balanceStatus(c.Outstand_Loan)}</Badge></Td>
                     {canEdit(role) && (
                       <Td>
                         <div className="flex gap-1.5">

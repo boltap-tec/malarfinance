@@ -8,7 +8,7 @@ import {
 } from '../data/repository'
 import { useApp } from '../store/app'
 import { PageHeader, Card, EmptyState } from '../components/ui'
-import { num, inr } from '../lib/format'
+import { num, inr, monthKey } from '../lib/format'
 
 export default function Settings() {
   const role = useApp(s => s.user?.role)
@@ -76,7 +76,9 @@ export default function Settings() {
       cur.count++; cur.total += num(i.Interest_Amount)
       map.set(i.Month, cur)
     }
-    return [...map.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1))
+    // Newest first — sort chronologically (year then month), not by the raw
+    // "MM-YYYY" string (which would order 12-2025 above 08-2026).
+    return [...map.entries()].sort((a, b) => monthKey(b[0]) - monthKey(a[0]))
   }, [finance, tick])
 
   if (role !== 'md') return <EmptyState title="Only the MD can change settings" />

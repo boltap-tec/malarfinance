@@ -15,6 +15,12 @@ const DAY = 1000 * 60 * 60 * 24
 const days = (a: Date, b: Date) => Math.ceil((b.getTime() - a.getTime()) / DAY) + 1
 export const roundTo10 = (v: number) => Math.round(v / 10) * 10
 
+// Format a Date as yyyy-mm-dd from its LOCAL calendar fields. The dates in
+// computeInterest are normalised to LOCAL midnight (setHours), so toISOString()
+// — which is UTC — would shift them a day back in +ve timezones (IST), e.g.
+// showing 31 Jul for a 1 Aug start. Local formatting keeps the period correct.
+const ymd = (d: Date) => isNaN(d.getTime()) ? '' : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
 export interface InterestPreview {
   loan: Loan
   fromDate: string
@@ -42,9 +48,8 @@ export function computeInterest(
   // zero preview instead of throwing on toISOString() — which would white-screen
   // the whole app the moment a repay date is being edited.
   if (isNaN(from.getTime()) || isNaN(to.getTime())) {
-    const safe = (d: Date) => isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
     return {
-      loan, fromDate: safe(from), toDate: safe(to), actualFromDate: safe(from),
+      loan, fromDate: ymd(from), toDate: ymd(to), actualFromDate: ymd(from),
       noOfDays: 0, totalMonthDays: 1, rawInterest: 0, interest: 0, month: '', description: '',
     }
   }
@@ -74,9 +79,9 @@ export function computeInterest(
 
   return {
     loan,
-    fromDate: from.toISOString().slice(0, 10),
-    toDate: to.toISOString().slice(0, 10),
-    actualFromDate: actualFrom.toISOString().slice(0, 10),
+    fromDate: ymd(from),
+    toDate: ymd(to),
+    actualFromDate: ymd(actualFrom),
     noOfDays,
     totalMonthDays,
     rawInterest: raw,

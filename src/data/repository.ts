@@ -917,23 +917,36 @@ export function nextStlNo(finance: string): string {
   return `${prefix}-STL${max + 1}`
 }
 
+// Interest rows carry a deterministic ID (e.g. `${stl}-${month}`). Skip any whose
+// ID already exists so a double-click / re-post can never duplicate a row —
+// posting is idempotent, and a genuine re-post only lands after a revoke removed
+// the old rows first.
+function dropExisting<T extends { ID?: string }>(table: T[], rows: T[]): T[] {
+  const have = new Set((table ?? []).map(r => r.ID))
+  return rows.filter(r => !have.has(r.ID))
+}
+
 export async function appendInterestRows(rows: InterestRow[]): Promise<void> {
-  db.Interest_Details = [...(db.Interest_Details ?? []), ...rows]
-  await sInsert('Interest_Details', rows)
+  const fresh = dropExisting(db.Interest_Details ?? [], rows)
+  if (!fresh.length) return
+  db.Interest_Details = [...(db.Interest_Details ?? []), ...fresh]
+  await sInsert('Interest_Details', fresh)
   persist()
 }
 
 export async function appendDepositInterest(rows: any[]): Promise<void> {
-  if (!rows.length) return
-  db.Depositer_Interest = [...(db.Depositer_Interest ?? []), ...rows]
-  await sInsert('Depositer_Interest', rows)
+  const fresh = dropExisting(db.Depositer_Interest ?? [], rows)
+  if (!fresh.length) return
+  db.Depositer_Interest = [...(db.Depositer_Interest ?? []), ...fresh]
+  await sInsert('Depositer_Interest', fresh)
   persist()
 }
 
 export async function appendOtherFinanceInterest(rows: any[]): Promise<void> {
-  if (!rows.length) return
-  db.Other_Finance_Interest = [...(db.Other_Finance_Interest ?? []), ...rows]
-  await sInsert('Other_Finance_Interest', rows)
+  const fresh = dropExisting(db.Other_Finance_Interest ?? [], rows)
+  if (!fresh.length) return
+  db.Other_Finance_Interest = [...(db.Other_Finance_Interest ?? []), ...fresh]
+  await sInsert('Other_Finance_Interest', fresh)
   persist()
 }
 

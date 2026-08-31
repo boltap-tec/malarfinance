@@ -74,10 +74,13 @@ export default function Interest() {
   const settings = getSettings()
   // Month end is enforced by construction; the To date must not be in the future.
   const monthEndOk = settings.postingAnyDate || new Date(to) <= new Date(todayStr)
-  // Already posted? Block re-running a completed month (belt-and-braces with each
-  // entity's posted-till). `posted` is a dep so this refreshes after a run.
+  // Already posted? If the register has this finance+month, the Post button is
+  // LOCKED — the sole thing that reopens it is a revoke (which removes the register
+  // row). This holds even right after a run (when `posted` is set), so a second
+  // click can never double-post, regardless of whether the per-entity posted-till
+  // persisted. The register lookup re-runs on every render (posting sets state).
   const priorRun = repo.postingLog(scope).find(r => r.Month === month)
-  const alreadyPosted = !!priorRun && posted === null
+  const alreadyPosted = !!priorRun
 
   // Customer loan interest. Rounding is applied per CUSTOMER (not per loan): each
   // loan's raw interest is summed for the customer and that total rounded to ₹10.
@@ -257,9 +260,9 @@ export default function Interest() {
             <Zap size={16} /> Post all interest
           </button>
         </div>
-        {alreadyPosted && priorRun && (
+        {alreadyPosted && posted === null && priorRun && (
           <div className="mt-3 rounded-xl bg-slate-500/10 px-4 py-2.5 text-sm text-slate-300 ring-1 ring-slate-500/30">
-            <b>{monthLabel(month)} is already posted.</b> Run on {fmtDateTime(priorRun.Posted_On)} · {priorRun.Customer_Lines ?? 0} customer, {priorRun.Deposit_Lines ?? 0} deposit, {priorRun.Other_Lines ?? 0} other-finance lines. Re-posting is blocked to avoid charging interest twice — see the posting register below.
+            <b>{monthLabel(month)} is already posted.</b> Run on {fmtDateTime(priorRun.Posted_On)} · {priorRun.Customer_Lines ?? 0} customer, {priorRun.Deposit_Lines ?? 0} deposit, {priorRun.Other_Lines ?? 0} other-finance lines. Re-posting is blocked to avoid charging interest twice — to change it, revoke the month in Settings, then post again.
           </div>
         )}
         {!monthEndOk && (

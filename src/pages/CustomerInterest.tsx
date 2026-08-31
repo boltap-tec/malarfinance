@@ -98,8 +98,8 @@ export default function CustomerInterest() {
                     )}
                     <tr className="group hover:bg-slate-800/40">
                       <Td sticky className="text-slate-200">{i.Customer_Name}</Td>
-                      <Td className="text-slate-400">{i.Loan_No}</Td>
-                      <Td right className="text-slate-300">{inr(outMap.get(i.Loan_No) ?? 0)}</Td>
+                      <Td className="text-slate-400">{i.Loan_No || <span className="text-slate-500">All loans</span>}</Td>
+                      <Td right className="text-slate-300">{inr(i.Loan_No ? (outMap.get(i.Loan_No) ?? 0) : num(i.Loan_Amount))}</Td>
                       <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>
                       <Td right className="text-hd">{inr(num(i.Interest_Amount))}</Td>
                       <Td right className="text-emerald-400">{inr(num(i.Amount_Received))}</Td>

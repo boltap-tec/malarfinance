@@ -556,6 +556,10 @@ const PK: Partial<Record<keyof Dataset, string>> = {
   Hand_Exchange: 'ID', Interest_Posting_Log: 'ID',
 }
 export let lastWriteError = ''
+// Clear the last write error before a batch of writes, then read it after to tell
+// whether every write in the batch actually reached Supabase (see Interest.tsx).
+export function resetWriteError(): void { lastWriteError = '' }
+export function getWriteError(): string { return lastWriteError }
 function noteErr(where: string, msg?: string) {
   if (!msg) return
   lastWriteError = `${where}: ${msg}`
@@ -1573,16 +1577,88 @@ export const addOtherFinanceInterestRow = (input: any) => addSideInterest('Other
 export const updateOtherFinanceInterestRow = (id: string, patch: any) => updateSideInterest('Other_Finance_Interest', id, patch, patch.Loan_No ?? '')
 export const deleteOtherFinanceInterestRow = (id: string) => deleteSideInterest('Other_Finance_Interest', id, '')
 
-// Remove every interest row for a finance + month (reversible from the log).
+// Rows created by a repayment/partial-closure carry "-repay-" in their ID (see
+// repayLoan and the repay modals). A monthly-posting row never does. Revoke must
+// touch ONLY the monthly postings and leave partial-repayment interest alone.
+export const isRepayInterest = (id?: string) => String(id ?? '').includes('-repay-')
+
+// Revoke the MONTHLY interest posting for a finance + month — the full, symmetric
+// reversal of a "Post all interest" run, so the month can be posted again:
+//   • delete the monthly rows in all three interest tables (repayment/partial-
+//     closure rows, which carry "-repay-" in their ID, are deliberately KEPT);
+//   • roll each entity's Interest_Posted_Upto BACK to its latest remaining monthly
+//     posting (or the prior month end), so the preview bills the month again;
+//   • drop the posting-register row, so the month no longer reads as "posted".
+// Reversible from the Activity Log. `month` is "MM-YYYY" (how interest rows store
+// it); the register uses "YYYY-MM".
 export async function revokeInterestForMonth(finance: string, month: string): Promise<number> {
-  const removed = (db.Interest_Details ?? []).filter(i => i.Finance_Name === finance && i.Month === month)
-  if (removed.length === 0) return 0
-  db.Interest_Details = (db.Interest_Details ?? []).filter(i => !(i.Finance_Name === finance && i.Month === month))
-  if (supabase) { const { error } = await supabase.from('Interest_Details').delete().eq('Finance_Name', finance).eq('Month', month); noteErr('delete Interest_Details', error?.message) }
-  new Set(removed.map(r => r.Customer_STL_NO)).forEach(stl => stl && recomputeCustomer(stl))
-  writeLog({ Action: 'revoke', Entity: 'Interest_Details', Entity_Label: `${finance} · ${month} · ${removed.length} rows`, Before: removed })
+  const [mm, yy] = month.split('-')
+  const ym = `${yy}-${mm}`
+  // Last day of the month BEFORE the revoked one — the posted-till fallback when an
+  // entity has no earlier monthly posting left.
+  const pd = new Date(Number(yy), Number(mm) - 1, 0)
+  const priorEnd = `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, '0')}-${String(pd.getDate()).padStart(2, '0')}`
+  const isMonthly = (r: any) => !isRepayInterest(r.ID)
+  // An entity's true posted-till after this revoke = its latest remaining monthly
+  // To_Date, else the prior month end.
+  const rollbackTill = (rows: any[], keyField: string, key: string) =>
+    rows.filter(r => r[keyField] === key && isMonthly(r) && r.To_Date).map(r => String(r.To_Date)).sort().slice(-1)[0] ?? priorEnd
+
+  let total = 0
+
+  // 1) Customer loan interest.
+  const custRemoved = (db.Interest_Details ?? []).filter(i => i.Finance_Name === finance && i.Month === month && isMonthly(i))
+  if (custRemoved.length) {
+    const ids = new Set(custRemoved.map(r => r.ID))
+    db.Interest_Details = (db.Interest_Details ?? []).filter(i => !ids.has(i.ID))
+    if (supabase) { const { error } = await supabase.from('Interest_Details').delete().in('ID', [...ids]); noteErr('delete Interest_Details', error?.message) }
+    for (const stl of new Set(custRemoved.map(r => r.Customer_STL_NO))) {
+      if (!stl) continue
+      recomputeCustomer(stl)
+      await markCustomerPostedUpto(stl, rollbackTill(db.Interest_Details ?? [], 'Customer_STL_NO', stl))
+    }
+    writeLog({ Action: 'revoke', Entity: 'Interest_Details', Entity_Label: `${finance} · ${month} · ${custRemoved.length} monthly rows`, Before: custRemoved })
+    total += custRemoved.length
+  }
+
+  // 2) Deposit interest (owed to depositors).
+  const depRemoved = (db.Depositer_Interest ?? []).filter((i: any) => i.Finance_Name === finance && i.Month === month && isMonthly(i))
+  if (depRemoved.length) {
+    const ids = new Set(depRemoved.map((r: any) => r.ID))
+    db.Depositer_Interest = (db.Depositer_Interest ?? []).filter((i: any) => !ids.has(i.ID))
+    if (supabase) { const { error } = await supabase.from('Depositer_Interest').delete().in('ID', [...ids]); noteErr('delete Depositer_Interest', error?.message) }
+    for (const code of new Set(depRemoved.map((r: any) => r.Deposit_No))) {
+      if (!code) continue
+      await markDepositPostedUpto(code, rollbackTill(db.Depositer_Interest ?? [], 'Deposit_No', code))
+    }
+    writeLog({ Action: 'revoke', Entity: 'Depositer_Interest', Entity_Label: `${finance} · ${month} · ${depRemoved.length} monthly rows`, Before: depRemoved })
+    total += depRemoved.length
+  }
+
+  // 3) Other-finance interest (owed to lenders).
+  const othRemoved = (db.Other_Finance_Interest ?? []).filter((i: any) => i.Finance_Name === finance && i.Month === month && isMonthly(i))
+  if (othRemoved.length) {
+    const ids = new Set(othRemoved.map((r: any) => r.ID))
+    db.Other_Finance_Interest = (db.Other_Finance_Interest ?? []).filter((i: any) => !ids.has(i.ID))
+    if (supabase) { const { error } = await supabase.from('Other_Finance_Interest').delete().in('ID', [...ids]); noteErr('delete Other_Finance_Interest', error?.message) }
+    for (const code of new Set(othRemoved.map((r: any) => r.Loan_No))) {
+      if (!code) continue
+      await markOtherFinancePostedUpto(code, rollbackTill(db.Other_Finance_Interest ?? [], 'Loan_No', code))
+    }
+    writeLog({ Action: 'revoke', Entity: 'Other_Finance_Interest', Entity_Label: `${finance} · ${month} · ${othRemoved.length} monthly rows`, Before: othRemoved })
+    total += othRemoved.length
+  }
+
+  // 4) Clear the posting-register entry so the month is postable again.
+  const logRemoved = (db.Interest_Posting_Log ?? []).filter(r => r.Finance_Name === finance && r.Month === ym)
+  if (logRemoved.length) {
+    const ids = new Set(logRemoved.map(r => r.ID))
+    db.Interest_Posting_Log = (db.Interest_Posting_Log ?? []).filter(r => !ids.has(r.ID))
+    if (supabase) { const { error } = await supabase.from('Interest_Posting_Log').delete().in('ID', [...ids]); noteErr('delete Interest_Posting_Log', error?.message) }
+  }
+
   persist()
-  return removed.length
+  return total
 }
 
 // Revoke (cancel) a chit auction and everything it created — its per-member due
@@ -1817,8 +1893,8 @@ export async function repayLoan(opts: RepayOptions): Promise<void> {
       Finance_Name: loan.Finance_Name, Loan_No: loanNo,
       Customer_STL_NO: loan.Customer_STL_NO, Customer_Name: loan.Customer_Name,
       From_Date: accrue.from, To_Date: accrue.to, Interest_Amount: accrue.amount,
-      Loan_Amount: num(loan.Loan_Amount), Month: accrue.month,
-      Description: `Interest on repayment — ${loanNo}`,
+      Loan_Amount: principal, Month: accrue.month,
+      Description: `Interest on ₹${num(principal).toLocaleString('en-IN')} repaid — ${loanNo}`,
       Amount_Received: 0, Status: 'Pending', Interest_Pending: accrue.amount,
       Referred_Partner: loan.Referred_Partner, Interest_Type: loan.Interest_Type,
     }

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Settings as Cog, RotateCcw, Check, ListChecks, Tags, X, Plus, Boxes, Download, CloudUpload } from 'lucide-react'
 import {
-  repo, getSettings, setSettings, revokeInterestForMonth, renumberCodes,
+  repo, getSettings, setSettings, revokeInterestForMonth, isRepayInterest, renumberCodes,
   getMandatory, setMandatory, FORM_FIELDS, type FormKind, type MandatoryConfig,
   getLedgerCategories, setLedgerCategories, type LedgerCategories,
   datasetSnapshot,
@@ -63,8 +63,11 @@ export default function Settings() {
 
   const months = useMemo(() => {
     const map = new Map<string, { count: number; total: number }>()
-    for (const i of repo.interest(finance)) {
-      if (!i.Month) continue
+    // Monthly postings across all three interest tables — partial-repayment
+    // interest (kept on revoke) is excluded from the count.
+    const all: any[] = [...repo.interest(finance), ...repo.depositInterest(finance), ...repo.otherFinanceInterest(finance)]
+    for (const i of all) {
+      if (!i.Month || isRepayInterest(i.ID)) continue
       const cur = map.get(i.Month) ?? { count: 0, total: 0 }
       cur.count++; cur.total += num(i.Interest_Amount)
       map.set(i.Month, cur)
@@ -77,7 +80,7 @@ export default function Settings() {
   async function revoke() {
     if (!finance || !month) return
     const n = await revokeInterestForMonth(finance, month)
-    setDone(`Removed ${n} interest row(s) for ${finance} · ${month}. Restore any time from the Log.`)
+    setDone(`Removed ${n} monthly interest posting(s) for ${finance} · ${month} (partial-repayment interest kept). Restore any time from the Log.`)
     setMonth(''); setTick(t => t + 1)
   }
 
@@ -119,7 +122,7 @@ export default function Settings() {
 
         <Card>
           <h3 className="mb-3 flex items-center gap-2 font-semibold text-hd"><RotateCcw size={16} /> Revoke a posted period</h3>
-          <p className="mb-3 text-xs text-slate-500">Removes all interest rows for a finance + month. Fully reversible from the Log.</p>
+          <p className="mb-3 text-xs text-slate-500">Removes the <b>monthly interest postings</b> for a finance + month so you can re-post. Partial-repayment interest is kept. Fully reversible from the Log.</p>
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="label">Finance</span>

@@ -1,15 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Zap, Check, Percent } from 'lucide-react'
 import {
   repo, appendInterestRows, appendDepositInterest, appendOtherFinanceInterest,
   markCustomerPostedUpto, markDepositPostedUpto, markOtherFinancePostedUpto,
-  appendPostingLog, getSettings, setSettings,
+  appendPostingLog, getSettings, resetWriteError, getWriteError, source,
 } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
-import { previewPosting, toInterestRow, computeInterest, isMonthEnd, distributeRounding, resumeFrom } from '../lib/interestEngine'
+import { previewPosting, computeInterest, distributeRounding, resumeFrom } from '../lib/interestEngine'
 import { PageHeader, Card, StatCard, Badge, Th, Td, EmptyState } from '../components/ui'
 import { inr, num } from '../lib/format'
-import type { Loan } from '../data/types'
+import type { Loan, InterestRow } from '../data/types'
 
 const monthStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 // A YYYY-MM key → "August 2026" for display.
@@ -18,6 +18,19 @@ const monthLabel = (m: string) => {
   return new Date(y, (mo || 1) - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' })
 }
 const fmtDateTime = (iso?: string) => iso ? new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
+
+// A posted interest row's Month is stored as "MM-YYYY" (e.g. "08-2026"). Turn it
+// into a monthly-posting description like "Aug-2026 interest".
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const monthDesc = (m: string) => { const [mm, yy] = String(m).split('-'); return `${MON[Number(mm) - 1] ?? mm}-${yy ?? ''} interest` }
+// Inclusive day span between two yyyy-mm-dd dates (min 1), for the No_Days column.
+const dayCount = (a: string, b: string) => { const d = Math.ceil((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000) + 1; return Number.isFinite(d) ? Math.max(1, d) : 1 }
+// Group items by a string key, preserving insertion order.
+function groupBy<T>(items: T[], keyOf: (t: T) => string): Map<string, T[]> {
+  const m = new Map<string, T[]>()
+  for (const it of items) { const k = keyOf(it); const a = m.get(k); if (a) a.push(it); else m.set(k, [it]) }
+  return m
+}
 
 export default function Interest() {
   const finance = useApp(s => s.finance)
@@ -35,14 +48,21 @@ export default function Interest() {
 
   const now = new Date()
   const todayStr = now.toISOString().slice(0, 10)
-  const lastPosted = getSettings().lastPostedDate
-  // Default to the month after the last posted one, else last month.
-  const defaultMonth = lastPosted
-    ? monthStr(new Date(new Date(lastPosted).getFullYear(), new Date(lastPosted).getMonth() + 1, 1))
-    : monthStr(new Date(now.getFullYear(), now.getMonth() - 1, 1))
+  // The next month to post for THIS finance — derived from its own posting
+  // register (per-finance), never a global date. Each finance advances on its
+  // own: posting one finance's month never bumps another's default or blocks it.
+  const nextMonthForScope = (s: string) => {
+    const lastMonth = repo.postingLog(s).map(r => r.Month).filter(Boolean).sort().slice(-1)[0]
+    if (lastMonth) {
+      const [ly, lm] = lastMonth.split('-').map(Number)
+      return monthStr(new Date(ly, lm, 1)) // month after the last posted one
+    }
+    return monthStr(new Date(now.getFullYear(), now.getMonth() - 1, 1)) // else last month
+  }
 
-  const [month, setMonth] = useState(defaultMonth)
+  const [month, setMonth] = useState(() => nextMonthForScope(scope))
   const [posted, setPosted] = useState<string | null>(null)
+  const [postError, setPostError] = useState<string | null>(null)
 
   // Posting is per whole month: From = 1st, To = month end.
   const [my, mm] = month.split('-').map(Number)
@@ -110,34 +130,94 @@ export default function Interest() {
   const count = custPreview.length + depPreview.length + othPreview.length
 
   async function postAll() {
-    await appendInterestRows(custPreview.map(toInterestRow))
-    await appendDepositInterest(depPreview.map(({ d, p, rate, id }) => ({
-      ID: id, Finance_Name: d.Finance_Name, Deposit_No: d.Deposit_No, Depositer_Name: d.Depositer_Name,
-      From_Date: p.fromDate, To_Date: p.toDate, No_Days: p.noOfDays, Interest_Per_Month_Per_Lakh: rate,
-      Interest_Amount: p.interest, Deposit_Amount: num(d.Deposit_Amount), Month: p.month, Description: p.description,
-      Amount_Received: 0, Status: 'Pending', Interest_Pending: p.interest, Interest_Type: 'Per_Month',
-    })))
-    await appendOtherFinanceInterest(othPreview.map(({ o, p, id }) => ({
-      ID: id, Finance_Name: o.Finance_Name, Loan_No: o.Loan_No, Loan_bought_Finance_Name: o.Loan_bought_Finance_Name,
-      From_Date: p.fromDate, To_Date: p.toDate, No_Days: p.noOfDays, Interest_Amount: p.interest, Loan_Amount: num(o.Loan_Amount),
-      Month: p.month, Description: p.description, Amount_Received: 0, Status: 'Pending', Interest_Pending: p.interest,
-      Interest_Type: o.Interest_Type || 'Per_Day',
-    })))
+    setPostError(null)
+    // Watch for a Supabase write failure across this whole batch. If any write is
+    // rejected (e.g. a table/column the migration hasn't created yet), we must NOT
+    // report success — otherwise the data lives only in memory and vanishes on
+    // reload ("stored temporarily, not in Supabase").
+    resetWriteError()
+    // ── Monthly posting = ONE consolidated interest row per entity ────────────
+    // Each customer/depositor/lender gets a SINGLE row for the month: sum every
+    // one of their loans/deposits (interest is already rounded to ₹10 per entity
+    // by distributeRounding above), period = billed-from → month end, and the
+    // description is just the month ("Aug-2026 interest"). Partial-closure interest
+    // is posted separately by the repay flow (period = last posted-till → repay
+    // date, description = the repaid amount), so the two never mix.
+
+    // Customer loan interest, consolidated per customer (STL). A single-loan
+    // customer keeps their loan no. so per-loan repayment still targets the row;
+    // a multi-loan customer's row is loan-agnostic (Loan_No blank).
+    const custRows: InterestRow[] = [...groupBy(custPreview, p => p.loan.Customer_STL_NO ?? '').entries()].map(([stl, ps]) => {
+      const f0 = ps[0].loan, m = ps[0].month
+      const from = ps.map(p => p.actualFromDate).sort()[0]
+      const amt = ps.reduce((s, p) => s + p.interest, 0)
+      const single = ps.length === 1
+      return {
+        ID: `${stl}-${m}`, Finance_Name: f0.Finance_Name, Loan_No: single ? f0.Loan_No : '',
+        Customer_STL_NO: stl, Customer_Name: f0.Customer_Name,
+        From_Date: from, To_Date: to, No_Days: dayCount(from, to),
+        Interest_Amount: amt, Loan_Amount: ps.reduce((s, p) => s + (Number(p.loan.Loan_Amount) || 0), 0),
+        Month: m, Description: monthDesc(m), Amount_Received: 0, Status: 'Pending', Interest_Pending: amt,
+        Referred_Partner: ps.every(p => p.loan.Referred_Partner === f0.Referred_Partner) ? f0.Referred_Partner : undefined,
+        Interest_Type: ps.every(p => p.loan.Interest_Type === f0.Interest_Type) ? f0.Interest_Type : undefined,
+      }
+    })
+    await appendInterestRows(custRows)
+
+    // Deposit interest we OWE, consolidated per depositor (DEP code).
+    const depRows = [...groupBy(depPreview, x => x.d.Deposit_No).entries()].map(([code, xs]) => {
+      const d0 = xs[0].d, m = xs[0].p.month
+      const from = xs.map(x => x.p.actualFromDate).sort()[0]
+      const amt = xs.reduce((s, x) => s + x.p.interest, 0)
+      return {
+        ID: `${code}-${m}`, Finance_Name: d0.Finance_Name, Deposit_No: code, Depositer_Name: d0.Depositer_Name,
+        From_Date: from, To_Date: to, No_Days: dayCount(from, to), Interest_Per_Month_Per_Lakh: xs[0].rate,
+        Interest_Amount: amt, Deposit_Amount: xs.reduce((s, x) => s + num(x.d.Deposit_Amount), 0),
+        Month: m, Description: monthDesc(m), Amount_Received: 0, Status: 'Pending', Interest_Pending: amt, Interest_Type: 'Per_Month',
+      }
+    })
+    await appendDepositInterest(depRows)
+
+    // Other-finance interest we OWE, consolidated per borrowing (FIN code).
+    const othRows = [...groupBy(othPreview, x => x.o.Loan_No).entries()].map(([code, xs]) => {
+      const o0 = xs[0].o, m = xs[0].p.month
+      const from = xs.map(x => x.p.actualFromDate).sort()[0]
+      const amt = xs.reduce((s, x) => s + x.p.interest, 0)
+      return {
+        ID: `${code}-${m}`, Finance_Name: o0.Finance_Name, Loan_No: code, Loan_bought_Finance_Name: o0.Loan_bought_Finance_Name,
+        From_Date: from, To_Date: to, No_Days: dayCount(from, to),
+        Interest_Amount: amt, Loan_Amount: xs.reduce((s, x) => s + num(x.o.Loan_Amount), 0),
+        Month: m, Description: monthDesc(m), Amount_Received: 0, Status: 'Pending', Interest_Pending: amt,
+        Interest_Type: o0.Interest_Type || 'Per_Day',
+      }
+    })
+    await appendOtherFinanceInterest(othRows)
     // Advance each posted item's posted-till to this month end. A posting is the
     // ONLY thing that moves it — repayments deliberately leave it alone, so a
     // remaining balance still bills its pre-repay days at the next monthly run.
     for (const stl of [...new Set(custPreview.map(p => p.loan.Customer_STL_NO))]) await markCustomerPostedUpto(stl, to)
     for (const x of depPreview) await markDepositPostedUpto(x.d.Deposit_No, to)
     for (const x of othPreview) await markOtherFinancePostedUpto(x.o.Loan_No, to)
-    setSettings({ lastPostedDate: to })
+    // NOTE: we deliberately do NOT touch the global Settings cut-over here. That
+    // date is the one-time migration floor shared by every finance; advancing it
+    // on each run floored ALL other finances at this month end and blocked them.
+    // Each posted item's own Interest_Posted_Upto column (stamped just above) is
+    // the per-finance source of truth, so finances now post independently.
     // Record the run in the posting register so this month reads as "posted".
     await appendPostingLog({
       ID: `${scope}-${month}`, Finance_Name: scope, Month: month, From_Date: from, To_Date: to,
       Posted_On: new Date().toISOString(), Posted_By: userName || role || 'md',
-      Customer_Lines: custPreview.length, Deposit_Lines: depPreview.length, Other_Lines: othPreview.length,
+      Customer_Lines: custRows.length, Deposit_Lines: depRows.length, Other_Lines: othRows.length,
       Customer_Amount: custTotal, Deposit_Amount: depTotal, Other_Amount: othTotal,
     })
-    setPosted(`Posted ${custPreview.length} customer, ${depPreview.length} deposit and ${othPreview.length} other-finance interest lines.`)
+    // In Supabase mode a rejected write leaves data only in memory. Surface it as
+    // a failure with the exact Postgres message instead of a false "posted".
+    const err = getWriteError()
+    if (source.mode === 'supabase' && err) {
+      setPostError(err)
+      return
+    }
+    setPosted(`Posted ${custRows.length} customer, ${depRows.length} deposit and ${othRows.length} other-finance interest entries (one per customer/depositor/lender).`)
   }
 
   if (role !== 'md') return <EmptyState title="Only the MD can post interest" />
@@ -159,14 +239,14 @@ export default function Interest() {
           {scopeOptions.length > 1 && (
             <div>
               <label className="label">Finance to post</label>
-              <select className="input mt-1" value={scope} onChange={e => { setScope(e.target.value); setPosted(null) }}>
+              <select className="input mt-1" value={scope} onChange={e => { const v = e.target.value; setScope(v); setMonth(nextMonthForScope(v)); setPosted(null); setPostError(null) }}>
                 {scopeOptions.map(s => <option key={s} value={s}>{s === 'ALL' ? 'All finances' : s}</option>)}
               </select>
             </div>
           )}
           <div>
             <label className="label">Month to post</label>
-            <input type="month" max={monthStr(now)} className="input mt-1" value={month} onChange={e => { setMonth(e.target.value); setPosted(null) }} />
+            <input type="month" max={monthStr(now)} className="input mt-1" value={month} onChange={e => { setMonth(e.target.value); setPosted(null); setPostError(null) }} />
           </div>
           <div className="text-sm text-slate-400">
             <p className="label">Period</p>
@@ -190,6 +270,12 @@ export default function Interest() {
         {posted && (
           <div className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300 ring-1 ring-emerald-500/30">
             <Check size={16} /> {posted} See Customer / Deposit / Other-Finance Interest to view or collect them.
+          </div>
+        )}
+        {postError && (
+          <div className="mt-3 rounded-xl bg-rose-500/10 px-4 py-3 text-sm text-rose-300 ring-1 ring-rose-500/30">
+            <b>Not saved to the database.</b> The interest was calculated but a write was rejected, so nothing was stored — it will disappear on reload. Run the pending Supabase migrations (<code>phase9_interest_posted_upto.sql</code> and <code>phase10_interest_posting_log.sql</code>) in the SQL editor, then post again.
+            <div className="mt-1 font-mono text-xs text-rose-400/80">{postError}</div>
           </div>
         )}
       </Card>

@@ -195,6 +195,17 @@ export default function Interest() {
       }
     })
     await appendOtherFinanceInterest(othRows)
+
+    // If ANY interest-row write was rejected (e.g. a schema gap), STOP before
+    // stamping posted-till or the register. Otherwise a partial failure would
+    // advance an entity's posted-till past a month it never actually billed —
+    // leaving it silently skipped next run (rows failed, posted-till moved).
+    const err = getWriteError()
+    if (source.mode === 'supabase' && err) {
+      setPostError(err)
+      return
+    }
+
     // Advance each posted item's posted-till to this month end. A posting is the
     // ONLY thing that moves it — repayments deliberately leave it alone, so a
     // remaining balance still bills its pre-repay days at the next monthly run.
@@ -213,13 +224,6 @@ export default function Interest() {
       Customer_Lines: custRows.length, Deposit_Lines: depRows.length, Other_Lines: othRows.length,
       Customer_Amount: custTotal, Deposit_Amount: depTotal, Other_Amount: othTotal,
     })
-    // In Supabase mode a rejected write leaves data only in memory. Surface it as
-    // a failure with the exact Postgres message instead of a false "posted".
-    const err = getWriteError()
-    if (source.mode === 'supabase' && err) {
-      setPostError(err)
-      return
-    }
     setPosted(`Posted ${custRows.length} customer, ${depRows.length} deposit and ${othRows.length} other-finance interest entries (one per customer/depositor/lender).`)
   }
 

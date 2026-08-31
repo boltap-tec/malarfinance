@@ -4,6 +4,7 @@ import { repo, repayCustomer, updateInterestRow, addInterestRow, deleteInterestR
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal } from '../components/ui'
 import CustomerInterestPayModal from '../components/CustomerInterestPayModal'
+import ReminderButton from '../components/ReminderButton'
 import { inr, fmtDate, num, monthKey, monthName } from '../lib/format'
 import type { InterestRow } from '../data/types'
 
@@ -83,13 +84,13 @@ export default function CustomerInterest() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th sticky>Customer</Th><Th>Loan</Th><Th right>Outstanding</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th>{editable && <Th>Collect</Th>}{isMd && <Th>Edit</Th>}</tr>
+                <tr><Th sticky>Customer</Th><Th>Loan</Th><Th right>Outstanding</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th><Th>Remind</Th>{editable && <Th>Collect</Th>}{isMd && <Th>Edit</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.slice(0, 300).map((i, k, arr) => (
                   <Fragment key={k}>
                     {(k === 0 || arr[k - 1].Month !== i.Month) && (
-                      <tr className="bg-slate-900/80"><td colSpan={8 + (editable ? 1 : 0) + (isMd ? 1 : 0)} className="px-3 py-1.5">
+                      <tr className="bg-slate-900/80"><td colSpan={9 + (editable ? 1 : 0) + (isMd ? 1 : 0)} className="px-3 py-1.5">
                         <div className="flex flex-wrap items-center gap-3">
                           <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">{monthName(i.Month)}</span>
                           <span className="text-xs text-slate-400">Interest <b className="text-hd">{inr(monthTotals[i.Month ?? '—']?.interest ?? 0)}</b> · Received <b className="text-emerald-300">{inr(monthTotals[i.Month ?? '—']?.received ?? 0)}</b> · Pending <b className="text-amber-300">{inr(monthTotals[i.Month ?? '—']?.pending ?? 0)}</b></span>
@@ -105,6 +106,14 @@ export default function CustomerInterest() {
                       <Td right className="text-emerald-400">{inr(num(i.Amount_Received))}</Td>
                       <Td right className="text-amber-400">{inr(num(i.Interest_Pending))}</Td>
                       <Td><Badge tone={statusTone(i.Status)}>{i.Status ?? '—'}</Badge></Td>
+                      <Td>
+                        <ReminderButton
+                          label="" className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"
+                          header={`${i.Customer_STL_NO}-${i.Customer_Name}`}
+                          phone={repo.customer(i.Customer_STL_NO)?.Customer_Phone_No}
+                          items={repo.interestByCustomer(i.Customer_STL_NO).map(r => ({ month: r.Month, amount: num(r.Interest_Amount), pending: num(r.Interest_Pending) }))}
+                        />
+                      </Td>
                       {editable && (
                         <Td>
                           {num(i.Interest_Pending) > 0

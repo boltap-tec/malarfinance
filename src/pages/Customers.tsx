@@ -4,6 +4,7 @@ import { Search, Plus, HandCoins, Percent, Users } from 'lucide-react'
 import { repo, addCustomer, customerRisk } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
+import ReminderButton from '../components/ReminderButton'
 import { inr, phone, num, balanceStatus } from '../lib/format'
 import { useCreateParam } from '../lib/useCreateParam'
 import type { Customer } from '../data/types'
@@ -89,6 +90,12 @@ export default function Customers() {
                           <button title="Give loan" onClick={() => giveLoan(c)} className="btn-ghost !px-2 !py-1 text-xs text-brand-300 ring-1 ring-inset ring-brand-500/30"><Plus size={13} /></button>
                           {num(c.Outstand_Loan) > 0 && <Link title="Repay" to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"><HandCoins size={13} /></Link>}
                           {num(c.Outstanding_Interest) > 0 && <Link title="Interest" to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}?do=interest`} className="btn-ghost !px-2 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30"><Percent size={13} /></Link>}
+                          <ReminderButton
+                            label="" className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"
+                            header={`${c.Customer_STL_NO}-${c.Customer_Name}`}
+                            phone={c.Customer_Phone_No}
+                            items={repo.interestByCustomer(c.Customer_STL_NO).map(r => ({ month: r.Month, amount: num(r.Interest_Amount), pending: num(r.Interest_Pending) }))}
+                          />
                         </div>
                       </Td>
                     )}

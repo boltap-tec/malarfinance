@@ -4,6 +4,7 @@ import { Search, Plus, Landmark, HandCoins, Percent } from 'lucide-react'
 import { repo } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Th, Td, EmptyState } from '../components/ui'
+import ReminderButton from '../components/ReminderButton'
 import { inr, phone, num } from '../lib/format'
 
 export default function OtherFinances() {
@@ -75,6 +76,12 @@ export default function OtherFinances() {
                           <button title="Borrow more" onClick={() => { setFinance(l.finance); navigate(`/other-finance?new=1&code=${encodeURIComponent(l.code)}`) }} className="btn-ghost !px-2 !py-1 text-xs text-brand-300 ring-1 ring-inset ring-brand-500/30"><Plus size={13} /></button>
                           {num(l.out) > 0 && <Link title="Repay" to={`/other-finance/${encodeURIComponent(l.code)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"><HandCoins size={13} /></Link>}
                           {intPending > 0 && <Link title="Pay interest" to={`/other-finance/${encodeURIComponent(l.code)}?do=interest`} className="btn-ghost !px-2 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30"><Percent size={13} /></Link>}
+                          <ReminderButton
+                            label="" className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"
+                            header={`${l.code}-${l.name}`} totalLabel="Total Interest Pending"
+                            phone={l.phone}
+                            items={repo.otherFinanceInterestByCode(l.code).map((r: any) => ({ month: r.Month, amount: num(r.Interest_Amount), pending: num(r.Interest_Pending) }))}
+                          />
                         </div>
                       </Td>
                     )}

@@ -101,7 +101,10 @@ export default function CustomerInterest() {
                       <Td sticky className="text-slate-200">{i.Customer_Name}</Td>
                       <Td className="text-slate-400">{i.Loan_No || <span className="text-slate-500">All loans</span>}</Td>
                       <Td right className="text-slate-300">{inr(i.Loan_No ? (outMap.get(i.Loan_No) ?? 0) : num(i.Loan_Amount))}</Td>
-                      <Td className="text-xs text-slate-500">{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</Td>
+                      <Td className="text-xs text-slate-500">
+                        <div>{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</div>
+                        {i.Description && <div className="mt-0.5 text-[11px] text-slate-400">{i.Description}</div>}
+                      </Td>
                       <Td right className="text-hd">{inr(num(i.Interest_Amount))}</Td>
                       <Td right className="text-emerald-400">{inr(num(i.Amount_Received))}</Td>
                       <Td right className="text-amber-400">{inr(num(i.Interest_Pending))}</Td>

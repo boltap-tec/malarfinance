@@ -198,32 +198,34 @@ export const repo = {
   depositPostedMonths(code: string): Set<string> {
     return new Set((db.Depositer_Interest ?? []).filter((i: any) => i.Deposit_No === code && i.Month).map((i: any) => i.Month as string))
   },
-  // Interest "posted up to" for an entity — the LATER of its stored
-  // Interest_Posted_Upto column and the global Settings cut-over. This is the
-  // single source of truth for both posting (its resume date) and repayment.
-  // It is advanced ONLY by a monthly posting (which stamps the column); a
-  // repayment deliberately does NOT move it, so the remaining outstanding still
-  // bills the pre-repay days at the next monthly run. Interest rows are NOT
-  // consulted here — repay writes rows too, and reading them would let a repay
+  // Interest "posted up to" for an entity — its OWN stored Interest_Posted_Upto
+  // column when it has one, otherwise the global Settings cut-over as a FALLBACK
+  // (never a floor). This is the single source of truth for both posting (its
+  // resume date) and repayment. It is advanced ONLY by a monthly posting (which
+  // stamps the column) and rolled back ONLY by a revoke; a repayment deliberately
+  // does NOT move it. Using the column verbatim (not max-with-global) is what lets
+  // a revoke's rollback actually take effect — a stale-high global cut-over must
+  // not silently re-floor an entity the revoke just moved back. Interest rows are
+  // NOT consulted here — repay writes rows too, and reading them would let a repay
   // silently push the posted-till forward.
   // Posted-till for a CUSTOMER (shared by all their loans) — read from the
   // customer master (STL_CRM), not the loan row.
   customerPostedUpto(stl: string): string | undefined {
     const cust = (db.STL_CRM ?? []).find(c => c.Customer_STL_NO === stl)
-    return laterD(cust?.Interest_Posted_Upto, getSettings().lastPostedDate || undefined)
+    return cust?.Interest_Posted_Upto || (getSettings().lastPostedDate || undefined)
   },
   loanPostedUpto(loanNo: string): string | undefined {
     const loan = (db.Loan_Processing ?? []).find(l => l.Loan_No === loanNo)
     const cust = loan ? (db.STL_CRM ?? []).find(c => c.Customer_STL_NO === loan.Customer_STL_NO) : undefined
-    return laterD(cust?.Interest_Posted_Upto, getSettings().lastPostedDate || undefined)
+    return cust?.Interest_Posted_Upto || (getSettings().lastPostedDate || undefined)
   },
   depositPostedUpto(code: string): string | undefined {
     const col = (db.Deposit_Amount ?? []).filter(d => d.Deposit_No === code).map(d => d.Interest_Posted_Upto).filter(Boolean).sort().slice(-1)[0]
-    return laterD(col, getSettings().lastPostedDate || undefined)
+    return col || (getSettings().lastPostedDate || undefined)
   },
   otherFinancePostedUpto(code: string): string | undefined {
     const col = (db.Other_Finance_Loan ?? []).filter(o => o.Loan_No === code).map(o => o.Interest_Posted_Upto).filter(Boolean).sort().slice(-1)[0]
-    return laterD(col, getSettings().lastPostedDate || undefined)
+    return col || (getSettings().lastPostedDate || undefined)
   },
   // The effective ₹/lakh/month rate for a depositor when it's not stored on the
   // deposit — derived from a full-month past interest row (Interest ÷ amount).
@@ -509,9 +511,6 @@ const num = (v: unknown) => { const n = Number(v); return isNaN(n) ? 0 : n }
 // Case-insensitive, trimmed name match — used for username login.
 const eqName = (a: unknown, b: unknown) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase()
 const refNum = (r: unknown) => { const n = Number(String(r).replace(/\D/g, '')); return isNaN(n) ? 0 : n }
-// Later of two dates (yyyy-mm-dd / ISO), ignoring blanks.
-const laterD = (a?: string | null, b?: string | null): string | undefined =>
-  !a ? (b || undefined) : !b ? a : (new Date(a).getTime() >= new Date(b).getTime() ? a : b)
 
 // Recompute the running Balance per finance, ordered by transaction date then
 // insertion order — so a back-dated entry correctly shifts later balances.

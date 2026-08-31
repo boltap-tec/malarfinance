@@ -52,3 +52,18 @@ drop policy if exists "app_read"  on "Interest_Posting_Log";
 create policy "app_read"  on "Interest_Posting_Log" for select using (true);
 drop policy if exists "app_write" on "Interest_Posting_Log";
 create policy "app_write" on "Interest_Posting_Log" for all using (true) with check (true);
+
+-- ── Fix: Depositer_Interest.Interest_Type was created as numeric ─────────────
+-- The app stores the interest kind ("Per_Month") there, so posting deposit
+-- interest failed with: invalid input syntax for type numeric: "Per_Month".
+-- Widen the column to text. (Interest_Details and Other_Finance_Interest are
+-- already text.) Idempotent — a no-op if it's already text.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_name = 'Depositer_Interest' and column_name = 'Interest_Type' and data_type = 'numeric'
+  ) then
+    alter table "Depositer_Interest" alter column "Interest_Type" type text using "Interest_Type"::text;
+  end if;
+end $$;

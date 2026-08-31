@@ -931,6 +931,9 @@ export async function appendInterestRows(rows: InterestRow[]): Promise<void> {
   if (!fresh.length) return
   db.Interest_Details = [...(db.Interest_Details ?? []), ...fresh]
   await sInsert('Interest_Details', fresh)
+  // Refresh each customer's roll-up (Outstanding_Interest etc.) so the Customers
+  // list and totals reflect the newly-posted interest, not just the interest page.
+  for (const stl of new Set(fresh.map(r => r.Customer_STL_NO).filter(Boolean))) recomputeCustomer(stl as string)
   persist()
 }
 

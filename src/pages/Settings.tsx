@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Settings as Cog, RotateCcw, Check, ListChecks, Tags, X, Plus, Boxes, Download, CloudUpload } from 'lucide-react'
 import {
-  repo, getSettings, setSettings, revokeInterestForMonth, isRepayInterest, renumberCodes,
+  repo, getSettings, setSettings, revokeInterestForMonth, isRepayInterest, updateFinance, renumberCodes,
   getMandatory, setMandatory, FORM_FIELDS, type FormKind, type MandatoryConfig,
   getLedgerCategories, setLedgerCategories, type LedgerCategories,
   datasetSnapshot,
@@ -15,8 +15,12 @@ export default function Settings() {
   const s0 = getSettings()
   const [anyDate, setAnyDate] = useState(s0.postingAnyDate)
   const [dataLoadedDate, setDataLoadedDate] = useState(s0.dataLoadedDate)
-  const [lastPostedDate, setLastPostedDate] = useState(s0.lastPostedDate)
   const [savedDates, setSavedDates] = useState(false)
+  // Per-finance interest cut-over (Finance_Details.Interest_Posted_Upto). Replaces
+  // the old single global "interest posted up to" so finances post independently.
+  const [cutFinance, setCutFinance] = useState(repo.finances()[0]?.Finance_Name ?? '')
+  const [cutDate, setCutDate] = useState(repo.finances()[0]?.Interest_Posted_Upto ?? '')
+  const [cutSaved, setCutSaved] = useState(false)
   const [mand, setMand] = useState<MandatoryConfig>(getMandatory())
   const [renumberMsg, setRenumberMsg] = useState<string | null>(null)
   const [cats, setCats] = useState<LedgerCategories>(getLedgerCategories())
@@ -84,6 +88,13 @@ export default function Settings() {
     setMonth(''); setTick(t => t + 1)
   }
 
+  // Save the selected finance's own interest cut-over onto its Finance_Details row.
+  async function saveCutover() {
+    if (!cutFinance) return
+    await updateFinance(cutFinance, { Interest_Posted_Upto: cutDate || undefined })
+    setCutSaved(true)
+  }
+
   return (
     <div>
       <PageHeader title="Settings" subtitle="Interest posting configuration & corrections." />
@@ -102,22 +113,38 @@ export default function Settings() {
             </span>
           </label>
 
-          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-800 pt-4">
-            <label className="block">
+          <div className="mt-4 border-t border-slate-800 pt-4">
+            <label className="block max-w-xs">
               <span className="label">Data loaded on</span>
               <input type="date" className="input mt-1" value={dataLoadedDate} onChange={e => { setDataLoadedDate(e.target.value); setSavedDates(false) }} />
             </label>
-            <label className="block">
-              <span className="label">Interest posted up to</span>
-              <input type="date" className="input mt-1" value={lastPostedDate} onChange={e => { setLastPostedDate(e.target.value); setSavedDates(false) }} />
-            </label>
+            <button className="btn-ghost mt-3" onClick={() => { setSettings({ dataLoadedDate }); setSavedDates(true) }}>
+              {savedDates ? <><Check size={15} /> Saved</> : 'Save date'}
+            </button>
           </div>
-          <p className="mt-2 text-xs text-slate-500">
-            When you import from an old source, set “posted up to” — the Interest screen then starts billing from the next day.
-          </p>
-          <button className="btn-ghost mt-3" onClick={() => { setSettings({ dataLoadedDate, lastPostedDate }); setSavedDates(true) }}>
-            {savedDates ? <><Check size={15} /> Saved</> : 'Save dates'}
-          </button>
+
+          <div className="mt-4 border-t border-slate-800 pt-4">
+            <span className="label">Interest posted up to <span className="text-slate-500">· per finance</span></span>
+            <p className="mt-0.5 mb-2 text-xs text-slate-500">
+              Each finance has its <b>own</b> cut-over — the date its interest was already settled before go-live. The Interest screen bills each finance from the day after <i>its</i> date, so finances post independently.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="label">Finance</span>
+                <select className="input mt-1" value={cutFinance}
+                  onChange={e => { const v = e.target.value; setCutFinance(v); setCutDate(repo.finances().find(f => f.Finance_Name === v)?.Interest_Posted_Upto ?? ''); setCutSaved(false) }}>
+                  {repo.finances().map(f => <option key={f.Finance_Name} value={f.Finance_Name}>{f.Finance_Name}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="label">Posted up to</span>
+                <input type="date" className="input mt-1" value={cutDate} onChange={e => { setCutDate(e.target.value); setCutSaved(false) }} />
+              </label>
+            </div>
+            <button className="btn-ghost mt-3" onClick={saveCutover}>
+              {cutSaved ? <><Check size={15} /> Saved {cutFinance}</> : `Save ${cutFinance || 'finance'} cut-over`}
+            </button>
+          </div>
         </Card>
 
         <Card>

@@ -12,6 +12,7 @@ export interface Finance {
   Phone_Number?: number | string
   MD_Name?: string
   PIN?: string               // MD login PIN for this finance's phone; default '1234'
+  Interest_Posted_Upto?: string  // per-finance interest cut-over: the fallback posted-till for this finance's entities that have no own Interest_Posted_Upto yet. Replaces the old single global setting so finances post independently.
 }
 
 export interface Partner {

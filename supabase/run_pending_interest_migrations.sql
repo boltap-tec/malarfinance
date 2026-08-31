@@ -27,6 +27,13 @@ alter table "Other_Finance_Loan"
 -- update "Deposit_Amount"      set "Interest_Posted_Upto" = '2026-07-31' where "Interest_Posted_Upto" is null;
 -- update "Other_Finance_Loan"  set "Interest_Posted_Upto" = '2026-07-31' where "Interest_Posted_Upto" is null;
 
+-- ── Per-finance interest cut-over ────────────────────────────────────────────
+-- Each finance now keeps its OWN "interest posted up to" date on its master row,
+-- replacing the single global setting so finances post independently. Set each
+-- finance's date in the app (Settings → Interest posting → per finance).
+alter table "Finance_Details"
+  add column if not exists "Interest_Posted_Upto" date;
+
 -- ── Phase 10 — interest posting register ─────────────────────────────────────
 -- One row per posting run (a finance + a month), so the app knows which months
 -- are posted and blocks re-running them. Keyed by ID = `${Finance_Name}-${Month}`.

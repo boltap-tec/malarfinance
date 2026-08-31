@@ -100,6 +100,15 @@ export async function hydrate(): Promise<void> {
   source.live = anyLive
 }
 
+// A finance's interest cut-over: the fallback posted-till for that finance's
+// entities that have none of their own. Read per-finance from Finance_Details so
+// each finance posts independently; falls back to the legacy global setting only
+// while a finance hasn't set its own date, so nothing breaks pre-migration.
+function financeCutoverOf(finance?: string): string | undefined {
+  const f = (db.Finance_Details ?? []).find(x => x.Finance_Name === finance)
+  return f?.Interest_Posted_Upto || (getSettings().lastPostedDate || undefined)
+}
+
 // ── Read helpers ─────────────────────────────────────────────────────────────
 export const repo = {
   finances(): Finance[] { return db.Finance_Details ?? [] },
@@ -208,24 +217,28 @@ export const repo = {
   // not silently re-floor an entity the revoke just moved back. Interest rows are
   // NOT consulted here — repay writes rows too, and reading them would let a repay
   // silently push the posted-till forward.
+  // A finance's own interest cut-over (from its Finance_Details row).
+  financeCutover(finance?: string): string | undefined { return financeCutoverOf(finance) },
   // Posted-till for a CUSTOMER (shared by all their loans) — read from the
   // customer master (STL_CRM), not the loan row.
   customerPostedUpto(stl: string): string | undefined {
     const cust = (db.STL_CRM ?? []).find(c => c.Customer_STL_NO === stl)
-    return cust?.Interest_Posted_Upto || (getSettings().lastPostedDate || undefined)
+    return cust?.Interest_Posted_Upto || financeCutoverOf(cust?.Finance_Name)
   },
   loanPostedUpto(loanNo: string): string | undefined {
     const loan = (db.Loan_Processing ?? []).find(l => l.Loan_No === loanNo)
     const cust = loan ? (db.STL_CRM ?? []).find(c => c.Customer_STL_NO === loan.Customer_STL_NO) : undefined
-    return cust?.Interest_Posted_Upto || (getSettings().lastPostedDate || undefined)
+    return cust?.Interest_Posted_Upto || financeCutoverOf(cust?.Finance_Name ?? loan?.Finance_Name)
   },
   depositPostedUpto(code: string): string | undefined {
-    const col = (db.Deposit_Amount ?? []).filter(d => d.Deposit_No === code).map(d => d.Interest_Posted_Upto).filter(Boolean).sort().slice(-1)[0]
-    return col || (getSettings().lastPostedDate || undefined)
+    const rows = (db.Deposit_Amount ?? []).filter(d => d.Deposit_No === code)
+    const col = rows.map(d => d.Interest_Posted_Upto).filter(Boolean).sort().slice(-1)[0]
+    return col || financeCutoverOf(rows[0]?.Finance_Name)
   },
   otherFinancePostedUpto(code: string): string | undefined {
-    const col = (db.Other_Finance_Loan ?? []).filter(o => o.Loan_No === code).map(o => o.Interest_Posted_Upto).filter(Boolean).sort().slice(-1)[0]
-    return col || (getSettings().lastPostedDate || undefined)
+    const rows = (db.Other_Finance_Loan ?? []).filter(o => o.Loan_No === code)
+    const col = rows.map(o => o.Interest_Posted_Upto).filter(Boolean).sort().slice(-1)[0]
+    return col || financeCutoverOf(rows[0]?.Finance_Name)
   },
   // The effective ₹/lakh/month rate for a depositor when it's not stored on the
   // deposit — derived from a full-month past interest row (Interest ÷ amount).

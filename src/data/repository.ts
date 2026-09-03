@@ -80,13 +80,33 @@ export function datasetSnapshot(): string {
 // Pull every table from Supabase into memory once at startup. If a table is
 // missing or the request fails, that table keeps its seeded values — so the app
 // works both before and after migrate.sql has been run.
+// Fetch EVERY row of a table, paginated. PostgREST caps a single response at
+// ~1000 rows regardless of .limit(), so a big table (e.g. Transaction_Ledger)
+// must be pulled in pages or later rows silently go missing. Ordered by the
+// table's key (when known) so the pages line up with no gaps or duplicates.
+async function fetchAllRows(client: NonNullable<typeof supabase>, table: string): Promise<{ data?: any[]; error?: unknown }> {
+  const PAGE = 1000
+  const key = PK[table as keyof Dataset]
+  const all: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    let q = client.from(table).select('*').range(from, from + PAGE - 1)
+    if (key) q = q.order(key, { ascending: true })
+    const { data, error } = await q
+    if (error) return { error }
+    if (!data || data.length === 0) break
+    all.push(...data)
+    if (data.length < PAGE) break
+  }
+  return { data: all }
+}
+
 export async function hydrate(): Promise<void> {
   const client = supabase
   if (!client) return
   const tables = Object.keys(seed) as (keyof Dataset)[]
   const results = await Promise.all(
     tables.map(async (t) => {
-      const { data, error } = await client.from(t as string).select('*').limit(5000)
+      const { data, error } = await fetchAllRows(client, t as string)
       // error => table not migrated yet; keep the seeded rows for it
       return error || !data ? null : { t, data }
     }),

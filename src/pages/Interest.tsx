@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Zap, Check, Percent } from 'lucide-react'
 import {
   repo, appendInterestRows, appendDepositInterest, appendOtherFinanceInterest,
@@ -291,7 +291,7 @@ export default function Interest() {
         <EmptyState title="Nothing to post in this window" hint="Adjust the dates, or interest for this period is already posted." />
       ) : (
         <div className="space-y-4">
-          <Section title="Customer interest" total={custTotal} rows={custPreview.map(p => ({ a: p.loan.Loan_No, b: p.loan.Customer_Name, days: p.noOfDays, amt: p.interest }))} />
+          <CustomerInterestByPartner preview={custPreview} total={custTotal} />
           <Section title="Deposit interest" total={depTotal} rows={depPreview.map(x => ({ a: x.d.Deposit_No, b: x.d.Depositer_Name, days: x.p.noOfDays, amt: x.p.interest }))} />
           <Section title="Other-finance interest" total={othTotal} rows={othPreview.map(x => ({ a: x.o.Loan_No, b: x.o.Loan_bought_Finance_Name, days: x.p.noOfDays, amt: x.p.interest }))} />
         </div>
@@ -341,6 +341,68 @@ function PostingRegister({ rows }: { rows: ReturnType<typeof repo.postingLog> })
           </table>
         </div>
       )}
+    </Card>
+  )
+}
+
+// Customer interest for the run, grouped by PARTNER, with each customer's total
+// interest (summed across their loans) — a partner sub-total per group.
+function CustomerInterestByPartner({ preview, total }: { preview: { loan: Loan; interest: number }[]; total: number }) {
+  const pmap = useMemo(() => { const m = new Map<string, string>(); for (const p of repo.partners()) m.set(p.Partner_ID, p.Partner_Name); return m }, [])
+  const groups = useMemo(() => {
+    const byPartner = new Map<string, Map<string, { stl: string; name: string; amt: number; loans: number }>>()
+    for (const p of preview) {
+      const pid = p.loan.Referred_Partner || ''
+      let custs = byPartner.get(pid); if (!custs) { custs = new Map(); byPartner.set(pid, custs) }
+      const stl = p.loan.Customer_STL_NO || p.loan.Loan_No || '—'
+      const c = custs.get(stl) ?? { stl, name: p.loan.Customer_Name ?? '', amt: 0, loans: 0 }
+      c.amt += p.interest; c.loans += 1
+      custs.set(stl, c)
+    }
+    return [...byPartner.entries()].map(([pid, custs]) => ({
+      pid,
+      name: pid ? (pmap.get(pid) || pid) : 'No partner',
+      customers: [...custs.values()].sort((a, b) => String(a.stl).localeCompare(String(b.stl), undefined, { numeric: true })),
+      subtotal: [...custs.values()].reduce((s, c) => s + c.amt, 0),
+    })).sort((a, b) => b.subtotal - a.subtotal)
+  }, [preview, pmap])
+
+  if (preview.length === 0) return null
+  return (
+    <Card className="!p-0 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5">
+        <h3 className="font-semibold text-hd">Customer interest · by partner</h3>
+        <Badge tone="blue">{inr(total)} · {preview.length} loans</Badge>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="border-y border-slate-800 bg-slate-900/60">
+            <tr><Th>Customer</Th><Th>Code</Th><Th right>Loans</Th><Th right>Interest</Th></tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800">
+            {groups.map(g => (
+              <Fragment key={g.pid || 'none'}>
+                <tr className="bg-slate-900/70">
+                  <td colSpan={4} className="px-3 py-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">{g.name}</span>
+                      <span className="text-xs text-slate-400">{g.customers.length} customers · <b className="text-hd">{inr(g.subtotal)}</b></span>
+                    </div>
+                  </td>
+                </tr>
+                {g.customers.map(c => (
+                  <tr key={g.pid + c.stl} className="hover:bg-slate-800/40">
+                    <Td className="text-slate-200">{c.name}</Td>
+                    <Td className="font-medium text-brand-300">{c.stl}</Td>
+                    <Td right className="text-slate-400">{c.loans}</Td>
+                    <Td right className="font-semibold text-hd">{inr(c.amt)}</Td>
+                  </tr>
+                ))}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Card>
   )
 }

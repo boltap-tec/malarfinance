@@ -18,9 +18,9 @@ export default function Depositors() {
     let list = repo.depositors(financeFilter(finance))
     const s = q.trim().toLowerCase()
     if (s) list = list.filter(d => d.name.toLowerCase().includes(s) || d.code.toLowerCase().includes(s) || String(d.phone ?? '').includes(s))
-    // Active first (a depositor with money still out), then by outstanding.
+    // Ascending by depositor code (numeric-aware).
     list = list.slice().sort((a, b) =>
-      (Number(b.out > 0) - Number(a.out > 0)) || (b.out - a.out),
+      String(a.code ?? '').localeCompare(String(b.code ?? ''), undefined, { numeric: true }),
     )
     return {
       rows: list,

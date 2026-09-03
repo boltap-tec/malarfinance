@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Phone, Mail, HandCoins, Percent, Share2, Building2 } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, HandCoins, Percent, Share2, Building2, Users } from 'lucide-react'
 import { repo } from '../data/repository'
 import { accrueOnRepaidPrincipal, type DebtLine } from '../lib/interestEngine'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
@@ -69,8 +69,24 @@ export default function PartnerDetail() {
       }))
     const unbilled = accrueOnRepaidPrincipal(lines, lines.reduce((s, l) => s + l.outstanding, 0), today).total
 
+    // Customer-wise roll-up of the referred loans (like the Customers view): one
+    // row per customer, with their loan count, amount given, outstanding, and
+    // pending interest — sorted ascending by STL number.
+    const pendByCust = new Map<string, number>()
+    for (const i of interest) pendByCust.set(i.Customer_STL_NO, (pendByCust.get(i.Customer_STL_NO) ?? 0) + num(i.Interest_Pending))
+    const custMap = new Map<string, { stl: string; name: string; count: number; given: number; out: number }>()
+    for (const l of loans) {
+      const key = l.Customer_STL_NO
+      const c = custMap.get(key) ?? { stl: key, name: l.Customer_Name, count: 0, given: 0, out: 0 }
+      c.count++; c.given += num(l.Loan_Amount); c.out += num(l.Outstand_Amount)
+      custMap.set(key, c)
+    }
+    const customers = [...custMap.values()]
+      .map(c => ({ ...c, pending: pendByCust.get(c.stl) ?? 0 }))
+      .sort((a, b) => String(a.stl ?? '').localeCompare(String(b.stl ?? ''), undefined, { numeric: true }))
+
     return {
-      partner, loans, interest, months, pendingPrev, pendingLedger, unbilled,
+      partner, loans, interest, months, pendingPrev, pendingLedger, unbilled, customers,
       given: loans.reduce((s, l) => s + num(l.Loan_Amount), 0),
       outstanding: loans.reduce((s, l) => s + num(l.Outstand_Amount), 0),
       pendingTotal: interest.reduce((s, i) => s + num(i.Interest_Pending), 0),
@@ -114,6 +130,33 @@ export default function PartnerDetail() {
         <StatCard label="Interest received" value={inr(d.received)} tone="green" icon={<Percent size={18} />} />
         <StatCard label="Interest pending" value={inr(d.pendingTotal)} tone="red" sub={`Unbilled so far ${inr(d.unbilled)}`} />
       </div>
+
+      <h3 className="mb-2 mt-6 flex items-center gap-2 font-semibold text-hd"><Users size={16} /> Customers ({d.customers.length})</h3>
+      {d.customers.length === 0 ? <EmptyState title="No referred customers" /> : (
+        <Card className="!p-0 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="border-b border-slate-800 bg-slate-900/60">
+                <tr><Th sticky>Customer</Th><Th>STL No.</Th><Th right>Loans</Th><Th right>Given</Th><Th right>Outstanding loan</Th><Th right>Outstanding interest</Th></tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {d.customers.map(c => (
+                  <tr key={c.stl} className="hover:bg-slate-800/40">
+                    <Td sticky>
+                      <Link to={`/customers/${encodeURIComponent(c.stl)}`} className="font-medium text-brand-300 hover:text-brand-200">{c.name}</Link>
+                    </Td>
+                    <Td className="text-slate-300">{c.stl}</Td>
+                    <Td right className="text-slate-400">{c.count}</Td>
+                    <Td right className="text-hd">{inr(c.given)}</Td>
+                    <Td right className="font-semibold text-amber-300">{inr(c.out)}</Td>
+                    <Td right className={c.pending > 0 ? 'font-semibold text-amber-400' : 'text-slate-400'}>{inr(c.pending)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       <h3 className="mb-2 mt-6 flex items-center gap-2 font-semibold text-hd"><HandCoins size={16} /> Referred loans</h3>
       {d.loans.length === 0 ? <EmptyState title="No referred loans" /> : (

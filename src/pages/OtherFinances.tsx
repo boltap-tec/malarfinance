@@ -18,7 +18,7 @@ export default function OtherFinances() {
     let list = repo.otherFinances(financeFilter(finance))
     const s = q.trim().toLowerCase()
     if (s) list = list.filter(l => l.name.toLowerCase().includes(s) || l.code.toLowerCase().includes(s) || String(l.phone ?? '').includes(s))
-    list = list.slice().sort((a, b) => b.out - a.out)
+    list = list.slice().sort((a, b) => String(a.code ?? '').localeCompare(String(b.code ?? ''), undefined, { numeric: true }))
     return {
       rows: list,
       borrowed: list.reduce((s2, l) => s2 + l.borrowed, 0),

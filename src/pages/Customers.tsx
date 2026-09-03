@@ -32,8 +32,7 @@ export default function Customers() {
       !s || c.Customer_Name?.toLowerCase().includes(s) || c.Customer_STL_NO?.toLowerCase().includes(s) ||
       String(c.Customer_Phone_No ?? '').includes(s),
     ).sort((a, b) =>
-      (Number(num(b.Outstand_Loan) > 0) - Number(num(a.Outstand_Loan) > 0)) ||   // active (owing) customers first
-      (num(b.Outstand_Loan) - num(a.Outstand_Loan)),
+      String(a.Customer_STL_NO ?? '').localeCompare(String(b.Customer_STL_NO ?? ''), undefined, { numeric: true }),
     )
     return {
       rows: filtered, pendMap,

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Percent, IndianRupee, Plus, Pencil, Trash2, Users } from 'lucide-react'
 import { repo, repayCustomer, updateInterestRow, addInterestRow, deleteInterestRow } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal, CallLink } from '../components/ui'
 import CustomerInterestPayModal from '../components/CustomerInterestPayModal'
 import ReminderButton from '../components/ReminderButton'
 import { inr, fmtDate, num, monthKey, monthName } from '../lib/format'
@@ -67,7 +67,10 @@ export default function CustomerInterest() {
     // Distinct months present (newest first) for the month picker.
     const monthOptions = [...new Set(list.map(i => i.Month ?? '—'))].sort((a, b) => monthKey(b) - monthKey(a))
     if (monthSel !== 'all') list = list.filter(i => (i.Month ?? '—') === monthSel)
-    list = list.slice().sort((a, b) => monthKey(b.Month) - monthKey(a.Month) || num(b.Interest_Pending) - num(a.Interest_Pending))
+    list = list.slice().sort((a, b) =>
+      monthKey(b.Month) - monthKey(a.Month) ||
+      String(a.Customer_STL_NO ?? '').localeCompare(String(b.Customer_STL_NO ?? ''), undefined, { numeric: true }) ||
+      num(b.Interest_Pending) - num(a.Interest_Pending))
 
     // Nest the lines: month → partner group → rows, each level carrying totals.
     type Totals = { interest: number; received: number; pending: number }
@@ -170,7 +173,12 @@ export default function CustomerInterest() {
                   const i = item.i
                   return (
                     <tr key={item.key} className="group hover:bg-slate-800/40">
-                      <Td sticky className="text-slate-200">{i.Customer_Name}</Td>
+                      <Td sticky className="text-slate-200">
+                        <div className="flex items-center gap-2">
+                          <span>{i.Customer_Name}</span>
+                          <CallLink phone={repo.customer(i.Customer_STL_NO)?.Customer_Phone_No} />
+                        </div>
+                      </Td>
                       <Td className="text-slate-400">{i.Customer_STL_NO}</Td>
                       <Td right className="text-slate-300">{inr(i.Loan_No ? (outMap.get(i.Loan_No) ?? 0) : num(i.Loan_Amount))}</Td>
                       <Td className="text-xs text-slate-500">

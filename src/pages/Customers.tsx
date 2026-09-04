@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Search, Plus, HandCoins, Percent, Users } from 'lucide-react'
 import { repo, addCustomer, customerRisk } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, CallLink } from '../components/ui'
 import ReminderButton from '../components/ReminderButton'
 import { inr, phone, num, balanceStatus } from '../lib/format'
 import { useCreateParam } from '../lib/useCreateParam'
@@ -121,9 +121,12 @@ export default function Customers() {
                   return (
                   <tr key={item.key} className="group hover:bg-slate-800/40">
                     <Td sticky>
-                      <Link to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}`} className="font-medium text-brand-300 hover:text-brand-200">
-                        {c.Customer_Name}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}`} className="font-medium text-brand-300 hover:text-brand-200">
+                          {c.Customer_Name}
+                        </Link>
+                        <CallLink phone={c.Customer_Phone_No} />
+                      </div>
                       <p className="text-xs text-slate-500">{c.Finance_Name}</p>
                     </Td>
                     <Td className="text-slate-300">{c.Customer_STL_NO}</Td>

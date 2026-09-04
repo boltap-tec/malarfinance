@@ -1,7 +1,23 @@
 import { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
-import { inr, amountWords } from '../lib/format'
+import { X, Phone } from 'lucide-react'
+import { inr, amountWords, phone as fmtPhone } from '../lib/format'
+
+// Click-to-call icon shown next to a name. A tel: link that opens the dialer;
+// renders nothing when there is no number. stopPropagation so it never triggers
+// a surrounding row link.
+export function CallLink({ phone, className = '' }: { phone?: number | string; className?: string }) {
+  const tel = phone != null && String(phone).trim() ? String(phone).replace(/[^\d+]/g, '') : ''
+  if (!tel) return null
+  return (
+    <a
+      href={`tel:${tel}`} title={`Call ${fmtPhone(phone)}`} onClick={e => e.stopPropagation()}
+      className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-emerald-300 ring-1 ring-inset ring-emerald-500/30 hover:bg-emerald-500/10 ${className}`}
+    >
+      <Phone size={12} />
+    </a>
+  )
+}
 
 // Live helper under a money input: shows the value in Indian grouping (₹1,50,000)
 // and spelled out in words, so large amounts are easy to confirm while typing.

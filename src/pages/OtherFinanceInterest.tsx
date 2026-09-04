@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { ReceiptText, IndianRupee, Plus, Pencil, Trash2 } from 'lucide-react'
 import { repo, payOtherFinanceInterest, addOtherFinanceInterestRow, updateOtherFinanceInterestRow, deleteOtherFinanceInterestRow } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal, CallLink } from '../components/ui'
 import InterestPayModal from '../components/InterestPayModal'
 import ReminderButton from '../components/ReminderButton'
 import { inr, fmtDate, num, monthKey, monthName } from '../lib/format'
@@ -96,7 +96,12 @@ export default function OtherFinanceInterest() {
                       </td></tr>
                     )}
                     <tr className="group hover:bg-slate-800/40">
-                      <Td sticky className="text-slate-200">{i.Loan_bought_Finance_Name}</Td>
+                      <Td sticky className="text-slate-200">
+                        <div className="flex items-center gap-2">
+                          <span>{i.Loan_bought_Finance_Name}</span>
+                          <CallLink phone={repo.otherFinanceLoans().find((l: any) => l.Loan_No === i.Loan_No)?.Loan_bought_Finance_Phone_No} />
+                        </div>
+                      </Td>
                       <Td className="text-slate-400">{i.Loan_No}</Td>
                       <Td right className="text-slate-300">{inr(outMap.get(i.Loan_No) ?? 0)}</Td>
                       <Td className="text-xs text-slate-500">

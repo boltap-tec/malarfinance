@@ -267,28 +267,30 @@ function InterestFormModal({ finance, row, onClose, onSaved }: {
   const [from, setFrom] = useState(row?.From_Date ?? '')
   const [to, setTo] = useState(row?.To_Date ?? '')
   const [amount, setAmount] = useState(String(num(row?.Interest_Amount) || ''))
-  const [received, setReceived] = useState(String(num(row?.Amount_Received) || ''))
   const [busy, setBusy] = useState(false)
 
   const cust = customers.find(c => c.Customer_STL_NO === stl)
-  const pending = Math.max(0, num(amount) - num(received))
+  // Received is never edited here — it changes only through the Collect flow. We
+  // keep whatever was already received (0 for a new row) and re-derive pending.
+  const received = num(row?.Amount_Received)
+  const pending = Math.max(0, num(amount) - received)
   const valid = stl && loanNo && month.trim() && num(amount) > 0
 
   async function save() {
     if (!valid || busy) return
     setBusy(true)
-    const status = num(received) >= num(amount) ? 'Paid' : num(received) > 0 ? 'Partial' : 'Pending'
+    const status = received >= num(amount) ? 'Paid' : received > 0 ? 'Partial' : 'Pending'
     if (editing && row) {
       await updateInterestRow(row.ID, {
         Month: month.trim(), From_Date: from || undefined, To_Date: to || undefined,
-        Interest_Amount: num(amount), Amount_Received: num(received), Interest_Pending: pending, Status: status,
+        Interest_Amount: num(amount), Amount_Received: received, Interest_Pending: pending, Status: status,
       })
     } else {
       await addInterestRow({
         Finance_Name: cust?.Finance_Name ?? finance ?? '', Loan_No: loanNo,
         Customer_STL_NO: stl, Customer_Name: cust?.Customer_Name ?? '',
         Month: month.trim(), From_Date: from || undefined, To_Date: to || undefined,
-        Interest_Amount: num(amount), Amount_Received: num(received), Interest_Pending: pending, Status: status,
+        Interest_Amount: num(amount), Amount_Received: received, Interest_Pending: pending, Status: status,
       })
     }
     onSaved()
@@ -320,11 +322,8 @@ function InterestFormModal({ finance, row, onClose, onSaved }: {
         <Field label="From"><input type="date" className="input" value={from} onChange={e => setFrom(e.target.value)} /></Field>
         <Field label="To"><input type="date" className="input" value={to} onChange={e => setTo(e.target.value)} /></Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Interest amount (₹)"><input className="input" inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} /></Field>
-        <Field label="Received (₹)"><input className="input" inputMode="numeric" value={received} onChange={e => setReceived(e.target.value)} /></Field>
-      </div>
-      <p className="text-sm text-slate-400">Pending: <b className="text-amber-300">{inr(pending)}</b></p>
+      <Field label="Interest amount (₹)"><input className="input" inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} /></Field>
+      {editing && received > 0 && <p className="text-sm text-slate-400">Received <b className="text-emerald-300">{inr(received)}</b> · Pending <b className="text-amber-300">{inr(pending)}</b></p>}
     </Modal>
   )
 }

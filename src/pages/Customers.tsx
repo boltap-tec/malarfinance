@@ -21,21 +21,55 @@ export default function Customers() {
   // Giving a loan needs a specific finance — adopt the customer's finance first.
   const giveLoan = (c: Customer) => { setFinance(c.Finance_Name); navigate(`/loans?new=1&stl=${encodeURIComponent(c.Customer_STL_NO)}`) }
 
-  const { rows, outLoan, outInterest, pendMap } = useMemo(() => {
-    const list = repo.customers(financeFilter(finance))
+  const { flat, count, outLoan, outInterest, pendMap } = useMemo(() => {
+    const ff = financeFilter(finance)
+    const list = repo.customers(ff)
     // Live pending interest per customer, summed straight from the interest rows —
     // so posted interest shows immediately without depending on the stored roll-up.
     const pendMap = new Map<string, number>()
-    for (const r of repo.interest(financeFilter(finance))) pendMap.set(r.Customer_STL_NO, (pendMap.get(r.Customer_STL_NO) ?? 0) + num(r.Interest_Pending))
+    for (const r of repo.interest(ff)) pendMap.set(r.Customer_STL_NO, (pendMap.get(r.Customer_STL_NO) ?? 0) + num(r.Interest_Pending))
+    // Partner id → name, and the referred partners across each customer's loans,
+    // to group customers by partner.
+    const pname = new Map<string, string>()
+    for (const p of repo.partners(ff)) pname.set(p.Partner_ID, p.Partner_Name)
+    const custPartners = new Map<string, Set<string>>()
+    for (const l of repo.loans(ff)) if (l.Referred_Partner) {
+      const set = custPartners.get(l.Customer_STL_NO) ?? new Set<string>()
+      set.add(l.Referred_Partner); custPartners.set(l.Customer_STL_NO, set)
+    }
+    // A customer's partner group: the sole partner across their loans, else
+    // "Unmatched partner" when loans span more than one; "No partner" when none.
+    // rank orders groups: partners first, No partner, Unmatched last.
+    const groupOf = (stl: string): { key: string; name: string; rank: number } => {
+      const pids = custPartners.get(stl) ?? new Set<string>()
+      if (pids.size === 0) return { key: '__NONE__', name: 'No partner', rank: 1 }
+      if (pids.size === 1) { const id = [...pids][0]; return { key: id, name: pname.get(id) || id, rank: 0 } }
+      return { key: '__UNMATCHED__', name: 'Unmatched partner', rank: 2 }
+    }
     const s = q.trim().toLowerCase()
     const filtered = list.filter(c =>
       !s || c.Customer_Name?.toLowerCase().includes(s) || c.Customer_STL_NO?.toLowerCase().includes(s) ||
       String(c.Customer_Phone_No ?? '').includes(s),
-    ).sort((a, b) =>
-      String(a.Customer_STL_NO ?? '').localeCompare(String(b.Customer_STL_NO ?? ''), undefined, { numeric: true }),
     )
+    // Sort by partner group (partners, then No partner, then Unmatched), then by
+    // STL within each group, and emit a header row whenever the group changes.
+    const tagged = filtered
+      .map(c => ({ c, g: groupOf(c.Customer_STL_NO) }))
+      .sort((a, b) =>
+        a.g.rank - b.g.rank || a.g.name.localeCompare(b.g.name) ||
+        String(a.c.Customer_STL_NO ?? '').localeCompare(String(b.c.Customer_STL_NO ?? ''), undefined, { numeric: true }))
+    type Item = { t: 'group'; key: string; name: string; count: number } | { t: 'row'; key: string; c: Customer }
+    const flat: Item[] = []
+    let prev = ''
+    for (const { c, g } of tagged) {
+      if (g.key !== prev) {
+        prev = g.key
+        flat.push({ t: 'group', key: 'g:' + g.key, name: g.name, count: tagged.filter(x => x.g.key === g.key).length })
+      }
+      flat.push({ t: 'row', key: c.Customer_STL_NO, c })
+    }
     return {
-      rows: filtered, pendMap,
+      flat, count: filtered.length, pendMap,
       outLoan: filtered.reduce((s2, c) => s2 + num(c.Outstand_Loan), 0),
       outInterest: filtered.reduce((s2, c) => s2 + (pendMap.get(c.Customer_STL_NO) ?? 0), 0),
     }
@@ -45,7 +79,7 @@ export default function Customers() {
     <div>
       <PageHeader
         title="Customers"
-        subtitle={`${rows.length} borrowers`}
+        subtitle={`${count} borrowers`}
         action={canEdit(role) &&
           <button className="btn-primary" onClick={() => setOpen(true)} disabled={finance === 'ALL'}>
             <Plus size={16} /> New customer
@@ -54,7 +88,7 @@ export default function Customers() {
       />
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatCard label="Customers" value={rows.length} tone="blue" icon={<Users size={18} />} />
+        <StatCard label="Customers" value={count} tone="blue" icon={<Users size={18} />} />
         <StatCard label="Outstanding loan" value={inr(outLoan)} tone="amber" />
         <StatCard label="Outstanding interest" value={inr(outInterest)} tone="red" />
       </div>
@@ -66,7 +100,7 @@ export default function Customers() {
         </div>
       </Card>
 
-      {rows.length === 0 ? <EmptyState title="No customers found" hint="Try a different search." /> : (
+      {count === 0 ? <EmptyState title="No customers found" hint="Try a different search." /> : (
         <Card className="!p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -74,8 +108,18 @@ export default function Customers() {
                 <tr><Th sticky>Customer</Th><Th>STL No.</Th><Th right>Outstanding loan</Th><Th right>Outstanding interest</Th><Th>Risk</Th><Th>Status</Th>{canEdit(role) && <Th>Actions</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {rows.map(c => (
-                  <tr key={c.Customer_STL_NO} className="group hover:bg-slate-800/40">
+                {flat.map(item => {
+                  if (item.t === 'group') return (
+                    <tr key={item.key} className="bg-slate-900/80"><td colSpan={6 + (canEdit(role) ? 1 : 0)} className="px-3 py-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-300"><Users size={12} />{item.name}</span>
+                        <span className="text-xs text-slate-400">{item.count} customers</span>
+                      </div>
+                    </td></tr>
+                  )
+                  const c = item.c
+                  return (
+                  <tr key={item.key} className="group hover:bg-slate-800/40">
                     <Td sticky>
                       <Link to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}`} className="font-medium text-brand-300 hover:text-brand-200">
                         {c.Customer_Name}
@@ -103,7 +147,8 @@ export default function Customers() {
                       </Td>
                     )}
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

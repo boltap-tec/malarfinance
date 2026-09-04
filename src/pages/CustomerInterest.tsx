@@ -1,5 +1,5 @@
-import { Fragment, useMemo, useState } from 'react'
-import { Percent, IndianRupee, Plus, Pencil, Trash2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Percent, IndianRupee, Plus, Pencil, Trash2, Users } from 'lucide-react'
 import { repo, repayCustomer, updateInterestRow, addInterestRow, deleteInterestRow } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal } from '../components/ui'
@@ -25,66 +25,96 @@ export default function CustomerInterest() {
   const [del, setDel] = useState<InterestRow | null>(null)
   const [adding, setAdding] = useState(false)
 
-  const { rows, monthTotals, outMap, billed, paid, pending, monthOptions, partnerGroups } = useMemo(() => {
+  const { flat, rowCount, outMap, billed, paid, pending, monthOptions } = useMemo(() => {
+    const ff = financeFilter(finance)
     // Current outstanding per loan, to show alongside each interest line.
     const outMap = new Map<string, number>()
-    for (const l of repo.loans(financeFilter(finance))) outMap.set(l.Loan_No, num(l.Outstand_Amount))
-    let list = repo.interest(financeFilter(finance))
+    for (const l of repo.loans(ff)) outMap.set(l.Loan_No, num(l.Outstand_Amount))
+    // Partner id → name, and the set of referred partners across each customer's
+    // loans (used to attribute an "All loans" interest line to a partner).
+    const pname = new Map<string, string>()
+    for (const p of repo.partners(ff)) pname.set(p.Partner_ID, p.Partner_Name)
+    const custPartners = new Map<string, Set<string>>()
+    for (const l of repo.loans(ff)) if (l.Referred_Partner) {
+      const set = custPartners.get(l.Customer_STL_NO) ?? new Set<string>()
+      set.add(l.Referred_Partner); custPartners.set(l.Customer_STL_NO, set)
+    }
+    // Which partner an interest line belongs to, via its loan(s): a single-loan
+    // line follows that loan's partner; an "All loans" line follows its
+    // customer's loans — the sole partner if they all share one, else "Unmatched
+    // partner". Lines whose loan(s) carry no partner fall under "No partner".
+    // rank orders groups within a month: partners first, No partner, Unmatched last.
+    const groupOf = (i: InterestRow): { key: string; name: string; rank: number } => {
+      let pids: Set<string>
+      if (i.Loan_No) {
+        const l = repo.loan(i.Loan_No)
+        pids = l ? new Set(l.Referred_Partner ? [l.Referred_Partner] : []) : (custPartners.get(i.Customer_STL_NO) ?? new Set())
+      } else {
+        pids = custPartners.get(i.Customer_STL_NO) ?? new Set()
+      }
+      if (pids.size === 0) return { key: '__NONE__', name: 'No partner', rank: 1 }
+      if (pids.size === 1) { const id = [...pids][0]; return { key: id, name: pname.get(id) || id, rank: 0 } }
+      return { key: '__UNMATCHED__', name: 'Unmatched partner', rank: 2 }
+    }
+
+    let list = repo.interest(ff)
     const s = q.trim().toLowerCase()
     if (s) list = list.filter(i =>
       String(i.Customer_Name ?? '').toLowerCase().includes(s) ||
+      String(i.Customer_STL_NO ?? '').toLowerCase().includes(s) ||
       String(i.Loan_No ?? '').toLowerCase().includes(s) ||
       String(i.Month ?? '').toLowerCase().includes(s))
     // Distinct months present (newest first) for the month picker.
     const monthOptions = [...new Set(list.map(i => i.Month ?? '—'))].sort((a, b) => monthKey(b) - monthKey(a))
     if (monthSel !== 'all') list = list.filter(i => (i.Month ?? '—') === monthSel)
     list = list.slice().sort((a, b) => monthKey(b.Month) - monthKey(a.Month) || num(b.Interest_Pending) - num(a.Interest_Pending))
-    const monthTotals: Record<string, { interest: number; received: number; pending: number }> = {}
-    for (const r of list) {
-      const m = r.Month ?? '—'
-      const t = monthTotals[m] ?? (monthTotals[m] = { interest: 0, received: 0, pending: 0 })
+
+    // Nest the lines: month → partner group → rows, each level carrying totals.
+    type Totals = { interest: number; received: number; pending: number }
+    type Grp = Totals & { name: string; rank: number; rows: InterestRow[] }
+    type Mon = Totals & { groups: Map<string, Grp> }
+    const add = (t: Totals, r: InterestRow) => {
       t.interest += num(r.Interest_Amount); t.received += num(r.Amount_Received); t.pending += num(r.Interest_Pending)
     }
-
-    // Partner-wise breakdown (rendered below the month view): group the same
-    // filtered lines by referred partner, and within a partner roll up totals
-    // per customer. Partner is taken from the interest line, falling back to its
-    // loan when the line carries none.
-    const pname = new Map<string, string>()
-    for (const p of repo.partners(financeFilter(finance))) pname.set(p.Partner_ID, p.Partner_Name)
-    const loanPartner = new Map<string, string>()
-    for (const l of repo.loans(financeFilter(finance))) if (l.Referred_Partner) loanPartner.set(l.Loan_No, l.Referred_Partner)
-    const partnerOf = (i: InterestRow) => i.Referred_Partner || loanPartner.get(String(i.Loan_No)) || ''
-    type CustAgg = { stl: string; name: string; interest: number; received: number; pending: number; loans: Set<string> }
-    const byPartner = new Map<string, Map<string, CustAgg>>()
+    const months = new Map<string, Mon>()
     for (const r of list) {
-      const pid = partnerOf(r)
-      let custs = byPartner.get(pid); if (!custs) { custs = new Map(); byPartner.set(pid, custs) }
-      const stl = r.Customer_STL_NO || r.Loan_No || '—'
-      const c = custs.get(stl) ?? { stl, name: r.Customer_Name ?? '', interest: 0, received: 0, pending: 0, loans: new Set<string>() }
-      c.interest += num(r.Interest_Amount); c.received += num(r.Amount_Received); c.pending += num(r.Interest_Pending)
-      if (r.Loan_No) c.loans.add(r.Loan_No)
-      custs.set(stl, c)
+      const m = r.Month ?? '—'
+      let mo = months.get(m); if (!mo) { mo = { interest: 0, received: 0, pending: 0, groups: new Map() }; months.set(m, mo) }
+      add(mo, r)
+      const g = groupOf(r)
+      let gr = mo.groups.get(g.key); if (!gr) { gr = { name: g.name, rank: g.rank, interest: 0, received: 0, pending: 0, rows: [] }; mo.groups.set(g.key, gr) }
+      add(gr, r); gr.rows.push(r)
     }
-    const partnerGroups = [...byPartner.entries()].map(([pid, custs]) => {
-      const customers = [...custs.values()]
-        .map(c => ({ ...c, loans: c.loans.size }))
-        .sort((a, b) => String(a.stl).localeCompare(String(b.stl), undefined, { numeric: true }))
-      return {
-        pid, name: pid ? (pname.get(pid) || pid) : 'No partner', customers,
-        interest: customers.reduce((x, c) => x + c.interest, 0),
-        received: customers.reduce((x, c) => x + c.received, 0),
-        pending: customers.reduce((x, c) => x + c.pending, 0),
+
+    // Flatten to a render list (header/sub-header/row items), capped at 300 rows.
+    type Item =
+      | { t: 'month'; key: string; label: string } & Totals
+      | { t: 'partner'; key: string; name: string } & Totals
+      | { t: 'row'; key: string; i: InterestRow }
+    const flat: Item[] = []
+    let shown = 0
+    outer: for (const m of [...months.keys()].sort((a, b) => monthKey(b) - monthKey(a))) {
+      const mo = months.get(m)!
+      flat.push({ t: 'month', key: 'm:' + m, label: m, interest: mo.interest, received: mo.received, pending: mo.pending })
+      const groups = [...mo.groups.entries()].sort((a, b) => a[1].rank - b[1].rank || a[1].name.localeCompare(b[1].name))
+      for (const [gk, gr] of groups) {
+        flat.push({ t: 'partner', key: 'p:' + m + '|' + gk, name: gr.name, interest: gr.interest, received: gr.received, pending: gr.pending })
+        for (const r of gr.rows) {
+          flat.push({ t: 'row', key: 'r:' + (r.ID ?? (m + '|' + gk + '|' + shown)), i: r })
+          if (++shown >= 300) break outer
+        }
       }
-    }).sort((a, b) => b.interest - a.interest || a.name.localeCompare(b.name))
+    }
 
     return {
-      rows: list, monthTotals, outMap, monthOptions, partnerGroups,
+      flat, rowCount: shown, outMap, monthOptions,
       billed: list.reduce((s2, i) => s2 + num(i.Interest_Amount), 0),
       paid: list.reduce((s2, i) => s2 + num(i.Amount_Received), 0),
       pending: list.reduce((s2, i) => s2 + num(i.Interest_Pending), 0),
     }
   }, [finance, q, tick, monthSel])
+
+  const cols = 9 + (editable ? 1 : 0) + (isMd ? 1 : 0)
 
   return (
     <div>
@@ -104,7 +134,7 @@ export default function CustomerInterest() {
 
       <Card className="mb-4 !p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <input className="input min-w-[12rem] flex-1" placeholder="Search customer, loan no., month…" value={q} onChange={e => setQ(e.target.value)} />
+          <input className="input min-w-[12rem] flex-1" placeholder="Search customer, STL no., loan no., month…" value={q} onChange={e => setQ(e.target.value)} />
           <select className="input !w-auto" value={monthSel} onChange={e => setMonthSel(e.target.value)}>
             <option value="all">All months</option>
             {monthOptions.map(m => <option key={m} value={m}>{monthName(m)}</option>)}
@@ -112,27 +142,36 @@ export default function CustomerInterest() {
         </div>
       </Card>
 
-      {rows.length === 0 ? <EmptyState title="No customer interest yet" hint="Run Interest posting to generate lines." /> : (
+      {rowCount === 0 ? <EmptyState title="No customer interest yet" hint="Run Interest posting to generate lines." /> : (
         <Card className="!p-0 overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="max-h-[70vh] overflow-auto">
             <table className="w-full">
-              <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th sticky>Customer</Th><Th>Loan</Th><Th right>Outstanding</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th><Th>Remind</Th>{editable && <Th>Collect</Th>}{isMd && <Th>Edit</Th>}</tr>
+              <thead className="sticky top-0 z-30 border-b border-slate-800 bg-slate-900">
+                <tr><Th sticky>Customer</Th><Th>STL No.</Th><Th right>Outstanding</Th><Th>Period</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th><Th>Status</Th><Th>Remind</Th>{editable && <Th>Collect</Th>}{isMd && <Th>Edit</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {rows.slice(0, 300).map((i, k, arr) => (
-                  <Fragment key={k}>
-                    {(k === 0 || arr[k - 1].Month !== i.Month) && (
-                      <tr className="bg-slate-900/80"><td colSpan={9 + (editable ? 1 : 0) + (isMd ? 1 : 0)} className="px-3 py-1.5">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">{monthName(i.Month)}</span>
-                          <span className="text-xs text-slate-400">Interest <b className="text-hd">{inr(monthTotals[i.Month ?? '—']?.interest ?? 0)}</b> · Received <b className="text-emerald-300">{inr(monthTotals[i.Month ?? '—']?.received ?? 0)}</b> · Pending <b className="text-amber-300">{inr(monthTotals[i.Month ?? '—']?.pending ?? 0)}</b></span>
-                        </div>
-                      </td></tr>
-                    )}
-                    <tr className="group hover:bg-slate-800/40">
+                {flat.map(item => {
+                  if (item.t === 'month') return (
+                    <tr key={item.key} className="bg-slate-900/80"><td colSpan={cols} className="px-3 py-1.5">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">{monthName(item.label)}</span>
+                        <span className="text-xs text-slate-400">Interest <b className="text-hd">{inr(item.interest)}</b> · Received <b className="text-emerald-300">{inr(item.received)}</b> · Pending <b className="text-amber-300">{inr(item.pending)}</b></span>
+                      </div>
+                    </td></tr>
+                  )
+                  if (item.t === 'partner') return (
+                    <tr key={item.key} className="bg-slate-900/50"><td colSpan={cols} className="px-3 py-1.5 pl-6">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-200"><Users size={12} className="text-slate-400" />{item.name}</span>
+                        <span className="text-[11px] text-slate-400">Interest <b className="text-hd">{inr(item.interest)}</b> · Received <b className="text-emerald-300">{inr(item.received)}</b> · Pending <b className="text-amber-300">{inr(item.pending)}</b></span>
+                      </div>
+                    </td></tr>
+                  )
+                  const i = item.i
+                  return (
+                    <tr key={item.key} className="group hover:bg-slate-800/40">
                       <Td sticky className="text-slate-200">{i.Customer_Name}</Td>
-                      <Td className="text-slate-400">{i.Loan_No || <span className="text-slate-500">All loans</span>}</Td>
+                      <Td className="text-slate-400">{i.Customer_STL_NO}</Td>
                       <Td right className="text-slate-300">{inr(i.Loan_No ? (outMap.get(i.Loan_No) ?? 0) : num(i.Loan_Amount))}</Td>
                       <Td className="text-xs text-slate-500">
                         <div>{fmtDate(i.From_Date)} – {fmtDate(i.To_Date)}</div>
@@ -167,15 +206,13 @@ export default function CustomerInterest() {
                         </Td>
                       )}
                     </tr>
-                  </Fragment>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
         </Card>
       )}
-
-      {rows.length > 0 && <PartnerWise groups={partnerGroups} />}
 
       {pay && (
         <CustomerInterestPayModal
@@ -205,54 +242,6 @@ export default function CustomerInterest() {
         />
       )}
     </div>
-  )
-}
-
-// Partner-wise view of the same (filtered) interest lines, shown below the
-// month view: one group per referred partner, with a partner sub-total and one
-// row per customer rolling up interest/received/pending across their loans.
-type PartnerGroup = {
-  pid: string; name: string; interest: number; received: number; pending: number
-  customers: { stl: string; name: string; interest: number; received: number; pending: number; loans: number }[]
-}
-function PartnerWise({ groups }: { groups: PartnerGroup[] }) {
-  if (groups.length === 0) return null
-  return (
-    <Card className="mt-4 !p-0 overflow-hidden">
-      <div className="px-4 py-2.5">
-        <h3 className="font-semibold text-hd">By partner</h3>
-        <p className="text-xs text-slate-400">Customer-wise interest totals grouped under each referred partner.</p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="border-y border-slate-800 bg-slate-900/60">
-            <tr><Th sticky>Customer</Th><Th>Code</Th><Th right>Loans</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th></tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
-            {groups.map(g => (
-              <Fragment key={g.pid || 'none'}>
-                <tr className="bg-slate-900/80"><td colSpan={6} className="px-3 py-1.5">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">{g.name}</span>
-                    <span className="text-xs text-slate-400">{g.customers.length} customers · Interest <b className="text-hd">{inr(g.interest)}</b> · Received <b className="text-emerald-300">{inr(g.received)}</b> · Pending <b className="text-amber-300">{inr(g.pending)}</b></span>
-                  </div>
-                </td></tr>
-                {g.customers.map(c => (
-                  <tr key={g.pid + c.stl} className="hover:bg-slate-800/40">
-                    <Td sticky className="text-slate-200">{c.name}</Td>
-                    <Td className="font-medium text-brand-300">{c.stl}</Td>
-                    <Td right className="text-slate-400">{c.loans}</Td>
-                    <Td right className="text-hd">{inr(c.interest)}</Td>
-                    <Td right className="text-emerald-400">{inr(c.received)}</Td>
-                    <Td right className="text-amber-400">{inr(c.pending)}</Td>
-                  </tr>
-                ))}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Card>
   )
 }
 

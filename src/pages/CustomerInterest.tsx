@@ -25,7 +25,7 @@ export default function CustomerInterest() {
   const [del, setDel] = useState<InterestRow | null>(null)
   const [adding, setAdding] = useState(false)
 
-  const { rows, monthTotals, outMap, billed, paid, pending, monthOptions } = useMemo(() => {
+  const { rows, monthTotals, outMap, billed, paid, pending, monthOptions, partnerGroups } = useMemo(() => {
     // Current outstanding per loan, to show alongside each interest line.
     const outMap = new Map<string, number>()
     for (const l of repo.loans(financeFilter(finance))) outMap.set(l.Loan_No, num(l.Outstand_Amount))
@@ -45,8 +45,41 @@ export default function CustomerInterest() {
       const t = monthTotals[m] ?? (monthTotals[m] = { interest: 0, received: 0, pending: 0 })
       t.interest += num(r.Interest_Amount); t.received += num(r.Amount_Received); t.pending += num(r.Interest_Pending)
     }
+
+    // Partner-wise breakdown (rendered below the month view): group the same
+    // filtered lines by referred partner, and within a partner roll up totals
+    // per customer. Partner is taken from the interest line, falling back to its
+    // loan when the line carries none.
+    const pname = new Map<string, string>()
+    for (const p of repo.partners(financeFilter(finance))) pname.set(p.Partner_ID, p.Partner_Name)
+    const loanPartner = new Map<string, string>()
+    for (const l of repo.loans(financeFilter(finance))) if (l.Referred_Partner) loanPartner.set(l.Loan_No, l.Referred_Partner)
+    const partnerOf = (i: InterestRow) => i.Referred_Partner || loanPartner.get(String(i.Loan_No)) || ''
+    type CustAgg = { stl: string; name: string; interest: number; received: number; pending: number; loans: Set<string> }
+    const byPartner = new Map<string, Map<string, CustAgg>>()
+    for (const r of list) {
+      const pid = partnerOf(r)
+      let custs = byPartner.get(pid); if (!custs) { custs = new Map(); byPartner.set(pid, custs) }
+      const stl = r.Customer_STL_NO || r.Loan_No || '—'
+      const c = custs.get(stl) ?? { stl, name: r.Customer_Name ?? '', interest: 0, received: 0, pending: 0, loans: new Set<string>() }
+      c.interest += num(r.Interest_Amount); c.received += num(r.Amount_Received); c.pending += num(r.Interest_Pending)
+      if (r.Loan_No) c.loans.add(r.Loan_No)
+      custs.set(stl, c)
+    }
+    const partnerGroups = [...byPartner.entries()].map(([pid, custs]) => {
+      const customers = [...custs.values()]
+        .map(c => ({ ...c, loans: c.loans.size }))
+        .sort((a, b) => String(a.stl).localeCompare(String(b.stl), undefined, { numeric: true }))
+      return {
+        pid, name: pid ? (pname.get(pid) || pid) : 'No partner', customers,
+        interest: customers.reduce((x, c) => x + c.interest, 0),
+        received: customers.reduce((x, c) => x + c.received, 0),
+        pending: customers.reduce((x, c) => x + c.pending, 0),
+      }
+    }).sort((a, b) => b.interest - a.interest || a.name.localeCompare(b.name))
+
     return {
-      rows: list, monthTotals, outMap, monthOptions,
+      rows: list, monthTotals, outMap, monthOptions, partnerGroups,
       billed: list.reduce((s2, i) => s2 + num(i.Interest_Amount), 0),
       paid: list.reduce((s2, i) => s2 + num(i.Amount_Received), 0),
       pending: list.reduce((s2, i) => s2 + num(i.Interest_Pending), 0),
@@ -142,6 +175,8 @@ export default function CustomerInterest() {
         </Card>
       )}
 
+      {rows.length > 0 && <PartnerWise groups={partnerGroups} />}
+
       {pay && (
         <CustomerInterestPayModal
           name={pay.Customer_Name}
@@ -170,6 +205,54 @@ export default function CustomerInterest() {
         />
       )}
     </div>
+  )
+}
+
+// Partner-wise view of the same (filtered) interest lines, shown below the
+// month view: one group per referred partner, with a partner sub-total and one
+// row per customer rolling up interest/received/pending across their loans.
+type PartnerGroup = {
+  pid: string; name: string; interest: number; received: number; pending: number
+  customers: { stl: string; name: string; interest: number; received: number; pending: number; loans: number }[]
+}
+function PartnerWise({ groups }: { groups: PartnerGroup[] }) {
+  if (groups.length === 0) return null
+  return (
+    <Card className="mt-4 !p-0 overflow-hidden">
+      <div className="px-4 py-2.5">
+        <h3 className="font-semibold text-hd">By partner</h3>
+        <p className="text-xs text-slate-400">Customer-wise interest totals grouped under each referred partner.</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="border-y border-slate-800 bg-slate-900/60">
+            <tr><Th sticky>Customer</Th><Th>Code</Th><Th right>Loans</Th><Th right>Interest</Th><Th right>Received</Th><Th right>Pending</Th></tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800">
+            {groups.map(g => (
+              <Fragment key={g.pid || 'none'}>
+                <tr className="bg-slate-900/80"><td colSpan={6} className="px-3 py-1.5">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">{g.name}</span>
+                    <span className="text-xs text-slate-400">{g.customers.length} customers · Interest <b className="text-hd">{inr(g.interest)}</b> · Received <b className="text-emerald-300">{inr(g.received)}</b> · Pending <b className="text-amber-300">{inr(g.pending)}</b></span>
+                  </div>
+                </td></tr>
+                {g.customers.map(c => (
+                  <tr key={g.pid + c.stl} className="hover:bg-slate-800/40">
+                    <Td sticky className="text-slate-200">{c.name}</Td>
+                    <Td className="font-medium text-brand-300">{c.stl}</Td>
+                    <Td right className="text-slate-400">{c.loans}</Td>
+                    <Td right className="text-hd">{inr(c.interest)}</Td>
+                    <Td right className="text-emerald-400">{inr(c.received)}</Td>
+                    <Td right className="text-amber-400">{inr(c.pending)}</Td>
+                  </tr>
+                ))}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   )
 }
 

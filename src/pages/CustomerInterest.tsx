@@ -274,7 +274,12 @@ function InterestFormModal({ finance, row, onClose, onSaved }: {
   // keep whatever was already received (0 for a new row) and re-derive pending.
   const received = num(row?.Amount_Received)
   const pending = Math.max(0, num(amount) - received)
-  const valid = stl && loanNo && month.trim() && num(amount) > 0
+  // When editing an existing row the customer/loan are fixed (a consolidated
+  // multi-loan row has no Loan_No at all), so only the amount/month matter. Adding
+  // a new row still needs a customer + loan chosen.
+  const valid = editing
+    ? month.trim().length > 0 && num(amount) > 0
+    : Boolean(stl && loanNo && month.trim() && num(amount) > 0)
 
   async function save() {
     if (!valid || busy) return

@@ -95,16 +95,34 @@ export default function CustomerRepayModal({
     // Fresh interest on the repaid amount (at the chosen loan's rate) is posted as
     // pending rows; principal goes to the chosen loan (or oldest-first for ALL);
     // interest settles the customer's oldest pending first.
-    const accrualRows: InterestRow[] = raw.map(a => {
-      const l = loans.find(x => x.Loan_No === a.key)!
+    // Consolidate this repayment's accrued interest into ONE row per month, even
+    // when several loans were repaid at once — so the interest view shows a single
+    // line for the customer instead of one row per loan. Per-loan detail (base and
+    // loan nos) is folded into the amount and description.
+    const byMonth = new Map<string, typeof raw>()
+    for (const a of raw) { const g = byMonth.get(a.month) ?? []; g.push(a); byMonth.set(a.month, g) }
+    const accrualRows: InterestRow[] = [...byMonth.entries()].map(([month, as]) => {
+      const first = loans.find(x => x.Loan_No === as[0].key)!
+      const amount = as.reduce((s, a) => s + num(a.amount), 0)
+      const base = as.reduce((s, a) => s + num(a.base), 0)
+      const from = as.map(a => a.from).sort()[0]
+      const to = as.map(a => a.to).sort().slice(-1)[0]
+      const loanNos = as.map(a => a.key)
+      const rowLoans = as.map(a => loans.find(x => x.Loan_No === a.key)!)
+      const samePartner = rowLoans.every(l => l.Referred_Partner === first.Referred_Partner)
+      const sameType = rowLoans.every(l => l.Interest_Type === first.Interest_Type)
+      const single = as.length === 1
       return {
-        ID: `${l.Customer_Name}-${l.Customer_STL_NO}-${l.Loan_No}-${a.month}-repay-${Date.now()}-${l.Loan_No}`,
-        Finance_Name: l.Finance_Name, Loan_No: l.Loan_No,
-        Customer_STL_NO: l.Customer_STL_NO, Customer_Name: l.Customer_Name,
-        From_Date: a.from, To_Date: a.to, Interest_Amount: a.amount, Loan_Amount: a.base, Month: a.month,
-        Description: `Interest on ₹${a.base.toLocaleString('en-IN')} repaid — ${l.Loan_No}`,
-        Amount_Received: 0, Status: 'Pending', Interest_Pending: a.amount,
-        Referred_Partner: l.Referred_Partner, Interest_Type: l.Interest_Type,
+        ID: `${first.Customer_Name}-${first.Customer_STL_NO}-${month}-repay-${Date.now()}`,
+        Finance_Name: first.Finance_Name, Loan_No: single ? first.Loan_No : '',
+        Customer_STL_NO: first.Customer_STL_NO, Customer_Name: first.Customer_Name,
+        From_Date: from, To_Date: to, Interest_Amount: amount, Loan_Amount: base, Month: month,
+        Description: single
+          ? `Interest on ₹${base.toLocaleString('en-IN')} repaid — ${loanNos[0]}`
+          : `Interest on ₹${base.toLocaleString('en-IN')} repaid — ${loanNos.length} loans (${loanNos.join(', ')})`,
+        Amount_Received: 0, Status: 'Pending', Interest_Pending: amount,
+        Referred_Partner: samePartner ? first.Referred_Partner : undefined,
+        Interest_Type: sameType ? first.Interest_Type : undefined,
       }
     })
     await repayCustomer({

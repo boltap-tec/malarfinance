@@ -51,20 +51,30 @@ export default function Customers() {
       !s || c.Customer_Name?.toLowerCase().includes(s) || c.Customer_STL_NO?.toLowerCase().includes(s) ||
       String(c.Customer_Phone_No ?? '').includes(s),
     )
-    // Sort by partner group (partners, then No partner, then Unmatched), then by
-    // STL within each group, and emit a header row whenever the group changes.
+    // Group by partner (partners, then No partner, then Unmatched), and within
+    // each partner split into Active / Inactive, then STL-sorted. A partner header
+    // precedes each group and an Active/Inactive sub-header precedes each subgroup.
+    const statusOf = (c: Customer) => balanceStatus(c.Outstand_Loan) // 'Active' | 'Inactive'
     const tagged = filtered
-      .map(c => ({ c, g: groupOf(c.Customer_STL_NO) }))
+      .map(c => ({ c, g: groupOf(c.Customer_STL_NO), s: statusOf(c) }))
       .sort((a, b) =>
         a.g.rank - b.g.rank || a.g.name.localeCompare(b.g.name) ||
+        (a.s === 'Active' ? 0 : 1) - (b.s === 'Active' ? 0 : 1) ||
         String(a.c.Customer_STL_NO ?? '').localeCompare(String(b.c.Customer_STL_NO ?? ''), undefined, { numeric: true }))
-    type Item = { t: 'group'; key: string; name: string; count: number } | { t: 'row'; key: string; c: Customer }
+    type Item =
+      | { t: 'group'; key: string; name: string; count: number }
+      | { t: 'status'; key: string; name: string; count: number }
+      | { t: 'row'; key: string; c: Customer }
     const flat: Item[] = []
-    let prev = ''
-    for (const { c, g } of tagged) {
-      if (g.key !== prev) {
-        prev = g.key
+    let prevG = '', prevS = ''
+    for (const { c, g, s } of tagged) {
+      if (g.key !== prevG) {
+        prevG = g.key; prevS = ''
         flat.push({ t: 'group', key: 'g:' + g.key, name: g.name, count: tagged.filter(x => x.g.key === g.key).length })
+      }
+      if (s !== prevS) {
+        prevS = s
+        flat.push({ t: 'status', key: 'g:' + g.key + '|s:' + s, name: s, count: tagged.filter(x => x.g.key === g.key && x.s === s).length })
       }
       flat.push({ t: 'row', key: c.Customer_STL_NO, c })
     }
@@ -115,6 +125,12 @@ export default function Customers() {
                         <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-300"><Users size={12} />{item.name}</span>
                         <span className="text-xs text-slate-400">{item.count} customers</span>
                       </div>
+                    </td></tr>
+                  )
+                  if (item.t === 'status') return (
+                    <tr key={item.key} className="bg-slate-900/50"><td colSpan={6 + (canEdit(role) ? 1 : 0)} className="px-3 py-1 pl-6">
+                      <span className={`text-[11px] font-semibold uppercase tracking-wide ${item.name === 'Active' ? 'text-emerald-300' : 'text-slate-500'}`}>{item.name}</span>
+                      <span className="ml-2 text-[11px] text-slate-500">{item.count}</span>
                     </td></tr>
                   )
                   const c = item.c

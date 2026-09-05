@@ -14,16 +14,27 @@ export default function Depositors() {
   const navigate = useNavigate()
   const [q, setQ] = useState('')
 
-  const { rows, deposited, outstanding } = useMemo(() => {
+  const { flat, count, deposited, outstanding } = useMemo(() => {
     let list = repo.depositors(financeFilter(finance))
     const s = q.trim().toLowerCase()
     if (s) list = list.filter(d => d.name.toLowerCase().includes(s) || d.code.toLowerCase().includes(s) || String(d.phone ?? '').includes(s))
-    // Ascending by depositor code (numeric-aware).
+    // Group Active (still owed) before Inactive (settled); code-ascending within each.
+    const statusOf = (d: typeof list[number]) => balanceStatus(d.out) // 'Active' | 'Inactive'
     list = list.slice().sort((a, b) =>
+      (statusOf(a) === 'Active' ? 0 : 1) - (statusOf(b) === 'Active' ? 0 : 1) ||
       String(a.code ?? '').localeCompare(String(b.code ?? ''), undefined, { numeric: true }),
     )
+    type Row = typeof list[number]
+    type Item = { t: 'status'; key: string; name: string; count: number } | { t: 'row'; key: string; d: Row }
+    const flat: Item[] = []
+    let prev = ''
+    for (const d of list) {
+      const st = statusOf(d)
+      if (st !== prev) { prev = st; flat.push({ t: 'status', key: 's:' + st, name: st, count: list.filter(x => statusOf(x) === st).length }) }
+      flat.push({ t: 'row', key: d.code, d })
+    }
     return {
-      rows: list,
+      flat, count: list.length,
       deposited: list.reduce((s2, d) => s2 + d.deposited, 0),
       outstanding: list.reduce((s2, d) => s2 + d.out, 0),
     }
@@ -41,7 +52,7 @@ export default function Depositors() {
       />
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatCard label="Depositors" value={rows.length} tone="blue" icon={<Users2 size={18} />} />
+        <StatCard label="Depositors" value={count} tone="blue" icon={<Users2 size={18} />} />
         <StatCard label="Total deposited" value={inr(deposited)} tone="slate" />
         <StatCard label="Outstanding payable" value={inr(outstanding)} tone="red" />
       </div>
@@ -55,7 +66,7 @@ export default function Depositors() {
 
       {finance === 'ALL' && <p className="mb-3 text-xs text-amber-300/80">Pick a single finance to add a deposit.</p>}
 
-      {rows.length === 0 ? <EmptyState title="No depositors" /> : (
+      {count === 0 ? <EmptyState title="No depositors" /> : (
         <Card className="!p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -63,10 +74,17 @@ export default function Depositors() {
                 <tr><Th sticky>Depositor</Th><Th>DEP no.</Th><Th>Phone</Th><Th right>Deposits</Th><Th right>Total</Th><Th right>Outstanding</Th><Th>Status</Th>{canEdit(role) && <Th>Actions</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {rows.map((d, i) => {
+                {flat.map(item => {
+                  if (item.t === 'status') return (
+                    <tr key={item.key} className="bg-slate-900/80"><td colSpan={7 + (canEdit(role) ? 1 : 0)} className="px-3 py-1.5">
+                      <span className={`text-xs font-semibold uppercase tracking-wide ${item.name === 'Active' ? 'text-emerald-300' : 'text-slate-500'}`}>{item.name}</span>
+                      <span className="ml-2 text-xs text-slate-500">{item.count}</span>
+                    </td></tr>
+                  )
+                  const d = item.d
                   const intPending = repo.depositInterestPending(d.code)
                   return (
-                  <tr key={i} className="group hover:bg-slate-800/40">
+                  <tr key={item.key} className="group hover:bg-slate-800/40">
                     <Td sticky><Link to={`/deposits/${encodeURIComponent(d.code)}`} className="font-medium text-brand-300">{d.name}</Link><p className="text-xs text-slate-500">{d.finance}</p></Td>
                     <Td className="text-slate-400">{d.code}</Td>
                     <Td className="text-slate-400">{phone(d.phone)}</Td>

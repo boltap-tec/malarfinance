@@ -20,15 +20,25 @@ export default function OtherFinance() {
   const [tick, setTick] = useState(0)
   const [del, setDel] = useState<OtherFinanceLoan | null>(null)
 
-  const { rows, borrowed, outstanding } = useMemo(() => {
+  const { flat, count, borrowed, outstanding } = useMemo(() => {
     const list = repo.otherFinanceLoans(financeFilter(finance))
       .slice()
       .sort((a, b) =>
         (Number(num(b.Outstand_Amount) > 0) - Number(num(a.Outstand_Amount) > 0)) ||   // active (owing) loans first
         (num(b.Outstand_Amount) - num(a.Outstand_Amount)),
       )
+    // Group Active (still owed) before Inactive (settled).
+    const statusOf = (o: OtherFinanceLoan) => balanceStatus(o.Outstand_Amount) // 'Active' | 'Inactive'
+    type Item = { t: 'status'; key: string; name: string; count: number } | { t: 'row'; key: string; o: OtherFinanceLoan }
+    const flat: Item[] = []
+    let prev = ''
+    list.forEach((o, i) => {
+      const st = statusOf(o)
+      if (st !== prev) { prev = st; flat.push({ t: 'status', key: 's:' + st, name: st, count: list.filter(x => statusOf(x) === st).length }) }
+      flat.push({ t: 'row', key: (o.Loan_No || '') + ':' + i, o })
+    })
     return {
-      rows: list,
+      flat, count: list.length,
       borrowed: list.reduce((s, o) => s + num(o.Loan_Amount), 0),
       outstanding: list.reduce((s, o) => s + num(o.Outstand_Amount), 0),
     }
@@ -47,14 +57,14 @@ export default function OtherFinance() {
       />
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatCard label="Lenders" value={rows.length} tone="blue" icon={<Building2 size={18} />} />
+        <StatCard label="Lenders" value={count} tone="blue" icon={<Building2 size={18} />} />
         <StatCard label="Total borrowed" value={inr(borrowed)} tone="slate" />
         <StatCard label="Outstanding payable" value={inr(outstanding)} tone="red" />
       </div>
 
       {finance === 'ALL' && <p className="mb-3 text-xs text-amber-300/80">Pick a single finance in the switcher to add a borrowing.</p>}
 
-      {rows.length === 0 ? <EmptyState title="No other-finance loans" /> : (
+      {count === 0 ? <EmptyState title="No other-finance loans" /> : (
         <Card className="!p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -65,8 +75,16 @@ export default function OtherFinance() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {rows.map((o, i) => (
-                  <tr key={i} className="group hover:bg-slate-800/40">
+                {flat.map(item => {
+                  if (item.t === 'status') return (
+                    <tr key={item.key} className="bg-slate-900/80"><td colSpan={8 + (canEdit(role) ? 1 : 0)} className="px-3 py-1.5">
+                      <span className={`text-xs font-semibold uppercase tracking-wide ${item.name === 'Active' ? 'text-emerald-300' : 'text-slate-500'}`}>{item.name}</span>
+                      <span className="ml-2 text-xs text-slate-500">{item.count}</span>
+                    </td></tr>
+                  )
+                  const o = item.o
+                  return (
+                  <tr key={item.key} className="group hover:bg-slate-800/40">
                     <Td sticky><Link to={`/other-finance/${encodeURIComponent(o.Loan_No)}`} className="font-medium text-brand-300">{o.Loan_No}</Link></Td>
                     <Td className="text-slate-200">{o.Loan_bought_Finance_Name}</Td>
                     <Td className="text-slate-400">{phone(o.Loan_bought_Finance_Phone_No)}</Td>
@@ -89,7 +107,8 @@ export default function OtherFinance() {
                       </Td>
                     )}
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

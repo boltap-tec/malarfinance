@@ -572,14 +572,31 @@ function TransactionReport({ all, scope }: { all: HandExchange[]; scope: string 
     return { Customer: c.size, Supplier: s.size }
   }, [all])
 
+  // The pick-list of people for the current category — sourced straight from the
+  // names recorded in the hand-exchange book, so you select a real customer.
+  const names = useMemo(() => {
+    const set = new Set<string>()
+    for (const e of all) {
+      if ((e.Category === 'Supplier' ? 'Supplier' : 'Customer') !== cat) continue
+      const n = (e.Person ?? '').trim()
+      if (n) set.add(n)
+    }
+    return [...set].sort((a, b) => a.localeCompare(b))
+  }, [all, cat])
+
   const rows = useMemo(() => {
     const query = q.trim().toLowerCase()
+    // An exact match on a picked name pins the report to that one person; a
+    // partial text still narrows by substring on name or phone.
+    const exact = names.some(n => n.toLowerCase() === query)
     return all
       .filter(e => (e.Category === 'Supplier' ? 'Supplier' : 'Customer') === cat)
       .filter(e => inRange(entryDay(e), start, end))
-      .filter(e => !query || (e.Person ?? '').toLowerCase().includes(query) || String(e.Person_Phone ?? '').includes(query))
+      .filter(e => !query
+        || (exact ? (e.Person ?? '').trim().toLowerCase() === query
+                  : (e.Person ?? '').toLowerCase().includes(query) || String(e.Person_Phone ?? '').includes(query)))
       .sort((a, b) => new Date(b.Date ?? 0).getTime() - new Date(a.Date ?? 0).getTime())
-  }, [all, cat, q, start, end])
+  }, [all, cat, q, start, end, names])
 
   const gave = rows.filter(e => e.Direction === 'out').reduce((s, e) => s + num(e.Amount), 0)
   const got = rows.filter(e => e.Direction === 'in').reduce((s, e) => s + num(e.Amount), 0)
@@ -593,18 +610,21 @@ function TransactionReport({ all, scope }: { all: HandExchange[]; scope: string 
       e.Direction === 'out' ? num(e.Amount) : '', e.Direction === 'in' ? num(e.Amount) : '',
     ]),
   })
-  const doPdf = () => { const t = table(); printReport('Transaction Report', `${cat}s · ${scope} · ${rangeText}`, t.headers, t.data,
+  const whoLabel = q.trim() ? q.trim() : `${cat}s`
+  const doPdf = () => { const t = table(); printReport('Transaction Report', `${whoLabel} · ${scope} · ${rangeText}`, t.headers, t.data,
     [{ label: 'You Gave', value: inr(gave) }, { label: 'You Got', value: inr(got) }, { label: 'Net Balance', value: inr(net) }]) }
-  const doCsv = () => { const t = table(); downloadCSV(`transaction-report-${cat.toLowerCase()}.csv`, [['Transaction Report', `${cat}s`, scope, rangeText], t.headers, ...t.data,
+  const doCsv = () => { const t = table(); downloadCSV(`transaction-report-${cat.toLowerCase()}.csv`, [['Transaction Report', whoLabel, scope, rangeText], t.headers, ...t.data,
     [], ['You Gave', gave], ['You Got', got], ['Net Balance', net]]) }
 
+  const picked = q.trim() && names.some(n => n.toLowerCase() === q.trim().toLowerCase()) ? q.trim() : ''
+  const who = picked || (q.trim() ? `“${q.trim()}”` : `all ${cat.toLowerCase()}s`)
   const nl = netLabel(net)
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="grid h-9 w-9 place-items-center rounded-full bg-brand-500/15 text-brand-300"><ArrowLeftRight size={18} /></span>
-          <div><h4 className="font-bold text-hd">Transaction Report</h4><p className="text-xs text-slate-500">{scope} · all transactions</p></div>
+          <div><h4 className="font-bold text-hd">Transaction Report</h4><p className="text-xs text-slate-500">{scope} · {who}</p></div>
         </div>
         <div className="flex gap-2">
           <button className="btn-ghost !py-1.5 text-sm" onClick={doPdf}><Printer size={14} /> PDF</button>
@@ -615,16 +635,28 @@ function TransactionReport({ all, scope }: { all: HandExchange[]; scope: string 
       {/* Customers / Suppliers tabs */}
       <div className="flex gap-1.5">
         {(['Customer', 'Supplier'] as const).map(c => (
-          <button key={c} onClick={() => setCat(c)} className={`btn-ghost !py-1 text-sm ${cat === c ? 'ring-1 ring-brand-500/40 text-brand-200' : 'text-slate-400'}`}>
+          <button key={c} onClick={() => { setCat(c); setQ('') }} className={`btn-ghost !py-1 text-sm ${cat === c ? 'ring-1 ring-brand-500/40 text-brand-200' : 'text-slate-400'}`}>
             {c}s <span className="text-xs text-slate-500">{counts[c]}</span>
           </button>
         ))}
       </div>
 
-      <Field label="Customer / person name">
+      <Field label={`${cat} name`} hint={`Pick a ${cat.toLowerCase()} from your hand-exchange book, or leave blank for all`}>
         <div className="relative">
           <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input className="input pl-8" placeholder="Search" value={q} onChange={e => setQ(e.target.value)} />
+          <input
+            className="input pl-8"
+            list="hand-tx-names"
+            placeholder={`All ${cat.toLowerCase()}s`}
+            value={q}
+            onChange={e => setQ(e.target.value)}
+          />
+          {q && (
+            <button type="button" title="Clear" onClick={() => setQ('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"><X size={14} /></button>
+          )}
+          <datalist id="hand-tx-names">
+            {names.map(n => <option key={n} value={n} />)}
+          </datalist>
         </div>
       </Field>
       <PeriodPicker period={period} setPeriod={setPeriod} start={start} end={end} setStart={setStart} setEnd={setEnd} />
@@ -671,31 +703,44 @@ function CashbookReport({ all, scope }: { all: HandExchange[]; scope: string }) 
   const [start, setStart] = useState(init.start)
   const [end, setEnd] = useState(init.end)
 
+  // Opening balance = net cash of every entry BEFORE the period start, carried
+  // forward so the running balance reads as a true cashbook for the period.
+  const opening = useMemo(() => {
+    if (!start) return 0
+    return all.filter(e => { const d = entryDay(e); return d && d < start })
+      .reduce((s, e) => s + (e.Direction === 'in' ? num(e.Amount) : -num(e.Amount)), 0)
+  }, [all, start])
+
   // Oldest → newest so the running cash balance reads correctly; displayed newest first.
   const asc = useMemo(() => all
     .filter(e => inRange(entryDay(e), start, end))
     .sort((a, b) => new Date(a.Date ?? 0).getTime() - new Date(b.Date ?? 0).getTime()), [all, start, end])
   const rows = useMemo(() => {
-    let run = 0
+    let run = opening
     return asc.map(e => { run += e.Direction === 'in' ? num(e.Amount) : -num(e.Amount); return { e, balance: run } }).reverse()
-  }, [asc])
+  }, [asc, opening])
 
   const totalIn = asc.filter(e => e.Direction === 'in').reduce((s, e) => s + num(e.Amount), 0)
   const totalOut = asc.filter(e => e.Direction === 'out').reduce((s, e) => s + num(e.Amount), 0)
   const netCash = totalIn - totalOut
+  const closing = opening + netCash
   const rangeText = start || end ? `${prettyDay(start)} – ${prettyDay(end)}` : 'All time'
 
   const table = (): { headers: string[]; data: (string | number)[][] } => ({
     headers: ['Date', 'Person', 'Type', 'Note', 'In', 'Out', 'Balance'],
-    data: rows.map(({ e, balance }) => [
-      prettyDay(entryDay(e)), e.Person, e.Type, e.Note ?? '',
-      e.Direction === 'in' ? num(e.Amount) : '', e.Direction === 'out' ? num(e.Amount) : '', balance,
-    ]),
+    data: [
+      ['', 'Opening balance', '', '', '', '', opening],
+      ...[...rows].reverse().map(({ e, balance }) => [
+        prettyDay(entryDay(e)), e.Person, e.Type, e.Note ?? '',
+        e.Direction === 'in' ? num(e.Amount) : '', e.Direction === 'out' ? num(e.Amount) : '', balance,
+      ] as (string | number)[]),
+      ['', 'Closing balance', '', '', totalIn, totalOut, closing],
+    ],
   })
   const doPdf = () => { const t = table(); printReport('Cashbook Report', `${scope} · ${rangeText}`, t.headers, t.data,
-    [{ label: 'Total In', value: inr(totalIn) }, { label: 'Total Out', value: inr(totalOut) }, { label: 'Net Balance', value: inr(netCash) }]) }
+    [{ label: 'Opening', value: inr(opening) }, { label: 'Total In', value: inr(totalIn) }, { label: 'Total Out', value: inr(totalOut) }, { label: 'Closing', value: inr(closing) }]) }
   const doCsv = () => { const t = table(); downloadCSV('cashbook-report.csv', [['Cashbook Report', scope, rangeText], t.headers, ...t.data,
-    [], ['Total In', totalIn], ['Total Out', totalOut], ['Net Balance', netCash]]) }
+    [], ['Opening balance', opening], ['Total In', totalIn], ['Total Out', totalOut], ['Net movement', netCash], ['Closing balance', closing]]) }
 
   return (
     <div className="space-y-4">
@@ -717,6 +762,10 @@ function CashbookReport({ all, scope }: { all: HandExchange[]; scope: string }) 
         <StatCard label="Total In" value={inr(totalIn)} tone="green" icon={<ArrowDownLeft size={18} />} />
         <StatCard label="Total Out" value={inr(totalOut)} tone="red" icon={<ArrowUpRight size={18} />} />
         <StatCard label="Net Balance" value={inr(netCash)} tone="blue" />
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-800/40 px-3 py-2 text-sm">
+        <span className="text-slate-400">Opening balance <b className="ml-1 tabular-nums text-slate-200">{inr(opening)}</b></span>
+        <span className="text-slate-400">Closing balance <b className="ml-1 tabular-nums text-slate-200">{inr(closing)}</b></span>
       </div>
 
       {rows.length === 0 ? (

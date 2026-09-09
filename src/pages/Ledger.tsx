@@ -7,12 +7,26 @@ import { PageHeader, Card, StatCard, Th, Td, EmptyState, Badge, Modal, Field, Co
 import { inr, fmtDate, num } from '../lib/format'
 import type { LedgerRow } from '../data/types'
 
+// View-only filters for the ledger: show just one kind of transaction.
+// Each entry maps to one or more Nature_Transaction values. Interest is
+// intentionally excluded — it has its own dedicated screens.
+const NATURE_VIEWS: { key: string; label: string; natures: string[] }[] = [
+  { key: 'all', label: 'All', natures: [] },
+  { key: 'loan-given', label: 'Loan giving', natures: ['Loan_To_Customer'] },
+  { key: 'loan-repay', label: 'Loan repayment', natures: ['Customer_Loan_Prin_Repayment'] },
+  { key: 'deposit', label: 'Deposit', natures: ['Deposit_From_Customer'] },
+  { key: 'deposit-repay', label: 'Deposit repay', natures: ['Deposit_Prin_Refund'] },
+  { key: 'other-borrowed', label: 'Other finance borrowed', natures: ['Other_Receipt'] },
+  { key: 'other-repay', label: 'Other finance repay', natures: ['Other_Finance_Loan_Refund'] },
+]
+
 export default function Ledger() {
   const finance = useApp(s => s.finance)
   const role = useApp(s => s.user?.role)
   const editable = canEdit(role)
   const isMd = role === 'md'
   const [q, setQ] = useState('')
+  const [view, setView] = useState('all')
   const [correct, setCorrect] = useState(false)
   const [entry, setEntry] = useState<'expense' | 'income' | null>(null)
   const [del, setDel] = useState<LedgerRow | null>(null)
@@ -38,6 +52,8 @@ export default function Ledger() {
     }
 
     let list = all
+    const natures = NATURE_VIEWS.find(v => v.key === view)?.natures ?? []
+    if (natures.length) list = list.filter(t => natures.includes(String(t.Nature_Transaction ?? '')))
     const s = q.trim().toLowerCase()
     if (s) list = list.filter(t =>
       [t.Description, t.Customer_Name, t.Nature_Transaction, t.STL_No, t.Loan_No, t.Ref_ID]
@@ -55,7 +71,7 @@ export default function Ledger() {
       balance: singleFinance ? all.reduce((s2, t) => s2 + num(t.Receipt_Amount) - num(t.Payment_Amount), 0) : 0,
       balByRef,
     }
-  }, [finance, q, tick, singleFinance])
+  }, [finance, q, view, tick, singleFinance])
 
   return (
     <div>
@@ -85,6 +101,22 @@ export default function Ledger() {
       </div>
 
       <Card className="mb-4 !p-3">
+        {/* View only one kind of transaction — a quick submenu over the ledger. */}
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {NATURE_VIEWS.map(v => (
+            <button
+              key={v.key}
+              onClick={() => setView(v.key)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                view === v.key
+                  ? 'bg-sky-600 text-white'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input className="input pl-9" placeholder="Search ledger…" value={q} onChange={e => setQ(e.target.value)} />

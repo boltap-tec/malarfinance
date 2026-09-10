@@ -6,7 +6,8 @@
 -- Supabase SQL editor, then hard-refresh the app.
 
 begin;
-drop index if exists "Transaction_Ledger_Ref_ID_key";
+-- Drop the UNIQUE constraint if it already exists (this also removes its backing
+-- index — never drop the index directly, Postgres refuses while the constraint owns it).
 alter table "Transaction_Ledger" drop constraint if exists "Transaction_Ledger_Ref_ID_key";
 delete from "Transaction_Ledger";
 

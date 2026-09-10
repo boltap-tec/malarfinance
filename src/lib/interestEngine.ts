@@ -176,6 +176,39 @@ export interface RepayAccrual {
 
 const dayAfter = (d: string) => { const x = new Date(d); x.setDate(x.getDate() + 1); return x.toISOString().slice(0, 10) }
 
+// Interest on a repaid slice for the days `from`..`calcTo` (both inclusive).
+//   • Per_Day   : days × ratePerLakhPerDay × amount / 100000
+//   • Per_Month : prorated per CALENDAR month — each month contributes
+//                 (days billed in it / that month's length) × monthly rate. So a
+//                 partial period bills only its share of a month, never a whole
+//                 month. (computeInterest can't be reused here: it treats any span
+//                 that doesn't end on a month boundary as a full month, which
+//                 over-charges monthly deposits/loans on a mid-month repayment.)
+export function accrualInterest(
+  type: string | undefined, amount: number, perDay: number, perMonth: number,
+  from: string, calcTo: string,
+): number {
+  const start = new Date(from); const to = new Date(calcTo)
+  start.setHours(0, 0, 0, 0); to.setHours(0, 0, 0, 0)
+  if (isNaN(start.getTime()) || isNaN(to.getTime()) || to < start) return 0
+  if ((type || 'Per_Day') === 'Per_Day') {
+    const d = Math.floor((to.getTime() - start.getTime()) / DAY) + 1
+    return roundTo10((d * (perDay || 0) * amount) / 100000)
+  }
+  let total = 0
+  let cur = new Date(start)
+  while (cur <= to) {
+    const y = cur.getFullYear(), m = cur.getMonth()
+    const monthEnd = new Date(y, m + 1, 0)
+    const daysInMonth = monthEnd.getDate()
+    const segEnd = to < monthEnd ? to : monthEnd
+    const segDays = Math.floor((segEnd.getTime() - cur.getTime()) / DAY) + 1
+    total += ((amount * (perMonth || 0)) / 100000) * (segDays / daysInMonth)
+    cur = new Date(y, m + 1, 1)
+  }
+  return roundTo10(total)
+}
+
 // Allocate `principal` across `lines` (caller passes them oldest-first) and
 // charge interest ONLY on each repaid slice, from the day after that line's last
 // interest date up to `calcTo`. Returns one accrual per line plus the total.
@@ -195,15 +228,11 @@ export function accrueOnRepaidPrincipal(lines: DebtLine[], principal: number, ca
     let from = l.lastTo ? dayAfter(l.lastTo) : (l.givenDate ?? calcTo)
     if (l.givenDate && new Date(l.givenDate) > new Date(from)) from = l.givenDate
     if (new Date(from) > new Date(calcTo)) continue
-    const pr = computeInterest({
-      Loan_Amount: slice,
-      Interest_Type: l.type,
-      Interest_Per_day_Per_Lakh: l.perDay,
-      Interest_Per_Month_Per_Lakh: l.perMonth,
-      Loan_Given_Date: l.givenDate,
-    } as Loan, from, calcTo)
-    if (pr.interest <= 0) continue
-    accruals.push({ key: l.key, base: slice, from: pr.actualFromDate, to: pr.toDate, amount: pr.interest, month: pr.month })
+    const amount = accrualInterest(l.type, slice, l.perDay ?? 0, l.perMonth ?? 0, from, calcTo)
+    if (amount <= 0) continue
+    const toD = new Date(calcTo)
+    const month = `${String(toD.getMonth() + 1).padStart(2, '0')}-${toD.getFullYear()}`
+    accruals.push({ key: l.key, base: slice, from, to: calcTo, amount, month })
   }
   return { accruals, total: accruals.reduce((s, a) => s + a.amount, 0) }
 }

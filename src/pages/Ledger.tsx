@@ -64,7 +64,10 @@ export default function Ledger() {
       return d !== 0 ? d : Number(String(b.Ref_ID).replace(/\D/g, '')) - Number(String(a.Ref_ID).replace(/\D/g, ''))
     })
     return {
-      rows: list.slice(0, 300),
+      // Show every matching row — no cap. (A prior 300-row slice silently hid
+      // older entries while the totals still counted them, which read as "missing
+      // lines".) The list is already filtered by finance/view/search.
+      rows: list,
       receipts: list.reduce((s2, t) => s2 + num(t.Receipt_Amount), 0),
       payments: list.reduce((s2, t) => s2 + num(t.Payment_Amount), 0),
       // Balance card = net of the whole finance ledger = the newest row's balance.

@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Settings as Cog, RotateCcw, Check, ListChecks, Tags, X, Plus, Boxes, Download, CloudUpload, MessageCircle } from 'lucide-react'
+import { Settings as Cog, RotateCcw, Check, ListChecks, Tags, X, Plus, Boxes, Download, CloudUpload, MessageCircle, Wrench } from 'lucide-react'
 import {
   repo, getSettings, setSettings, revokeInterestForMonth, isRepayInterest, updateFinance, renumberCodes,
   getMandatory, setMandatory, FORM_FIELDS, type FormKind, type MandatoryConfig,
   getLedgerCategories, setLedgerCategories, type LedgerCategories,
-  datasetSnapshot,
+  datasetSnapshot, reconcileBalances,
 } from '../data/repository'
 import { useApp } from '../store/app'
 import { PageHeader, Card, EmptyState } from '../components/ui'
@@ -23,6 +23,8 @@ export default function Settings() {
   const [cutSaved, setCutSaved] = useState(false)
   const [mand, setMand] = useState<MandatoryConfig>(getMandatory())
   const [renumberMsg, setRenumberMsg] = useState<string | null>(null)
+  const [reconcileMsg, setReconcileMsg] = useState<string | null>(null)
+  const [reconciling, setReconciling] = useState(false)
   const [cats, setCats] = useState<LedgerCategories>(getLedgerCategories())
   const [multiTakers, setMultiTakers] = useState(s0.chitMultipleTakersPerMonth)
   const [perMemberComm, setPerMemberComm] = useState(s0.chitPerMemberCommission)
@@ -44,6 +46,20 @@ export default function Settings() {
     a.download = `arul-finance-backup-${stamp}.json`
     document.body.appendChild(a); a.click(); a.remove()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  async function runReconcile() {
+    setReconciling(true)
+    try {
+      const r = await reconcileBalances()
+      setReconcileMsg(
+        r.loansFixed === 0 && r.customersFixed === 0
+          ? 'Everything already balances — no corrections needed.'
+          : `Corrected ${r.loansFixed} loan(s) and ${r.customersFixed} customer balance(s). Refresh to see updated figures.`,
+      )
+    } finally {
+      setReconciling(false)
+    }
   }
 
   async function runRenumber() {
@@ -179,6 +195,21 @@ export default function Settings() {
           )}
         </Card>
       </div>
+
+      <Card className="mt-4">
+        <h3 className="mb-1 flex items-center gap-2 font-semibold text-hd"><Wrench size={16} /> Reconcile balances</h3>
+        <p className="mb-3 text-xs text-slate-500">
+          Fixes any loan whose outstanding drifted from <code>Loan − Repaid</code> (e.g. interest wrongly netted out of the principal by an old repayment), and refreshes every customer's outstanding-loan total. Safe to run any time — only wrong figures are changed.
+        </p>
+        <button className="btn-primary" onClick={runReconcile} disabled={reconciling}>
+          <Wrench size={15} /> {reconciling ? 'Reconciling…' : 'Reconcile now'}
+        </button>
+        {reconcileMsg && (
+          <div className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300 ring-1 ring-emerald-500/30">
+            <Check size={15} /> {reconcileMsg}
+          </div>
+        )}
+      </Card>
 
       <Card className="mt-4">
         <h3 className="mb-1 flex items-center gap-2 font-semibold text-hd"><RotateCcw size={16} /> Renumber deposit & other-finance codes</h3>

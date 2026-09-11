@@ -1826,6 +1826,39 @@ export function recomputeCustomer(stl: string): void {
   void sUpdate('STL_CRM', stl, rollup)
 }
 
+// Repair every customer's balances so they satisfy the invariants the app
+// maintains, undoing legacy corruption (e.g. old repayment screens that netted
+// interest out of the loan principal, or a stale STL_CRM roll-up):
+//   • each loan:      Outstand_Amount = max(0, Loan_Amount − Repaid_Amount)
+//   • each customer:  roll-ups recomputed from its loans & interest rows
+// Only rows that are actually wrong are written, so it's cheap and idempotent.
+// Returns how many loans and customers were corrected.
+export async function reconcileBalances(): Promise<{ loansFixed: number; customersFixed: number }> {
+  let loansFixed = 0
+  for (const l of [...(db.Loan_Processing ?? [])]) {
+    const correct = Math.max(0, num(l.Loan_Amount) - num(l.Repaid_Amount))
+    if (Math.round(correct) !== Math.round(num(l.Outstand_Amount))) {
+      await updateLoan(l.Loan_No, {
+        Outstand_Amount: correct,
+        Loan_Status: correct <= 0 ? 'Closed' : (l.Loan_Status ?? 'Active'),
+      })
+      loansFixed++
+    }
+  }
+  // Recompute every customer roll-up (fixes a stale STL_CRM.Outstand_Loan even
+  // when the loan rows were already correct).
+  let customersFixed = 0
+  for (const c of [...(db.STL_CRM ?? [])]) {
+    const before = num(c.Outstand_Loan)
+    recomputeCustomer(c.Customer_STL_NO)
+    const after = num((db.STL_CRM ?? []).find(x => x.Customer_STL_NO === c.Customer_STL_NO)?.Outstand_Loan)
+    if (Math.round(before) !== Math.round(after)) customersFixed++
+  }
+  writeLog({ Action: 'update', Entity: 'STL_CRM', Entity_Label: `Reconcile balances · ${loansFixed} loan(s), ${customersFixed} customer(s) corrected` })
+  persist()
+  return { loansFixed, customersFixed }
+}
+
 // Customer risk from unpaid interest: count distinct months still pending.
 export function customerRisk(stl: string): { level: 'low' | 'medium' | 'high'; months: number } {
   const months = new Set(

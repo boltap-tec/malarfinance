@@ -21,13 +21,19 @@ export default function Customers() {
   // Giving a loan needs a specific finance — adopt the customer's finance first.
   const giveLoan = (c: Customer) => { setFinance(c.Finance_Name); navigate(`/loans?new=1&stl=${encodeURIComponent(c.Customer_STL_NO)}`) }
 
-  const { flat, count, outLoan, outInterest, pendMap } = useMemo(() => {
+  const { flat, count, outLoan, outInterest, pendMap, outMap } = useMemo(() => {
     const ff = financeFilter(finance)
     const list = repo.customers(ff)
     // Live pending interest per customer, summed straight from the interest rows —
     // so posted interest shows immediately without depending on the stored roll-up.
     const pendMap = new Map<string, number>()
     for (const r of repo.interest(ff)) pendMap.set(r.Customer_STL_NO, (pendMap.get(r.Customer_STL_NO) ?? 0) + num(r.Interest_Pending))
+    // Live outstanding loan per customer, summed straight from the loan rows — so
+    // the list always matches the customer detail page and never shows a stale
+    // STL_CRM roll-up.
+    const outMap = new Map<string, number>()
+    for (const l of repo.loans(ff)) outMap.set(l.Customer_STL_NO, (outMap.get(l.Customer_STL_NO) ?? 0) + num(l.Outstand_Amount))
+    const outOf = (stl: string) => outMap.get(stl) ?? 0
     // Partner id → name, and the referred partners across each customer's loans,
     // to group customers by partner.
     const pname = new Map<string, string>()
@@ -54,7 +60,7 @@ export default function Customers() {
     // Group by partner (partners, then No partner, then Unmatched), and within
     // each partner split into Active / Inactive, then STL-sorted. A partner header
     // precedes each group and an Active/Inactive sub-header precedes each subgroup.
-    const statusOf = (c: Customer) => balanceStatus(c.Outstand_Loan) // 'Active' | 'Inactive'
+    const statusOf = (c: Customer) => balanceStatus(outOf(c.Customer_STL_NO)) // 'Active' | 'Inactive'
     const tagged = filtered
       .map(c => ({ c, g: groupOf(c.Customer_STL_NO), s: statusOf(c) }))
       .sort((a, b) =>
@@ -79,8 +85,8 @@ export default function Customers() {
       flat.push({ t: 'row', key: c.Customer_STL_NO, c })
     }
     return {
-      flat, count: filtered.length, pendMap,
-      outLoan: filtered.reduce((s2, c) => s2 + num(c.Outstand_Loan), 0),
+      flat, count: filtered.length, pendMap, outMap,
+      outLoan: filtered.reduce((s2, c) => s2 + outOf(c.Customer_STL_NO), 0),
       outInterest: filtered.reduce((s2, c) => s2 + (pendMap.get(c.Customer_STL_NO) ?? 0), 0),
     }
   }, [finance, q, tick])
@@ -146,15 +152,15 @@ export default function Customers() {
                       <p className="text-xs text-slate-500">{c.Finance_Name}</p>
                     </Td>
                     <Td className="text-slate-300">{c.Customer_STL_NO}</Td>
-                    <Td right className="font-semibold text-hd">{inr(num(c.Outstand_Loan))}</Td>
+                    <Td right className="font-semibold text-hd">{inr(outMap.get(c.Customer_STL_NO) ?? 0)}</Td>
                     <Td right className={(pendMap.get(c.Customer_STL_NO) ?? 0) > 0 ? 'font-semibold text-amber-400' : 'text-slate-400'}>{inr(pendMap.get(c.Customer_STL_NO) ?? 0)}</Td>
                     <Td><RiskBadge stl={c.Customer_STL_NO} /></Td>
-                    <Td><Badge tone={statusTone(balanceStatus(c.Outstand_Loan))}>{balanceStatus(c.Outstand_Loan)}</Badge></Td>
+                    <Td><Badge tone={statusTone(balanceStatus(outMap.get(c.Customer_STL_NO) ?? 0))}>{balanceStatus(outMap.get(c.Customer_STL_NO) ?? 0)}</Badge></Td>
                     {canEdit(role) && (
                       <Td>
                         <div className="flex gap-1.5">
                           <button title="Give loan" onClick={() => giveLoan(c)} className="btn-ghost !px-2 !py-1 text-xs text-brand-300 ring-1 ring-inset ring-brand-500/30"><Plus size={13} /></button>
-                          {num(c.Outstand_Loan) > 0 && <Link title="Repay" to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"><HandCoins size={13} /></Link>}
+                          {(outMap.get(c.Customer_STL_NO) ?? 0) > 0 && <Link title="Repay" to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}?do=repay`} className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"><HandCoins size={13} /></Link>}
                           {(pendMap.get(c.Customer_STL_NO) ?? 0) > 0 && <Link title="Interest" to={`/customers/${encodeURIComponent(c.Customer_STL_NO)}?do=interest`} className="btn-ghost !px-2 !py-1 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/30"><Percent size={13} /></Link>}
                           <ReminderButton
                             label="" className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"

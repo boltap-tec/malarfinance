@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Settings as Cog, RotateCcw, Check, ListChecks, Tags, X, Plus, Boxes, Download, CloudUpload } from 'lucide-react'
+import { Settings as Cog, RotateCcw, Check, ListChecks, Tags, X, Plus, Boxes, Download, CloudUpload, MessageCircle } from 'lucide-react'
 import {
   repo, getSettings, setSettings, revokeInterestForMonth, isRepayInterest, updateFinance, renumberCodes,
   getMandatory, setMandatory, FORM_FIELDS, type FormKind, type MandatoryConfig,
@@ -26,6 +26,8 @@ export default function Settings() {
   const [cats, setCats] = useState<LedgerCategories>(getLedgerCategories())
   const [multiTakers, setMultiTakers] = useState(s0.chitMultipleTakersPerMonth)
   const [perMemberComm, setPerMemberComm] = useState(s0.chitPerMemberCommission)
+  const [paymentNote, setPaymentNote] = useState(s0.paymentNote)
+  const [noteSaved, setNoteSaved] = useState(false)
 
   function updateCats(kind: keyof LedgerCategories, next: string[]) {
     const updated = { ...cats, [kind]: next }
@@ -228,6 +230,22 @@ export default function Settings() {
             </span>
           </label>
         </div>
+      </Card>
+
+      <Card className="mt-4">
+        <h3 className="mb-1 flex items-center gap-2 font-semibold text-hd"><MessageCircle size={16} /> WhatsApp payment note</h3>
+        <p className="mb-3 text-xs text-slate-500">
+          Appended to the end of every chit-member WhatsApp message (after the pending details). Put your UPI / bank details here.
+        </p>
+        <textarea
+          className="input min-h-[140px] font-mono text-sm leading-relaxed"
+          value={paymentNote}
+          placeholder={'Note: Amount can be sent through UPI No: 9626262427\nor through Account Details:\nName: T MALARVIZHI\nIFSC: IOBA0002882\nAccount No: 288201000006548\nSukkaliyur, Karur Branch'}
+          onChange={e => { setPaymentNote(e.target.value); setNoteSaved(false) }}
+        />
+        <button className="btn-primary mt-3" onClick={() => { setSettings({ paymentNote }); setNoteSaved(true) }}>
+          {noteSaved ? <><Check size={15} /> Saved</> : 'Save note'}
+        </button>
       </Card>
 
       <Card className="mt-4">

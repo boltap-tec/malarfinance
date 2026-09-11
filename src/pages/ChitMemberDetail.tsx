@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Phone, MapPin, Users2, HandCoins, Coins, Printer } from 'lucide-react'
-import { repo, collectChitDue } from '../data/repository'
+import { repo, collectChitDue, getSettings } from '../data/repository'
 import type { ChitLedgerRow } from '../data/types'
 import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
 import { AmountModal } from './ChitDetail'
 import ReminderButton from '../components/ReminderButton'
-import { inr, phone, fmtDate, num, mmYyyy } from '../lib/format'
+import { buildChitMemberMessage } from '../lib/reminder'
+import { inr, phone, fmtDate, num } from '../lib/format'
 
 // Full 360° view of one chit member — mirrors the customer/lender detail pages.
 // Shows their profile, dues across every month, and any payouts when they took
@@ -48,11 +49,19 @@ export default function ChitMemberDetail() {
           <div className="flex items-center gap-2">
             <Badge tone={member.Chit_Taken === 'Taken' ? 'green' : 'slate'}>{member.Chit_Taken === 'Taken' ? 'Taken' : 'Not taken'}</Badge>
             <ReminderButton
-              header={`${chit?.Chit_Name ?? member.Chit_ID} - ${member.Member_Name}`}
+              header={member.Member_Name}
               phone={member.Member_Phone_No}
-              items={dues.map(r => ({ month: mmYyyy(r.Date_Auction) ?? `#${num(r.Month_Count)}`, amount: num(r.Due_Amount), pending: num(r.Pending_Amount) }))}
-              totalLabel="Total Chit Due Pending"
-              amountWord="Due"
+              message={buildChitMemberMessage({
+                name: member.Member_Name,
+                totalPending: totals.pend,
+                months: dues
+                  .filter(r => num(r.Pending_Amount) > 0)
+                  .sort((a, b) => num(a.Month_Count) - num(b.Month_Count))
+                  .map(r => ({ month: num(r.Month_Count), pending: num(r.Pending_Amount) })),
+                status: member.Chit_Taken,
+                completedMonth: dues.reduce((mx, r) => Math.max(mx, num(r.Month_Count)), 0),
+                note: getSettings().paymentNote,
+              })}
             />
             <button className="btn-ghost !py-1.5" onClick={() => printMemberStatement({ member, chitName: chit?.Chit_Name, dues, takings, ...totals })}><Printer size={15} /> Print / PDF</button>
           </div>

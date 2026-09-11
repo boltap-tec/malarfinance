@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { UserPlus } from 'lucide-react'
-import { repo } from '../data/repository'
+import { repo, getSettings } from '../data/repository'
 import { useApp, canEdit, financeFilter } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, Th, Td, EmptyState } from '../components/ui'
 import { AddMemberModal } from './ChitDetail'
+import ReminderButton from '../components/ReminderButton'
+import { buildChitMemberMessage } from '../lib/reminder'
 import { inr, phone, num } from '../lib/format'
 
 export default function ChitMembers() {
@@ -52,10 +54,23 @@ export default function ChitMembers() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="border-b border-slate-800 bg-slate-900/60">
-                  <tr><Th>Member</Th><Th>Phone</Th><Th right>Share</Th><Th>Chit</Th><Th right>Taken amount</Th><Th right>Payout pending</Th></tr>
+                  <tr><Th>Member</Th><Th>Phone</Th><Th right>Share</Th><Th>Chit</Th><Th right>Taken amount</Th><Th right>Payout pending</Th><Th right>Message</Th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {members.map(m => (
+                  {members.map(m => {
+                    const dues = repo.chitLedgerByMember(m.Member_ID)
+                    const message = buildChitMemberMessage({
+                      name: m.Member_Name,
+                      totalPending: dues.reduce((s, r) => s + num(r.Pending_Amount), 0),
+                      months: dues
+                        .filter(r => num(r.Pending_Amount) > 0)
+                        .sort((a, b) => num(a.Month_Count) - num(b.Month_Count))
+                        .map(r => ({ month: num(r.Month_Count), pending: num(r.Pending_Amount) })),
+                      status: m.Chit_Taken,
+                      completedMonth: dues.reduce((mx, r) => Math.max(mx, num(r.Month_Count)), 0),
+                      note: getSettings().paymentNote,
+                    })
+                    return (
                     <tr key={m.Member_ID} className="hover:bg-slate-800/40">
                       <Td>
                         <Link to={`/chit/member/${encodeURIComponent(m.Member_ID)}`} className="text-brand-300 hover:underline">{m.Member_Name}</Link>
@@ -66,8 +81,14 @@ export default function ChitMembers() {
                       <Td><Badge tone={m.Chit_Taken === 'Taken' ? 'green' : 'slate'}>{m.Chit_Taken === 'Taken' ? 'Taken' : 'Not taken'}</Badge></Td>
                       <Td right className="text-slate-300">{num(m.Chit_Taken_Amount) ? inr(num(m.Chit_Taken_Amount)) : '—'}</Td>
                       <Td right className="text-rose-300">{num(m.Remaining_Amount) ? inr(num(m.Remaining_Amount)) : '—'}</Td>
+                      <Td right>
+                        <div className="flex justify-end">
+                          <ReminderButton header={m.Member_Name} phone={m.Member_Phone_No} message={message} label="WhatsApp" />
+                        </div>
+                      </Td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

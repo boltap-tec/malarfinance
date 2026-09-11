@@ -1300,10 +1300,12 @@ export interface AppSettings {
   lastPostedDate: string       // interest already posted up to this date (migration)
   chitMultipleTakersPerMonth: boolean  // allow more than one member to take a chit in the same month
   chitPerMemberCommission: boolean     // use each member's own commission % when they take (instead of the chit-wide %)
+  paymentNote: string                  // UPI / bank details appended to WhatsApp messages
 }
 const SETTINGS_DEFAULTS: AppSettings = {
   postingAnyDate: false, dataLoadedDate: '', lastPostedDate: '',
   chitMultipleTakersPerMonth: false, chitPerMemberCommission: false,
+  paymentNote: '',
 }
 const SETTINGS_KEY = 'arul-finance:settings:v1'
 export function getSettings(): AppSettings {

@@ -43,6 +43,59 @@ export function buildReminder(o: {
   return lines.join('\n')
 }
 
+// ── Chit-member message ──────────────────────────────────────────────────────
+// A chit member's WhatsApp update uses a fixed layout the finance prefers:
+//
+//   Chit Details:
+//
+//   Name : Gopal
+//
+//   Total Pending: Rs.10362.5
+//   Month 6 - Pending Rs. 10362.5
+//   Chit Status : Not_Taken
+//   Chit Completed Month : 6
+//
+//
+//   <payment note from Settings>
+//
+// The payment note (UPI / bank details) is configured once in Settings and
+// appended to every member's message.
+export interface ChitMemberMessageInput {
+  name: string
+  totalPending: number
+  months: { month: number; pending: number }[]   // only months still pending
+  status?: string                                 // raw Chit_Taken value
+  completedMonth: number                          // months auctioned so far
+  note?: string                                   // payment note from Settings
+}
+
+// Normalise the messy stored Chit_Taken values ("Yes"/"No"/"Taken"/true/…) to
+// the two labels the message shows.
+export function chitStatusLabel(v?: string | boolean): string {
+  const s = String(v ?? '').trim().toLowerCase()
+  return s === 'taken' || s === 'yes' || s === 'true' ? 'Taken' : 'Not_Taken'
+}
+
+// Amount without a currency symbol, decimals kept only when present
+// (10362.5 -> "10362.5", 10000 -> "10000").
+const amt = (n: number) => String(Math.round(Number(n) * 100) / 100)
+
+export function buildChitMemberMessage(o: ChitMemberMessageInput): string {
+  const lines = [
+    'Chit Details:',
+    '',
+    `Name : ${o.name}`,
+    '',
+    `Total Pending: Rs.${amt(o.totalPending)}`,
+  ]
+  for (const m of o.months) lines.push(`Month ${m.month} - Pending Rs. ${amt(m.pending)}`)
+  lines.push(`Chit Status : ${chitStatusLabel(o.status)}`)
+  lines.push(`Chit Completed Month : ${o.completedMonth}`)
+  const note = o.note?.trim()
+  if (note) lines.push('', '', note)
+  return lines.join('\n')
+}
+
 // Normalise a stored phone to a wa.me number (adds India country code for
 // bare 10-digit numbers). Returns null when there's nothing usable.
 export function waPhone(p?: number | string): string | null {

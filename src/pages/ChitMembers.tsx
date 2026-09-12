@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { UserPlus } from 'lucide-react'
 import { repo, getSettings } from '../data/repository'
 import { useApp, canEdit, financeFilter } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, Th, Td, EmptyState } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, Th, Td, EmptyState, CallLink } from '../components/ui'
 import { AddMemberModal } from './ChitDetail'
 import ReminderButton from '../components/ReminderButton'
 import { buildChitMemberMessage } from '../lib/reminder'
@@ -54,7 +54,7 @@ export default function ChitMembers() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="border-b border-slate-800 bg-slate-900/60">
-                  <tr><Th>Member</Th><Th>Phone</Th><Th right>Share</Th><Th>Chit</Th><Th right>Taken amount</Th><Th right>Payout pending</Th><Th right>Message</Th></tr>
+                  <tr><Th sticky>Member</Th><Th>Phone</Th><Th right>Share</Th><Th>Chit</Th><Th right>Taken amount</Th><Th right>Payout pending</Th><Th right>Message</Th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                   {members.map(m => {
@@ -71,9 +71,12 @@ export default function ChitMembers() {
                       note: getSettings().paymentNote,
                     })
                     return (
-                    <tr key={m.Member_ID} className="hover:bg-slate-800/40">
-                      <Td>
-                        <Link to={`/chit/member/${encodeURIComponent(m.Member_ID)}`} className="text-brand-300 hover:underline">{m.Member_Name}</Link>
+                    <tr key={m.Member_ID} className="group hover:bg-slate-800/40">
+                      <Td sticky>
+                        <div className="flex items-center gap-2">
+                          <Link to={`/chit/member/${encodeURIComponent(m.Member_ID)}`} className="text-brand-300 hover:underline">{m.Member_Name}</Link>
+                          <CallLink phone={m.Member_Phone_No} />
+                        </div>
                         {m.Member_Type && m.Member_Type !== 'Member' && <p className="text-xs text-slate-500">{m.Member_Type}</p>}
                       </Td>
                       <Td className="text-slate-400">{phone(m.Member_Phone_No)}</Td>

@@ -4,7 +4,7 @@ import { Coins, HandCoins } from 'lucide-react'
 import { repo, collectChitDue } from '../data/repository'
 import type { ChitLedgerRow } from '../data/types'
 import { useApp, canEdit, financeFilter } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, CallLink } from '../components/ui'
 import { AmountModal } from './ChitDetail'
 import { inr, fmtDate, num } from '../lib/format'
 
@@ -63,12 +63,17 @@ export default function ChitTransactions() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="border-b border-slate-800 bg-slate-900/60">
-                  <tr><Th>Member</Th><Th right>Share</Th><Th right>Due</Th><Th right>Received</Th><Th right>Pending</Th><Th>Paid on</Th><Th>Status</Th>{editable && <Th>Action</Th>}</tr>
+                  <tr><Th sticky>Member</Th><Th right>Share</Th><Th right>Due</Th><Th right>Received</Th><Th right>Pending</Th><Th>Paid on</Th><Th>Status</Th>{editable && <Th>Action</Th>}</tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                   {rows.map(r => (
-                    <tr key={r.ID} className="hover:bg-slate-800/40">
-                      <Td><button className="text-left font-medium text-brand-300 hover:underline" onClick={() => setDetail(r)}>{r.Member_Name}</button></Td>
+                    <tr key={r.ID} className="group hover:bg-slate-800/40">
+                      <Td sticky>
+                        <div className="flex items-center gap-2">
+                          <button className="text-left font-medium text-brand-300 hover:underline" onClick={() => setDetail(r)}>{r.Member_Name}</button>
+                          <CallLink phone={repo.chitMember(r.Member_ID)?.Member_Phone_No} />
+                        </div>
+                      </Td>
                       <Td right className="text-slate-400">{num(r.Member_Percentage)}</Td>
                       <Td right className="text-slate-300">{inr(num(r.Due_Amount))}</Td>
                       <Td right className="text-emerald-400">{inr(num(r.Received_Amount))}</Td>

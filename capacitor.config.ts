@@ -8,7 +8,11 @@ const config: CapacitorConfig = {
   appName: 'Arul Finance',
   webDir: 'dist',
   backgroundColor: '#020617',
+  // Serve the app from https://localhost inside the WebView (a secure context),
+  // matching the browser. This keeps fetch/XHR to Supabase behaving the same on
+  // the device as on the web, and enables realtime/secure-context features.
   android: { allowMixedContent: true },
+  server: { androidScheme: 'https' },
 }
 
 export default config

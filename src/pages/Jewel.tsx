@@ -36,7 +36,7 @@ export default function Jewel() {
   const [edit, setEdit] = useState<JewelLoan | null>(null)
   const [del, setDel] = useState<JewelLoan | null>(null)
 
-  const { rows, openCount, borrowed, grams } = useMemo(() => {
+  const { rows, activeRows, closedRows, openCount, borrowed, grams } = useMemo(() => {
     let list = repo.jewelLoans(financeFilter(finance))
     if (filter !== 'All') list = list.filter(j => (j.Loan_Status ?? 'Active') === filter)
     const s = q.trim().toLowerCase()
@@ -45,9 +45,12 @@ export default function Jewel() {
       (j.Loan_Taken_From ?? '').toLowerCase().includes(s) ||
       (j.Loan_Taken_By ?? '').toLowerCase().includes(s) ||
       (j.Particular_Description ?? '').toLowerCase().includes(s))
-    const openRows = repo.jewelLoans(financeFilter(finance)).filter(j => (j.Loan_Status ?? 'Active') !== 'Closed')
+    const isActive = (j: JewelLoan) => (j.Loan_Status ?? 'Active') !== 'Closed'
+    const openRows = repo.jewelLoans(financeFilter(finance)).filter(isActive)
     return {
       rows: list,
+      activeRows: list.filter(isActive),   // Active group — shown on top
+      closedRows: list.filter(j => !isActive(j)),
       openCount: openRows.length,
       borrowed: openRows.reduce((a, j) => a + num(j.Loan_Amount), 0),
       grams: openRows.reduce((a, j) => a + num(j.Loan_Total_grams), 0),
@@ -90,42 +93,10 @@ export default function Jewel() {
       </Card>
 
       {rows.length === 0 ? <EmptyState title="No jewel loans yet" hint={canEdit(role) ? 'Add one with the button above.' : undefined} /> : (
-        <Card className="!p-0 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr>
-                  <Th sticky>Loan no.</Th><Th>Taken from</Th><Th>By</Th><Th>Date</Th><Th>Due by</Th>
-                  <Th right>Grams</Th><Th right>Amount</Th><Th right>Int / mo</Th><Th>Photos</Th><Th>Status</Th>{isMd && <Th>Del</Th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {rows.map(j => (
-                  <tr key={j.Loan_No} className="group hover:bg-slate-800/40">
-                    <Td sticky><Link to={`/jewel/${encodeURIComponent(j.Loan_No)}`} className="font-medium text-brand-300">{j.Loan_No}</Link></Td>
-                    <Td>
-                      <p className="text-slate-200">{j.Loan_Taken_From || '—'}</p>
-                      {j.Particular_Description && <p className="max-w-[220px] truncate text-xs text-slate-500">{j.Particular_Description}</p>}
-                    </Td>
-                    <Td className="text-slate-400">{j.Loan_Taken_By || '—'}</Td>
-                    <Td className="text-slate-400 whitespace-nowrap">{fmtDate(j.Loan_Taken_Date)}</Td>
-                    <Td className="whitespace-nowrap"><DueCell loan={j} /></Td>
-                    <Td right className="text-slate-300 whitespace-nowrap">{num(j.Loan_Total_grams) ? `${num(j.Loan_Total_grams)} g` : '—'}</Td>
-                    <Td right className="text-hd">{inr(num(j.Loan_Amount))}</Td>
-                    <Td right className="text-amber-300">{num(j.Interest_Rate) ? inr(monthlyInterest(num(j.Loan_Amount), num(j.Interest_Rate))) : '—'}</Td>
-                    <Td>
-                      <Link to={`/jewel/${encodeURIComponent(j.Loan_No)}`} className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200">
-                        <Camera size={13} /> {num(j.Photo_Count) || 0}
-                      </Link>
-                    </Td>
-                    <Td><Badge tone={statusTone(j.Loan_Status)}>{j.Loan_Status ?? 'Active'}</Badge></Td>
-                    {isMd && <Td><button title="Delete jewel loan" className="btn-ghost !px-2 !py-1 text-xs text-rose-300" onClick={() => setDel(j)}><Trash2 size={13} /></button></Td>}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <>
+          {activeRows.length > 0 && <JewelGroup title="Active" tone="green" rows={activeRows} isMd={isMd} onDelete={setDel} />}
+          {closedRows.length > 0 && <JewelGroup title="Closed" tone="slate" rows={closedRows} isMd={isMd} onDelete={setDel} />}
+        </>
       )}
 
       {open && (
@@ -151,6 +122,61 @@ export default function Jewel() {
           onClose={() => setDel(null)}
         />
       )}
+    </div>
+  )
+}
+
+// One status section (Active / Closed) with its own header carrying the group's
+// loan count and total loan amount, above its table of loans.
+function JewelGroup({ title, tone, rows, isMd, onDelete }: {
+  title: string; tone: 'green' | 'slate'; rows: JewelLoan[]; isMd: boolean; onDelete: (j: JewelLoan) => void
+}) {
+  const total = rows.reduce((a, j) => a + num(j.Loan_Amount), 0)
+  return (
+    <div className="mb-5">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
+        <div className="flex items-center gap-2">
+          <Badge tone={tone}>{title}</Badge>
+          <span className="text-xs text-slate-500">{rows.length} loan{rows.length === 1 ? '' : 's'}</span>
+        </div>
+        <div className="text-sm"><span className="text-slate-400">Total loan </span><span className="font-semibold text-hd tabular-nums">{inr(total)}</span></div>
+      </div>
+      <Card className="!p-0 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="border-b border-slate-800 bg-slate-900/60">
+              <tr>
+                <Th sticky>Loan no.</Th><Th>Taken from</Th><Th>By</Th><Th>Date</Th><Th>Due by</Th>
+                <Th right>Grams</Th><Th right>Amount</Th><Th right>Int / mo</Th><Th>Photos</Th><Th>Status</Th>{isMd && <Th>Del</Th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {rows.map(j => (
+                <tr key={j.Loan_No} className="group hover:bg-slate-800/40">
+                  <Td sticky><Link to={`/jewel/${encodeURIComponent(j.Loan_No)}`} className="font-medium text-brand-300">{j.Loan_No}</Link></Td>
+                  <Td>
+                    <p className="text-slate-200">{j.Loan_Taken_From || '—'}</p>
+                    {j.Particular_Description && <p className="max-w-[220px] truncate text-xs text-slate-500">{j.Particular_Description}</p>}
+                  </Td>
+                  <Td className="text-slate-400">{j.Loan_Taken_By || '—'}</Td>
+                  <Td className="text-slate-400 whitespace-nowrap">{fmtDate(j.Loan_Taken_Date)}</Td>
+                  <Td className="whitespace-nowrap"><DueCell loan={j} /></Td>
+                  <Td right className="text-slate-300 whitespace-nowrap">{num(j.Loan_Total_grams) ? `${num(j.Loan_Total_grams)} g` : '—'}</Td>
+                  <Td right className="text-hd">{inr(num(j.Loan_Amount))}</Td>
+                  <Td right className="text-amber-300">{num(j.Interest_Rate) ? inr(monthlyInterest(num(j.Loan_Amount), num(j.Interest_Rate))) : '—'}</Td>
+                  <Td>
+                    <Link to={`/jewel/${encodeURIComponent(j.Loan_No)}`} className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200">
+                      <Camera size={13} /> {num(j.Photo_Count) || 0}
+                    </Link>
+                  </Td>
+                  <Td><Badge tone={statusTone(j.Loan_Status)}>{j.Loan_Status ?? 'Active'}</Badge></Td>
+                  {isMd && <Td><button title="Delete jewel loan" className="btn-ghost !px-2 !py-1 text-xs text-rose-300" onClick={() => onDelete(j)}><Trash2 size={13} /></button></Td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   )
 }

@@ -85,7 +85,7 @@ export const navGroups: NavGroup[] = [
     title: 'More',
     items: [
       { to: '/chits', label: 'My Invested Chits', icon: Boxes, desc: 'Chits you joined at other companies' },
-      { to: '/jewel', label: 'Jewel Loans', icon: Gem, desc: 'Gold / pawn (soon)' },
+      { to: '/jewel', label: 'Jewel Loans', icon: Gem, desc: 'Gold pledged — grams, items & photos' },
     ],
   },
   {

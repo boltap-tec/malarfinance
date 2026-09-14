@@ -39,7 +39,8 @@ import ChitAuctions from './pages/ChitAuctions'
 import ChitTransactions from './pages/ChitTransactions'
 import ChitLedger from './pages/ChitLedger'
 import Menu from './pages/Menu'
-import Placeholder from './pages/Placeholder'
+import Jewel from './pages/Jewel'
+import JewelDetail from './pages/JewelDetail'
 
 // Blocks a route the current role isn't allowed to reach (direct-URL access).
 function Guard({ children }: { children: ReactNode }) {
@@ -103,7 +104,8 @@ export default function App() {
         <Route path="/chit/ledger" element={<ChitLedger />} />
         <Route path="/chit/member/:memberId" element={<ChitMemberDetail />} />
         <Route path="/chit/:chitId" element={<ChitDetail />} />
-        <Route path="/jewel" element={<Placeholder title="Jewel Loans" note="Gold/pawn loans with item particulars and photos — module coming next." />} />
+        <Route path="/jewel" element={<Jewel />} />
+        <Route path="/jewel/:loanNo" element={<JewelDetail />} />
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

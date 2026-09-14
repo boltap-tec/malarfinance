@@ -11,6 +11,7 @@ import type {
   OtherFinanceLoan, Worker, AppNotification, LogEntry, Message,
   ChitCreation, ChitMember, ChitAuction, ChitTakenMember, ChitLedgerRow,
   InvestedChit, InvestedChitTrans, HandExchange, PostingLog,
+  JewelLoan, JewelPhoto,
 } from './types'
 
 const STORAGE_KEY = 'arul-finance:data:v1'
@@ -481,6 +482,23 @@ export const repo = {
     return { theyOwe, youOwe }
   },
 
+  // ── Jewel loans (gold pledged to borrow — see jewel.xlsx) ──────────────────
+  jewelLoans(finance?: string): JewelLoan[] {
+    return (db.Jewel_Loan ?? [])
+      .filter(j => !finance || j.Finance_Name === finance)
+      .slice()
+      .sort((a, b) => new Date(b.Loan_Taken_Date ?? 0).getTime() - new Date(a.Loan_Taken_Date ?? 0).getTime())
+  },
+  jewelLoan(loanNo: string): JewelLoan | undefined {
+    return (db.Jewel_Loan ?? []).find(j => j.Loan_No === loanNo)
+  },
+  // Photos already pulled into memory for a loan (populated by fetchJewelPhotos).
+  jewelPhotos(loanNo: string): JewelPhoto[] {
+    return (db.Jewel_Loan_Photo ?? [])
+      .filter(p => p.Loan_No === loanNo)
+      .sort((a, b) => num(a.Sort) - num(b.Sort))
+  },
+
   raw<K extends keyof Dataset>(key: K): Dataset[K] { return db[key] },
 }
 
@@ -586,6 +604,7 @@ const PK: Partial<Record<keyof Dataset, string>> = {
   Chit_Taken_Member: 'Chit_Taken_ID', Chit_Ledger: 'ID',
   Invested_Chit: 'Chit_ID', Invested_Chit_Trans: 'ID',
   Hand_Exchange: 'ID', Interest_Posting_Log: 'ID',
+  Jewel_Loan: 'Loan_No', Jewel_Loan_Photo: 'id',
 }
 export let lastWriteError = ''
 // Clear the last write error before a batch of writes, then read it after to tell
@@ -658,6 +677,100 @@ export async function addLoan(loan: Loan): Promise<void> {
     }
   }
   persist()
+}
+
+// ── Jewel loans (gold pledged to borrow) — standalone register + photos ──────
+// The loan row is text-light and lives in Jewel_Loan (hydrated at startup).
+// Photos are heavy, so they live in Jewel_Loan_Photo, which is NOT pulled at
+// startup — fetchJewelPhotos loads a single loan's photos on demand.
+const jewelStatus = (j: Partial<JewelLoan>): string => (j.Loan_Closed_Date ? 'Closed' : 'Open')
+
+export function nextJewelLoanNo(finance: string): string {
+  const prefix = (finance.slice(0, 3) || 'Fin')
+  const n = (db.Jewel_Loan ?? []).filter(j => j.Finance_Name === finance).reduce((m, j) => {
+    const x = Number(String(j.Loan_No).replace(/\D/g, ''))
+    return isNaN(x) ? m : Math.max(m, x)
+  }, 0)
+  return `${prefix}-JL-${n + 1}`
+}
+
+export async function addJewelLoan(loan: JewelLoan): Promise<void> {
+  const row: JewelLoan = { ...loan, Loan_Status: jewelStatus(loan), Photo_Count: num(loan.Photo_Count) }
+  db.Jewel_Loan = [row, ...(db.Jewel_Loan ?? [])]
+  await sInsert('Jewel_Loan', row)
+  writeLog({ Action: 'create', Entity: 'Jewel_Loan', Entity_Label: `${row.Loan_No} · ${row.Loan_Taken_From ?? 'jewel loan'}`, After: row })
+  persist()
+}
+
+export async function updateJewelLoan(loanNo: string, patch: Partial<JewelLoan>): Promise<void> {
+  const before = (db.Jewel_Loan ?? []).find(j => j.Loan_No === loanNo)
+  if (!before) return
+  const merged = { ...before, ...patch }
+  // Keep the status column honest with the close date whenever either changes.
+  if ('Loan_Closed_Date' in patch) merged.Loan_Status = jewelStatus(merged)
+  db.Jewel_Loan = (db.Jewel_Loan ?? []).map(j => j.Loan_No === loanNo ? merged : j)
+  await sUpdate('Jewel_Loan', loanNo, { ...patch, Loan_Status: merged.Loan_Status })
+  writeLog({ Action: 'update', Entity: 'Jewel_Loan', Entity_Label: `${loanNo} · ${merged.Loan_Taken_From ?? 'jewel loan'}`, Before: before, After: merged })
+  persist()
+}
+
+export async function deleteJewelLoan(loanNo: string): Promise<void> {
+  const row = (db.Jewel_Loan ?? []).find(j => j.Loan_No === loanNo)
+  if (!row) return
+  const photos = (db.Jewel_Loan_Photo ?? []).filter(p => p.Loan_No === loanNo)
+  db.Jewel_Loan = (db.Jewel_Loan ?? []).filter(j => j.Loan_No !== loanNo)
+  db.Jewel_Loan_Photo = (db.Jewel_Loan_Photo ?? []).filter(p => p.Loan_No !== loanNo)
+  await sDelete('Jewel_Loan', loanNo)
+  if (supabase) { const { error } = await supabase.from('Jewel_Loan_Photo').delete().eq('Loan_No', loanNo); noteErr('delete Jewel_Loan_Photo', error?.message) }
+  writeLog({ Action: 'delete', Entity: 'Jewel_Loan', Entity_Label: `${loanNo} · ${row.Loan_Taken_From ?? 'jewel loan'} (${photos.length} photo${photos.length === 1 ? '' : 's'})`, Before: row })
+  persist()
+}
+
+// Pull a loan's photos into memory (Supabase mode) and return them, newest sort
+// last. In local mode this just returns whatever is already in memory.
+export async function fetchJewelPhotos(loanNo: string): Promise<JewelPhoto[]> {
+  if (supabase) {
+    const { data, error } = await supabase.from('Jewel_Loan_Photo').select('*').eq('Loan_No', loanNo)
+    noteErr('fetch Jewel_Loan_Photo', error?.message)
+    if (!error && data) {
+      const others = (db.Jewel_Loan_Photo ?? []).filter(p => p.Loan_No !== loanNo)
+      db.Jewel_Loan_Photo = [...others, ...(data as JewelPhoto[])]
+    }
+  }
+  return repo.jewelPhotos(loanNo)
+}
+
+// Add already-compressed data URLs as photos for a loan, and keep the loan's
+// cached Photo_Count in sync so the list badge stays right.
+export async function addJewelPhotos(loanNo: string, finance: string, dataUrls: string[]): Promise<JewelPhoto[]> {
+  if (!dataUrls.length) return repo.jewelPhotos(loanNo)
+  const base = (db.Jewel_Loan_Photo ?? []).filter(p => p.Loan_No === loanNo).reduce((m, p) => Math.max(m, num(p.Sort)), 0)
+  const rows: JewelPhoto[] = dataUrls.map((Data, i) => ({
+    id: `JP-${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${i}`,
+    Loan_No: loanNo, Finance_Name: finance, Data,
+    Sort: base + i + 1, Created_Date: new Date().toISOString(),
+  }))
+  db.Jewel_Loan_Photo = [...(db.Jewel_Loan_Photo ?? []), ...rows]
+  await sInsert('Jewel_Loan_Photo', rows)
+  const count = (db.Jewel_Loan_Photo ?? []).filter(p => p.Loan_No === loanNo).length
+  await bumpJewelPhotoCount(loanNo, count)
+  persist()
+  return repo.jewelPhotos(loanNo)
+}
+
+export async function deleteJewelPhoto(id: string, loanNo: string): Promise<void> {
+  db.Jewel_Loan_Photo = (db.Jewel_Loan_Photo ?? []).filter(p => p.id !== id)
+  await sDelete('Jewel_Loan_Photo', id)
+  const count = (db.Jewel_Loan_Photo ?? []).filter(p => p.Loan_No === loanNo).length
+  await bumpJewelPhotoCount(loanNo, count)
+  persist()
+}
+
+async function bumpJewelPhotoCount(loanNo: string, count: number): Promise<void> {
+  const loan = (db.Jewel_Loan ?? []).find(j => j.Loan_No === loanNo)
+  if (!loan || loan.Photo_Count === count) return
+  loan.Photo_Count = count
+  await sUpdate('Jewel_Loan', loanNo, { Photo_Count: count })
 }
 
 // ── Deletes (all logged & restorable) ────────────────────────────────────────

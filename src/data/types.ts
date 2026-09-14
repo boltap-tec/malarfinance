@@ -324,6 +324,40 @@ export interface HandExchange {
   Remarks?: string
 }
 
+// ── Jewel loan (a gold loan the firm/owner TOOK by pledging jewellery) ───────
+// Mirrors the jewel.xlsx register: money borrowed against gold ornaments —
+// from whom, by whom, how many grams, the item particulars, and photos of the
+// pledged jewels. Photos live in their OWN table (Jewel_Loan_Photo) so the main
+// register stays light and loads fast; they're fetched only when a loan opens.
+export interface JewelLoan {
+  Finance_Name: string
+  Loan_No: string                 // PK, e.g. "Fin-JL-1"
+  Loan_Taken_From?: string        // lender / bank / financier the gold was pledged to
+  Loan_Taken_By?: string          // who in the firm took the loan
+  Loan_Taken_Date?: string
+  Loan_Amount?: number
+  Interest_Rate?: number          // ₹ / lakh / month (matches the rest of the app)
+  Loan_Closed_Date?: string       // blank while the loan is open
+  Interest_Amount?: number        // interest paid / accrued, as recorded
+  Loan_Total_grams?: number       // total weight of pledged gold
+  Particular_Description?: string // the ornaments (e.g. "2 bangles, 1 chain")
+  Loan_Status?: string            // Open | Closed (derived from Loan_Closed_Date)
+  Remark1?: string
+  Photo_Count?: number            // cached count so the list shows 📷 n without a fetch
+}
+
+// One pledged-jewel photo, stored as a compressed data URL. Kept out of the
+// hydrate() startup pull (not in seed.json) — loaded per loan on demand.
+export interface JewelPhoto {
+  id: string
+  Loan_No: string
+  Finance_Name: string
+  Data: string                    // compressed image data URL (image/jpeg)
+  Caption?: string
+  Sort?: number
+  Created_Date?: string
+}
+
 export interface NatureTransaction {
   Nature_Transaction: string
   Type: 'Receipt' | 'Payment' | string
@@ -426,6 +460,7 @@ export interface Dataset {
   Given: any[]
   Borrowed: any[]
   Hand_Exchange: HandExchange[]
-  Jewel_Loan: any[]
+  Jewel_Loan: JewelLoan[]
+  Jewel_Loan_Photo: JewelPhoto[]
   Interest_Posting_Log: PostingLog[]
 }

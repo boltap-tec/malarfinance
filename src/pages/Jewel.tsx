@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Search, Plus, Gem, Scale, Trash2, ImagePlus, X, Camera } from 'lucide-react'
 import {
@@ -11,7 +11,19 @@ import { useCreateParam } from '../lib/useCreateParam'
 import { shrinkImages } from '../lib/image'
 import type { JewelLoan } from '../data/types'
 
-const FILTERS = ['All', 'Open', 'Closed'] as const
+const FILTERS = ['All', 'Active', 'Closed'] as const
+
+// Monthly interest implied by a per-lakh rate: amount ÷ 1 lakh × rate.
+const monthlyInterest = (amount: number, ratePerLakh: number) => (amount / 100000) * ratePerLakh
+// Default settle-by date: one week before the loan completes a year.
+export function defaultDueDate(takenISO?: string): string {
+  if (!takenISO) return ''
+  const d = new Date(takenISO)
+  if (isNaN(d.getTime())) return ''
+  d.setFullYear(d.getFullYear() + 1)
+  d.setDate(d.getDate() - 7)
+  return d.toISOString().slice(0, 10)
+}
 
 export default function Jewel() {
   const finance = useApp(s => s.finance)
@@ -26,14 +38,14 @@ export default function Jewel() {
 
   const { rows, openCount, borrowed, grams } = useMemo(() => {
     let list = repo.jewelLoans(financeFilter(finance))
-    if (filter !== 'All') list = list.filter(j => (j.Loan_Status ?? 'Open') === filter)
+    if (filter !== 'All') list = list.filter(j => (j.Loan_Status ?? 'Active') === filter)
     const s = q.trim().toLowerCase()
     if (s) list = list.filter(j =>
       j.Loan_No?.toLowerCase().includes(s) ||
       (j.Loan_Taken_From ?? '').toLowerCase().includes(s) ||
       (j.Loan_Taken_By ?? '').toLowerCase().includes(s) ||
       (j.Particular_Description ?? '').toLowerCase().includes(s))
-    const openRows = repo.jewelLoans(financeFilter(finance)).filter(j => (j.Loan_Status ?? 'Open') !== 'Closed')
+    const openRows = repo.jewelLoans(financeFilter(finance)).filter(j => (j.Loan_Status ?? 'Active') !== 'Closed')
     return {
       rows: list,
       openCount: openRows.length,
@@ -83,8 +95,8 @@ export default function Jewel() {
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
                 <tr>
-                  <Th sticky>Loan no.</Th><Th>Taken from</Th><Th>By</Th><Th>Date</Th>
-                  <Th right>Grams</Th><Th right>Amount</Th><Th right>Interest</Th><Th>Photos</Th><Th>Status</Th>{isMd && <Th>Del</Th>}
+                  <Th sticky>Loan no.</Th><Th>Taken from</Th><Th>By</Th><Th>Date</Th><Th>Due by</Th>
+                  <Th right>Grams</Th><Th right>Amount</Th><Th right>Int / mo</Th><Th>Photos</Th><Th>Status</Th>{isMd && <Th>Del</Th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -97,15 +109,16 @@ export default function Jewel() {
                     </Td>
                     <Td className="text-slate-400">{j.Loan_Taken_By || '—'}</Td>
                     <Td className="text-slate-400 whitespace-nowrap">{fmtDate(j.Loan_Taken_Date)}</Td>
+                    <Td className="whitespace-nowrap"><DueCell loan={j} /></Td>
                     <Td right className="text-slate-300 whitespace-nowrap">{num(j.Loan_Total_grams) ? `${num(j.Loan_Total_grams)} g` : '—'}</Td>
                     <Td right className="text-hd">{inr(num(j.Loan_Amount))}</Td>
-                    <Td right className="text-amber-300">{num(j.Interest_Amount) ? inr(num(j.Interest_Amount)) : '—'}</Td>
+                    <Td right className="text-amber-300">{num(j.Interest_Rate) ? inr(monthlyInterest(num(j.Loan_Amount), num(j.Interest_Rate))) : '—'}</Td>
                     <Td>
                       <Link to={`/jewel/${encodeURIComponent(j.Loan_No)}`} className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200">
                         <Camera size={13} /> {num(j.Photo_Count) || 0}
                       </Link>
                     </Td>
-                    <Td><Badge tone={statusTone(j.Loan_Status)}>{j.Loan_Status ?? 'Open'}</Badge></Td>
+                    <Td><Badge tone={statusTone(j.Loan_Status)}>{j.Loan_Status ?? 'Active'}</Badge></Td>
                     {isMd && <Td><button title="Delete jewel loan" className="btn-ghost !px-2 !py-1 text-xs text-rose-300" onClick={() => setDel(j)}><Trash2 size={13} /></button></Td>}
                   </tr>
                 ))}
@@ -142,6 +155,23 @@ export default function Jewel() {
   )
 }
 
+// Due date with an urgency hint once the loan is within 15 days of maturity
+// (or overdue). Closed loans show a plain date.
+export function DueCell({ loan }: { loan: JewelLoan }) {
+  if (!loan.Due_Date) return <span className="text-slate-600">—</span>
+  const closed = (loan.Loan_Status ?? 'Active') === 'Closed'
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const due = new Date(loan.Due_Date); due.setHours(0, 0, 0, 0)
+  const days = Math.round((due.getTime() - today.getTime()) / 86400000)
+  const soon = !closed && days <= 15
+  return (
+    <span className={soon ? (days < 0 ? 'text-rose-300' : 'text-amber-300') : 'text-slate-400'}>
+      {fmtDate(loan.Due_Date)}
+      {soon && <span className="ml-1 text-[11px]">· {days < 0 ? `overdue ${-days}d` : days === 0 ? 'due today' : `in ${days}d`}</span>}
+    </span>
+  )
+}
+
 // Shared create / edit form. Photos can be attached while CREATING (staged in
 // memory, then written after the loan row is inserted). Editing an existing loan
 // manages photos on the detail page instead, so the modal stays focused.
@@ -149,17 +179,23 @@ export function JewelForm({ finance, initial, onClose, onSaved }: {
   finance: string; initial?: JewelLoan; onClose: () => void; onSaved: () => void
 }) {
   const editing = !!initial
+  const today = new Date().toISOString().slice(0, 10)
   const [from, setFrom] = useState(initial?.Loan_Taken_From ?? '')
   const [by, setBy] = useState(initial?.Loan_Taken_By ?? '')
-  const [date, setDate] = useState(initial?.Loan_Taken_Date ?? new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(initial?.Loan_Taken_Date ?? today)
   const [amount, setAmount] = useState(initial?.Loan_Amount != null ? String(initial.Loan_Amount) : '')
   const [rate, setRate] = useState(initial?.Interest_Rate != null ? String(initial.Interest_Rate) : '')
-  const [interestAmt, setInterestAmt] = useState(initial?.Interest_Amount != null ? String(initial.Interest_Amount) : '')
   const [grams, setGrams] = useState(initial?.Loan_Total_grams != null ? String(initial.Loan_Total_grams) : '')
   const [desc, setDesc] = useState(initial?.Particular_Description ?? '')
   const [remark, setRemark] = useState(initial?.Remark1 ?? '')
-  const [closedDate, setClosedDate] = useState(initial?.Loan_Closed_Date ?? '')
+  const [status, setStatus] = useState<'Active' | 'Closed'>((initial?.Loan_Status as 'Active' | 'Closed') ?? 'Active')
+  const [closedDate, setClosedDate] = useState(initial?.Loan_Closed_Date ?? today)
+  // Settle-by date: defaults to one week before the loan turns a year old, and
+  // follows the loan date until the user overrides it themselves.
+  const [due, setDue] = useState(initial?.Due_Date ?? defaultDueDate(date))
+  const dueTouched = useRef(!!initial?.Due_Date)
 
+  const monthlyInt = monthlyInterest(num(amount), num(rate))
   const [staged, setStaged] = useState<string[]>([])
   const [busy, setBusy] = useState('')
   const [saving, setSaving] = useState(false)
@@ -167,6 +203,12 @@ export function JewelForm({ finance, initial, onClose, onSaved }: {
 
   const loanNo = editing ? initial!.Loan_No : nextJewelLoanNo(finance)
   const valid = num(amount) > 0 && !saving
+
+  // Keep the due date one week short of a year from the loan date, until the
+  // user edits it themselves.
+  useEffect(() => {
+    if (!dueTouched.current) setDue(defaultDueDate(date))
+  }, [date])
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
@@ -180,35 +222,24 @@ export function JewelForm({ finance, initial, onClose, onSaved }: {
 
   async function save() {
     setSaving(true)
+    const closedOn = status === 'Closed' ? (closedDate || today) : undefined
+    const common = {
+      Loan_Taken_From: from.trim() || undefined,
+      Loan_Taken_By: by.trim() || undefined,
+      Loan_Taken_Date: date || undefined,
+      Loan_Amount: num(amount),
+      Interest_Rate: rate ? num(rate) : undefined,
+      Interest_Amount: rate && num(amount) ? Math.round(monthlyInt) : undefined,
+      Loan_Total_grams: grams ? num(grams) : undefined,
+      Particular_Description: desc.trim() || undefined,
+      Due_Date: due || undefined,
+      Remark1: remark.trim() || undefined,
+      Loan_Closed_Date: closedOn,
+    }
     if (editing) {
-      await updateJewelLoan(loanNo, {
-        Loan_Taken_From: from.trim() || undefined,
-        Loan_Taken_By: by.trim() || undefined,
-        Loan_Taken_Date: date || undefined,
-        Loan_Amount: num(amount),
-        Interest_Rate: rate ? num(rate) : undefined,
-        Interest_Amount: interestAmt ? num(interestAmt) : undefined,
-        Loan_Total_grams: grams ? num(grams) : undefined,
-        Particular_Description: desc.trim() || undefined,
-        Remark1: remark.trim() || undefined,
-        Loan_Closed_Date: closedDate || undefined,
-      })
+      await updateJewelLoan(loanNo, common)
     } else {
-      const loan: JewelLoan = {
-        Finance_Name: finance,
-        Loan_No: loanNo,
-        Loan_Taken_From: from.trim() || undefined,
-        Loan_Taken_By: by.trim() || undefined,
-        Loan_Taken_Date: date || undefined,
-        Loan_Amount: num(amount),
-        Interest_Rate: rate ? num(rate) : undefined,
-        Interest_Amount: interestAmt ? num(interestAmt) : undefined,
-        Loan_Total_grams: grams ? num(grams) : undefined,
-        Particular_Description: desc.trim() || undefined,
-        Remark1: remark.trim() || undefined,
-        Photo_Count: 0,
-      }
-      await addJewelLoan(loan)
+      await addJewelLoan({ Finance_Name: finance, Loan_No: loanNo, Photo_Count: 0, ...common })
       if (staged.length) await addJewelPhotos(loanNo, finance, staged)
     }
     onSaved()
@@ -234,18 +265,41 @@ export function JewelForm({ finance, initial, onClose, onSaved }: {
         <Field label="Taken date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
       </div>
       <AmountHint value={amount} />
-      <div className="grid grid-cols-3 gap-3">
-        <Field label="Rate (₹/L·mo)"><input className="input" inputMode="numeric" value={rate} onChange={e => setRate(e.target.value.replace(/[^\d.]/g, ''))} /></Field>
-        <Field label="Interest paid (₹)"><input className="input" inputMode="numeric" value={interestAmt} onChange={e => setInterestAmt(e.target.value.replace(/[^\d.]/g, ''))} /></Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Interest rate (₹ / lakh · month)"><input className="input" inputMode="decimal" value={rate} onChange={e => setRate(e.target.value.replace(/[^\d.]/g, ''))} placeholder="e.g. 1000" /></Field>
         <Field label="Total grams"><input className="input" inputMode="decimal" value={grams} onChange={e => setGrams(e.target.value.replace(/[^\d.]/g, ''))} /></Field>
       </div>
-      <Field label="Item particulars"><textarea className="input min-h-[64px]" value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. 2 gold bangles, 1 chain (22k)" /></Field>
-      <Field label="Remark"><input className="input" value={remark} onChange={e => setRemark(e.target.value)} /></Field>
-      {editing && (
-        <Field label="Closed date" hint="Set this to mark the loan Closed; leave blank while it's open.">
-          <input type="date" className="input" value={closedDate} onChange={e => setClosedDate(e.target.value)} />
+      {num(amount) > 0 && num(rate) > 0 && (
+        <div className="rounded-xl bg-amber-500/10 px-3 py-2 text-sm ring-1 ring-inset ring-amber-500/25">
+          <span className="text-slate-300">Interest / month</span>
+          <span className="ml-2 font-semibold text-amber-300 tabular-nums">{inr(Math.round(monthlyInt))}</span>
+          <span className="text-slate-500"> · {inr(num(amount))} at ₹{num(rate)}/lakh</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Loan status">
+          <div className="flex gap-1 rounded-xl bg-slate-800/60 p-1">
+            {(['Active', 'Closed'] as const).map(s => (
+              <button key={s} type="button" onClick={() => setStatus(s)}
+                className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium ${status === s ? (s === 'Closed' ? 'bg-slate-600 text-white' : 'bg-emerald-600 text-white') : 'text-slate-300'}`}>{s}</button>
+            ))}
+          </div>
+        </Field>
+        {status === 'Closed'
+          ? <Field label="Closed date"><input type="date" className="input" value={closedDate} onChange={e => setClosedDate(e.target.value)} /></Field>
+          : <Field label="Settle by (period)" hint="Defaults to a week before it turns a year old.">
+              <input type="date" className="input" value={due} onChange={e => { dueTouched.current = true; setDue(e.target.value) }} />
+            </Field>}
+      </div>
+      {status === 'Closed' && (
+        <Field label="Settle by (period)" hint="Kept for reference on closed loans.">
+          <input type="date" className="input" value={due} onChange={e => { dueTouched.current = true; setDue(e.target.value) }} />
         </Field>
       )}
+
+      <Field label="Item particulars"><textarea className="input min-h-[64px]" value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. 2 gold bangles, 1 chain (22k)" /></Field>
+      <Field label="Remark"><input className="input" value={remark} onChange={e => setRemark(e.target.value)} /></Field>
 
       {!editing && (
         <div>

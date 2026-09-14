@@ -34,6 +34,7 @@ create table "Jewel_Loan" (
   "Loan_Total_grams" numeric,
   "Particular_Description" text,
   "Loan_Status" text,
+  "Due_Date" text,
   "Remark1" text,
   "Photo_Count" numeric
 );

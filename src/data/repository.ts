@@ -683,7 +683,25 @@ export async function addLoan(loan: Loan): Promise<void> {
 // The loan row is text-light and lives in Jewel_Loan (hydrated at startup).
 // Photos are heavy, so they live in Jewel_Loan_Photo, which is NOT pulled at
 // startup — fetchJewelPhotos loads a single loan's photos on demand.
-const jewelStatus = (j: Partial<JewelLoan>): string => (j.Loan_Closed_Date ? 'Closed' : 'Open')
+const jewelStatus = (j: Partial<JewelLoan>): string => (j.Loan_Closed_Date ? 'Closed' : 'Active')
+
+// Active jewel loans whose settle-by (Due_Date) is within the next 15 days, or
+// already overdue — the source for the header bell reminder. Most urgent first.
+export interface JewelDueAlert { loanNo: string; finance: string; lender: string; dueDate: string; daysLeft: number; amount: number }
+export function jewelDueAlerts(finance?: string): JewelDueAlert[] {
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
+  const out: JewelDueAlert[] = []
+  for (const j of db.Jewel_Loan ?? []) {
+    if (finance && j.Finance_Name !== finance) continue
+    if ((j.Loan_Status ?? 'Active') === 'Closed' || !j.Due_Date) continue
+    const due = new Date(j.Due_Date); if (isNaN(due.getTime())) continue
+    due.setHours(0, 0, 0, 0)
+    const daysLeft = Math.round((due.getTime() - startOfToday.getTime()) / 86400000)
+    if (daysLeft > 15) continue // alert window opens 15 days before the due date
+    out.push({ loanNo: j.Loan_No, finance: j.Finance_Name, lender: j.Loan_Taken_From ?? 'Jewel loan', dueDate: j.Due_Date, daysLeft, amount: num(j.Loan_Amount) })
+  }
+  return out.sort((a, b) => a.daysLeft - b.daysLeft)
+}
 
 export function nextJewelLoanNo(finance: string): string {
   const prefix = (finance.slice(0, 3) || 'Fin')
@@ -709,7 +727,11 @@ export async function updateJewelLoan(loanNo: string, patch: Partial<JewelLoan>)
   // Keep the status column honest with the close date whenever either changes.
   if ('Loan_Closed_Date' in patch) merged.Loan_Status = jewelStatus(merged)
   db.Jewel_Loan = (db.Jewel_Loan ?? []).map(j => j.Loan_No === loanNo ? merged : j)
-  await sUpdate('Jewel_Loan', loanNo, { ...patch, Loan_Status: merged.Loan_Status })
+  // clean() drops undefined, so an intended "clear the close date" must be sent
+  // as null or Supabase would keep the old date (loan stuck as Closed there).
+  const dbPatch: any = { ...patch, Loan_Status: merged.Loan_Status }
+  if ('Loan_Closed_Date' in patch && !patch.Loan_Closed_Date) dbPatch.Loan_Closed_Date = null
+  await sUpdate('Jewel_Loan', loanNo, dbPatch)
   writeLog({ Action: 'update', Entity: 'Jewel_Loan', Entity_Label: `${loanNo} · ${merged.Loan_Taken_From ?? 'jewel loan'}`, Before: before, After: merged })
   persist()
 }

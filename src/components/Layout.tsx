@@ -5,8 +5,9 @@ import {
   PanelLeftClose, PanelLeftOpen, Bell, RefreshCw, KeyRound, MessageSquare, Volume2, VolumeX,
   Palette, Check,
 } from 'lucide-react'
-import { useApp, canSeeRoute } from '../store/app'
-import { repo, source, refresh, markNotificationsRead } from '../data/repository'
+import { useApp, canSeeRoute, financeFilter } from '../store/app'
+import { repo, source, refresh, markNotificationsRead, jewelDueAlerts } from '../data/repository'
+import { fmtDate } from '../lib/format'
 import { navGroups, bottomNav } from '../nav'
 import { Modal, Field } from './ui'
 import { playClick, playAction, isMuted, setMuted } from '../lib/sound'
@@ -190,11 +191,16 @@ function playBeep() {
 
 function NotificationBell() {
   const phone = useApp(s => s.user?.phone) ?? ''
+  const finance = useApp(s => s.finance)
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [tick, setTick] = useState(0)
   const prevUnread = useRef<number | null>(null)
   const items = repo.notifications(phone).slice(0, 20)
   const unread = repo.unreadCount(phone)
+  // Live reminders for jewel loans nearing (or past) their settle-by date.
+  const dueAlerts = jewelDueAlerts(financeFilter(finance))
+  const badge = unread + dueAlerts.length
 
   // Poll so notifications raised elsewhere in this session surface with a beep.
   useEffect(() => {
@@ -218,9 +224,9 @@ function NotificationBell() {
         title="Notifications"
       >
         <Bell size={18} />
-        {unread > 0 && (
+        {badge > 0 && (
           <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
-            {unread > 9 ? '9+' : unread}
+            {badge > 9 ? '9+' : badge}
           </span>
         )}
       </button>
@@ -230,7 +236,19 @@ function NotificationBell() {
           <div className="absolute right-0 z-40 mt-2 w-80 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-xl" data-tick={tick}>
             <div className="border-b border-slate-800 px-4 py-2.5 text-sm font-semibold text-hd">Notifications</div>
             <div className="max-h-80 overflow-y-auto">
-              {items.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-500">No notifications.</p>}
+              {items.length === 0 && dueAlerts.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-500">No notifications.</p>}
+              {dueAlerts.map(a => (
+                <button
+                  key={`jd-${a.loanNo}`}
+                  onClick={() => { setOpen(false); navigate(`/jewel/${encodeURIComponent(a.loanNo)}`) }}
+                  className="block w-full border-b border-slate-800/60 px-4 py-2.5 text-left hover:bg-slate-800/40"
+                >
+                  <p className={`text-sm font-medium ${a.daysLeft < 0 ? 'text-rose-300' : 'text-amber-300'}`}>
+                    💍 Jewel loan {a.daysLeft < 0 ? `overdue ${-a.daysLeft}d` : a.daysLeft === 0 ? 'due today' : `due in ${a.daysLeft}d`}
+                  </p>
+                  <p className="text-xs text-slate-400">{a.loanNo} · {a.lender} — settle by {fmtDate(a.dueDate)}</p>
+                </button>
+              ))}
               {items.map(n => (
                 <div key={n.id} className="border-b border-slate-800/60 px-4 py-2.5">
                   <p className="text-sm font-medium text-slate-100">{n.Title}</p>

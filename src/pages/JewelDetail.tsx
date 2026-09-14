@@ -11,7 +11,7 @@ import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, EmptyState, ConfirmModal } from '../components/ui'
 import { inr, fmtDate, num } from '../lib/format'
 import { shrinkImages } from '../lib/image'
-import { JewelForm } from './Jewel'
+import { JewelForm, DueCell } from './Jewel'
 import type { JewelPhoto } from '../data/types'
 
 export default function JewelDetail() {
@@ -50,7 +50,7 @@ export default function JewelDetail() {
     </div>
   )
 
-  const closed = (loan.Loan_Status ?? 'Open') === 'Closed'
+  const closed = (loan.Loan_Status ?? 'Active') === 'Closed'
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
@@ -88,7 +88,7 @@ export default function JewelDetail() {
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Loan amount" value={inr(num(loan.Loan_Amount))} tone="amber" />
         <StatCard label="Gold pledged" value={num(loan.Loan_Total_grams) ? `${num(loan.Loan_Total_grams)} g` : '—'} tone="slate" />
-        <StatCard label="Interest paid" value={num(loan.Interest_Amount) ? inr(num(loan.Interest_Amount)) : '—'} tone="slate" />
+        <StatCard label="Interest / month" value={num(loan.Interest_Amount) ? inr(num(loan.Interest_Amount)) : '—'} sub={num(loan.Interest_Rate) ? `₹${num(loan.Interest_Rate)} / lakh` : undefined} tone="slate" />
         <StatCard label="Photos" value={list.length} tone="blue" icon={<Camera size={18} />} />
       </div>
 
@@ -99,6 +99,10 @@ export default function JewelDetail() {
           <Detail label="Taken by" value={loan.Loan_Taken_By} />
           <Detail label="Taken date" value={fmtDate(loan.Loan_Taken_Date)} />
           <Detail label="Rate" value={num(loan.Interest_Rate) ? `₹${num(loan.Interest_Rate)} / lakh · mo` : undefined} />
+          <div>
+            <dt className="label">Settle by (period)</dt>
+            <dd className="mt-0.5"><DueCell loan={loan} /></dd>
+          </div>
           <Detail label="Closed date" value={loan.Loan_Closed_Date ? fmtDate(loan.Loan_Closed_Date) : undefined} />
           <Detail label="Remark" value={loan.Remark1} />
         </dl>

@@ -341,7 +341,10 @@ export interface JewelLoan {
   Interest_Amount?: number        // interest paid / accrued, as recorded
   Loan_Total_grams?: number       // total weight of pledged gold
   Particular_Description?: string // the ornaments (e.g. "2 bangles, 1 chain")
-  Loan_Status?: string            // Open | Closed (derived from Loan_Closed_Date)
+  Loan_Status?: string            // Active | Closed (derived from Loan_Closed_Date)
+  Due_Date?: string               // period / maturity to settle by. Default = one
+                                  // week before the loan completes a year. A bell
+                                  // alert shows from 15 days before this date.
   Remark1?: string
   Photo_Count?: number            // cached count so the list shows 📷 n without a fetch
 }

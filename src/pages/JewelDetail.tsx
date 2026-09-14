@@ -8,10 +8,10 @@ import {
   repo, fetchJewelPhotos, addJewelPhotos, deleteJewelPhoto, deleteJewelLoan, updateJewelLoan,
 } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, EmptyState, ConfirmModal } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, EmptyState, ConfirmModal, Modal, Field } from '../components/ui'
 import { inr, fmtDate, num } from '../lib/format'
 import { shrinkImages } from '../lib/image'
-import { JewelForm, DueCell } from './Jewel'
+import { JewelForm, DueCell, accruedInterest } from './Jewel'
 import type { JewelPhoto } from '../data/types'
 
 export default function JewelDetail() {
@@ -30,6 +30,8 @@ export default function JewelDetail() {
   const [del, setDel] = useState(false)
   const [delPhoto, setDelPhoto] = useState<JewelPhoto | null>(null)
   const [confirmClose, setConfirmClose] = useState(false)
+  const [closeInterest, setCloseInterest] = useState('')
+  const [closeDate, setCloseDate] = useState(new Date().toISOString().slice(0, 10))
   const [lightbox, setLightbox] = useState<number | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -79,7 +81,7 @@ export default function JewelDetail() {
             {editable && <button className="btn-ghost !py-1.5" onClick={() => setEdit(true)}><Pencil size={15} /> Edit</button>}
             {editable && (closed
               ? <button className="btn-ghost !py-1.5 text-amber-300" onClick={async () => { await updateJewelLoan(id, { Loan_Closed_Date: undefined }); setTick(t => t + 1) }}><RotateCcw size={15} /> Reopen</button>
-              : <button className="btn-ghost !py-1.5 text-emerald-300" onClick={() => setConfirmClose(true)}><CheckCircle2 size={15} /> Close</button>)}
+              : <button className="btn-ghost !py-1.5 text-emerald-300" onClick={() => { setCloseInterest(String(accruedInterest(loan) || '')); setCloseDate(new Date().toISOString().slice(0, 10)); setConfirmClose(true) }}><CheckCircle2 size={15} /> Close</button>)}
             {isMd && <button className="btn-ghost !py-1.5 text-rose-300" onClick={() => setDel(true)}><Trash2 size={15} /> Delete</button>}
           </div>
         }
@@ -102,6 +104,10 @@ export default function JewelDetail() {
           <div>
             <dt className="label">Settle by (period)</dt>
             <dd className="mt-0.5"><DueCell loan={loan} /></dd>
+          </div>
+          <div>
+            <dt className="label">{closed ? 'Interest paid' : 'Interest so far'}</dt>
+            <dd className="mt-0.5 text-amber-300">{closed ? (num(loan.Total_Interest_Paid) ? inr(num(loan.Total_Interest_Paid)) : '—') : inr(accruedInterest(loan))}</dd>
           </div>
           <Detail label="Closed date" value={loan.Loan_Closed_Date ? fmtDate(loan.Loan_Closed_Date) : undefined} />
           <Detail label="Remark" value={loan.Remark1} />
@@ -165,12 +171,25 @@ export default function JewelDetail() {
         <JewelForm finance={loan.Finance_Name} initial={loan} onClose={() => setEdit(false)} onSaved={() => { setEdit(false); setTick(t => t + 1) }} />
       )}
       {confirmClose && (
-        <ConfirmModal
-          title="Close jewel loan" danger={false} confirmLabel="Mark closed"
-          message={<>Mark <b className="text-hd">{loan.Loan_No}</b> as closed (today)?</>}
-          onConfirm={async () => { await updateJewelLoan(id, { Loan_Closed_Date: new Date().toISOString().slice(0, 10) }); setConfirmClose(false); setTick(t => t + 1) }}
+        <Modal
+          title={`Close ${loan.Loan_No}`}
           onClose={() => setConfirmClose(false)}
-        />
+          footer={<>
+            <button className="btn-ghost" onClick={() => setConfirmClose(false)}>Cancel</button>
+            <button className="btn-primary" onClick={async () => {
+              await updateJewelLoan(id, { Loan_Closed_Date: closeDate || new Date().toISOString().slice(0, 10), Total_Interest_Paid: closeInterest ? num(closeInterest) : undefined })
+              setConfirmClose(false); setTick(t => t + 1)
+            }}>Mark closed</button>
+          </>}
+        >
+          <p className="text-sm text-slate-400">Interest accrued so far is about <b className="text-amber-300">{inr(accruedInterest(loan))}</b> — enter the total interest you actually paid.</p>
+          <Field label="Total interest paid (₹)">
+            <input className="input" inputMode="numeric" autoFocus value={closeInterest} onChange={e => setCloseInterest(e.target.value.replace(/[^\d.]/g, ''))} />
+          </Field>
+          <Field label="Closed date">
+            <input type="date" className="input" value={closeDate} onChange={e => setCloseDate(e.target.value)} />
+          </Field>
+        </Modal>
       )}
       {delPhoto && (
         <ConfirmModal

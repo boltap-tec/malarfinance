@@ -15,6 +15,21 @@ const FILTERS = ['All', 'Active', 'Closed'] as const
 
 // Monthly interest implied by a per-lakh rate: amount ÷ 1 lakh × rate.
 const monthlyInterest = (amount: number, ratePerLakh: number) => (amount / 100000) * ratePerLakh
+
+// Interest accrued so far on a loan — monthly interest × months elapsed from the
+// loan date up to today (or to the close date, once closed). Months are counted
+// as elapsed days ÷ 30, so a part-month still accrues its share. An estimate for
+// a running view, not the final settlement figure the lender charges.
+export function accruedInterest(j: JewelLoan): number {
+  const perMonth = monthlyInterest(num(j.Loan_Amount), num(j.Interest_Rate))
+  if (!perMonth || !j.Loan_Taken_Date) return 0
+  const start = new Date(j.Loan_Taken_Date)
+  const end = j.Loan_Closed_Date ? new Date(j.Loan_Closed_Date) : new Date()
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0
+  const days = (end.getTime() - start.getTime()) / 86400000
+  if (days <= 0) return 0
+  return Math.round(perMonth * (days / 30))
+}
 // Default settle-by date: one week before the loan completes a year.
 export function defaultDueDate(takenISO?: string): string {
   if (!takenISO) return ''
@@ -131,7 +146,12 @@ export default function Jewel() {
 function JewelGroup({ title, tone, rows, isMd, onDelete }: {
   title: string; tone: 'green' | 'slate'; rows: JewelLoan[]; isMd: boolean; onDelete: (j: JewelLoan) => void
 }) {
+  const closedGroup = title === 'Closed'
   const total = rows.reduce((a, j) => a + num(j.Loan_Amount), 0)
+  // Closed loans: sum the interest actually paid. Active loans: sum the interest
+  // accrued so far.
+  const intTotal = rows.reduce((a, j) => a + (closedGroup ? num(j.Total_Interest_Paid) : accruedInterest(j)), 0)
+  const intLabel = closedGroup ? 'Interest paid' : 'Interest so far'
   return (
     <div className="mb-5">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
@@ -139,7 +159,10 @@ function JewelGroup({ title, tone, rows, isMd, onDelete }: {
           <Badge tone={tone}>{title}</Badge>
           <span className="text-xs text-slate-500">{rows.length} loan{rows.length === 1 ? '' : 's'}</span>
         </div>
-        <div className="text-sm"><span className="text-slate-400">Total loan </span><span className="font-semibold text-hd tabular-nums">{inr(total)}</span></div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-sm">
+          <span><span className="text-slate-400">Total loan </span><span className="font-semibold text-hd tabular-nums">{inr(total)}</span></span>
+          {intTotal > 0 && <span><span className="text-slate-400">{intLabel} </span><span className="font-semibold text-amber-300 tabular-nums">{inr(intTotal)}</span></span>}
+        </div>
       </div>
       <Card className="!p-0 overflow-hidden">
         <div className="overflow-x-auto">
@@ -147,11 +170,13 @@ function JewelGroup({ title, tone, rows, isMd, onDelete }: {
             <thead className="border-b border-slate-800 bg-slate-900/60">
               <tr>
                 <Th sticky>Loan no.</Th><Th>Taken from</Th><Th>By</Th><Th>Date</Th><Th>Due by</Th>
-                <Th right>Grams</Th><Th right>Amount</Th><Th right>Int / mo</Th><Th>Photos</Th><Th>Status</Th>{isMd && <Th>Del</Th>}
+                <Th right>Grams</Th><Th right>Amount</Th><Th right>Int / mo</Th><Th right>{intLabel}</Th><Th>Photos</Th><Th>Status</Th>{isMd && <Th>Del</Th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
-              {rows.map(j => (
+              {rows.map(j => {
+                const intVal = closedGroup ? num(j.Total_Interest_Paid) : accruedInterest(j)
+                return (
                 <tr key={j.Loan_No} className="group hover:bg-slate-800/40">
                   <Td sticky><Link to={`/jewel/${encodeURIComponent(j.Loan_No)}`} className="font-medium text-brand-300">{j.Loan_No}</Link></Td>
                   <Td>
@@ -164,6 +189,7 @@ function JewelGroup({ title, tone, rows, isMd, onDelete }: {
                   <Td right className="text-slate-300 whitespace-nowrap">{num(j.Loan_Total_grams) ? `${num(j.Loan_Total_grams)} g` : '—'}</Td>
                   <Td right className="text-hd">{inr(num(j.Loan_Amount))}</Td>
                   <Td right className="text-amber-300">{num(j.Interest_Rate) ? inr(monthlyInterest(num(j.Loan_Amount), num(j.Interest_Rate))) : '—'}</Td>
+                  <Td right className={closedGroup ? 'text-emerald-300' : 'text-slate-300'}>{intVal ? inr(intVal) : '—'}</Td>
                   <Td>
                     <Link to={`/jewel/${encodeURIComponent(j.Loan_No)}`} className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200">
                       <Camera size={13} /> {num(j.Photo_Count) || 0}
@@ -172,7 +198,7 @@ function JewelGroup({ title, tone, rows, isMd, onDelete }: {
                   <Td><Badge tone={statusTone(j.Loan_Status)}>{j.Loan_Status ?? 'Active'}</Badge></Td>
                   {isMd && <Td><button title="Delete jewel loan" className="btn-ghost !px-2 !py-1 text-xs text-rose-300" onClick={() => onDelete(j)}><Trash2 size={13} /></button></Td>}
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>
@@ -216,6 +242,7 @@ export function JewelForm({ finance, initial, onClose, onSaved }: {
   const [remark, setRemark] = useState(initial?.Remark1 ?? '')
   const [status, setStatus] = useState<'Active' | 'Closed'>((initial?.Loan_Status as 'Active' | 'Closed') ?? 'Active')
   const [closedDate, setClosedDate] = useState(initial?.Loan_Closed_Date ?? today)
+  const [interestPaid, setInterestPaid] = useState(initial?.Total_Interest_Paid != null ? String(initial.Total_Interest_Paid) : '')
   // Settle-by date: defaults to one week before the loan turns a year old, and
   // follows the loan date until the user overrides it themselves.
   const [due, setDue] = useState(initial?.Due_Date ?? defaultDueDate(date))
@@ -249,7 +276,7 @@ export function JewelForm({ finance, initial, onClose, onSaved }: {
   async function save() {
     setSaving(true)
     const closedOn = status === 'Closed' ? (closedDate || today) : undefined
-    const common = {
+    const common: Partial<JewelLoan> = {
       Loan_Taken_From: from.trim() || undefined,
       Loan_Taken_By: by.trim() || undefined,
       Loan_Taken_Date: date || undefined,
@@ -261,6 +288,8 @@ export function JewelForm({ finance, initial, onClose, onSaved }: {
       Due_Date: due || undefined,
       Remark1: remark.trim() || undefined,
       Loan_Closed_Date: closedOn,
+      // Only record interest paid when the loan is being closed.
+      Total_Interest_Paid: status === 'Closed' && interestPaid ? num(interestPaid) : undefined,
     }
     if (editing) {
       await updateJewelLoan(loanNo, common)
@@ -319,9 +348,14 @@ export function JewelForm({ finance, initial, onClose, onSaved }: {
             </Field>}
       </div>
       {status === 'Closed' && (
-        <Field label="Settle by (period)" hint="Kept for reference on closed loans.">
-          <input type="date" className="input" value={due} onChange={e => { dueTouched.current = true; setDue(e.target.value) }} />
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Total interest paid (₹)" hint="What you actually paid over the loan's life.">
+            <input className="input" inputMode="numeric" value={interestPaid} onChange={e => setInterestPaid(e.target.value.replace(/[^\d.]/g, ''))} />
+          </Field>
+          <Field label="Settle by (period)" hint="Kept for reference.">
+            <input type="date" className="input" value={due} onChange={e => { dueTouched.current = true; setDue(e.target.value) }} />
+          </Field>
+        </div>
       )}
 
       <Field label="Item particulars"><textarea className="input min-h-[64px]" value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. 2 gold bangles, 1 chain (22k)" /></Field>

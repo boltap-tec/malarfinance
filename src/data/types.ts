@@ -345,6 +345,8 @@ export interface JewelLoan {
   Due_Date?: string               // period / maturity to settle by. Default = one
                                   // week before the loan completes a year. A bell
                                   // alert shows from 15 days before this date.
+  Total_Interest_Paid?: number    // the actual interest paid over the loan's life,
+                                  // entered by the user when closing the loan.
   Remark1?: string
   Photo_Count?: number            // cached count so the list shows 📷 n without a fetch
 }

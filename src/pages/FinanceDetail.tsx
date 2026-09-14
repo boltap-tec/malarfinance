@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Building2, Phone, User, HandCoins, PiggyBank, Landmark, Percent, Wallet, Boxes } from 'lucide-react'
+import { ArrowLeft, Building2, Phone, User, HandCoins, PiggyBank, Landmark, Percent, Wallet, Boxes, Gem } from 'lucide-react'
 import { repo, balanceForFinance } from '../data/repository'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
 import { inr, fmtDate, phone as fmtPhone, num } from '../lib/format'
@@ -18,8 +18,12 @@ export default function FinanceDetail() {
     const other = repo.otherFinanceLoans(id)
     const interest = repo.interest(id)
     const chits = repo.chits(id)
+    const jewels = repo.jewelLoans(id)
+    const openJewels = jewels.filter(j => (j.Loan_Status ?? 'Active') !== 'Closed')
     return {
-      finance, loans, deposits, other, chits,
+      finance, loans, deposits, other, chits, jewels,
+      jewelOpen: openJewels.reduce((s, j) => s + num(j.Loan_Amount), 0),
+      jewelOpenCount: openJewels.length,
       outLoan: loans.reduce((s, l) => s + num(l.Outstand_Amount), 0),
       givenLoan: loans.reduce((s, l) => s + num(l.Loan_Amount), 0),
       recvLoan: loans.reduce((s, l) => s + num(l.Repaid_Amount), 0),
@@ -63,6 +67,7 @@ export default function FinanceDetail() {
         <StatCard label="Loan received (total)" value={inr(d.recvLoan)} tone="green" />
         <StatCard label="Interest received" value={inr(d.intRecv)} tone="green" icon={<Percent size={18} />} sub={`of ${inr(d.intBilled)} billed`} />
         <StatCard label="Interest pending" value={inr(d.intPending)} tone="amber" />
+        <StatCard label="Jewel loans (open)" value={inr(d.jewelOpen)} tone="blue" icon={<Gem size={18} />} sub={`${d.jewelOpenCount} open · ${d.jewels.length} total`} />
       </div>
 
       {/* Loans */}
@@ -135,6 +140,33 @@ export default function FinanceDetail() {
                       <Td right className="text-hd">{inr(num(x.Loan_Amount))}</Td>
                       <Td right className="text-rose-300">{inr(num(x.Outstand_Amount))}</Td>
                       <Td><Badge tone={statusTone(x.Loan_Status)}>{x.Loan_Status ?? '—'}</Badge></Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
+
+      {/* Jewel loans (gold pledged) */}
+      {d.jewels.length > 0 && (
+        <>
+          <h3 className="mb-2 mt-6 flex items-center gap-2 font-semibold text-hd"><Gem size={16} /> Jewel loans</h3>
+          <Card className="!p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b border-slate-800 bg-slate-900/60">
+                  <tr><Th>Loan</Th><Th>Taken from</Th><Th right>Grams</Th><Th right>Amount</Th><Th>Status</Th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {d.jewels.slice(0, 100).map(j => (
+                    <tr key={j.Loan_No} className="hover:bg-slate-800/40">
+                      <Td><Link to={`/jewel/${encodeURIComponent(j.Loan_No)}`} className="text-brand-300 hover:underline">{j.Loan_No}</Link></Td>
+                      <Td className="text-slate-300">{j.Loan_Taken_From ?? '—'}</Td>
+                      <Td right className="text-slate-300">{num(j.Loan_Total_grams) ? `${num(j.Loan_Total_grams)} g` : '—'}</Td>
+                      <Td right className="text-hd">{inr(num(j.Loan_Amount))}</Td>
+                      <Td><Badge tone={statusTone(j.Loan_Status)}>{j.Loan_Status ?? 'Active'}</Badge></Td>
                     </tr>
                   ))}
                 </tbody>

@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Boxes, Building2, Plus } from 'lucide-react'
+import { Boxes, Building2, Plus, HandCoins } from 'lucide-react'
 import { repo, addInvestedChit } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
-import { inr, fmtDate, num } from '../lib/format'
+import { inr, fmtDate, num, monthName, mmYyyy } from '../lib/format'
 import type { InvestedChit } from '../data/types'
+
+const isTaken = (c: InvestedChit) => (c.Chit_Taken ?? '').toLowerCase() === 'yes'
+// Month label for when a chit was taken, e.g. "Nov 2024".
+const takenMonth = (c: InvestedChit) => (c.Chit_Taken_Date ? monthName(mmYyyy(c.Chit_Taken_Date)) : '—')
 
 // A chit counts as completed when its status says so, or every month is paid.
 function isChitCompleted(c: InvestedChit): boolean {
@@ -18,12 +22,23 @@ function isChitCompleted(c: InvestedChit): boolean {
 function InvestedSection({ title, tone, rows, empty, className }: {
   title: string; tone: string; rows: InvestedChit[]; empty?: string; className?: string
 }) {
+  // Group totals shown in the header, jewel-loan style.
+  const invested = rows.reduce((a, c) => a + repo.investedChitSummary(c.Chit_ID).invested, 0)
+  const takenCount = rows.filter(isTaken).length
   return (
     <div className={className}>
-      <div className="mb-2 flex items-center gap-2">
-        <Boxes size={16} className={tone} />
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">{title}</h2>
-        <span className="rounded-full bg-slate-800/70 px-2 py-0.5 text-xs text-slate-400">{rows.length}</span>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Boxes size={16} className={tone} />
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">{title}</h2>
+          <span className="rounded-full bg-slate-800/70 px-2 py-0.5 text-xs text-slate-400">{rows.length}</span>
+        </div>
+        {rows.length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-4 text-xs text-slate-400">
+            <span>Invested <span className="font-semibold text-emerald-300 tabular-nums">{inr(invested)}</span></span>
+            <span>Taken <span className="font-semibold text-slate-200">{takenCount}</span> · Not taken <span className="font-semibold text-slate-200">{rows.length - takenCount}</span></span>
+          </div>
+        )}
       </div>
       {rows.length === 0 ? (
         <EmptyState title={empty ?? 'Nothing here.'} />
@@ -32,24 +47,28 @@ function InvestedSection({ title, tone, rows, empty, className }: {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Chit</Th><Th>Company</Th><Th>Started</Th><Th right>Pot value</Th><Th right>Invested</Th><Th right>Months</Th><Th>Status</Th></tr>
+                <tr><Th>Chit</Th><Th>Company</Th><Th>Started</Th><Th right>Pot value</Th><Th right>Invested</Th><Th right>Months</Th><Th>Taken</Th><Th>Taken month</Th><Th right>Taken amount</Th><Th>Status</Th></tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map((c) => {
                   const s = repo.investedChitSummary(c.Chit_ID)
+                  const taken = isTaken(c)
                   return (
                     <tr key={c.Chit_ID} className="hover:bg-slate-800/40">
                       <Td>
                         <Link to={`/chits/invested/${encodeURIComponent(c.Chit_ID)}`} className="font-medium text-brand-300 hover:underline">
                           {c.Chit_Name ?? c.Chit_ID}
                         </Link>
-                        <p className="text-xs text-slate-500">{c.Chit_Invested_By}{c.Chit_Taken === 'Yes' ? ' · taken' : ''}</p>
+                        <p className="text-xs text-slate-500">{c.Chit_Invested_By}</p>
                       </Td>
                       <Td className="text-slate-300"><span className="flex items-center gap-1.5"><Building2 size={14} className="text-slate-500" />{c.Chit_Invested_Company}</span></Td>
                       <Td className="text-slate-400">{fmtDate(c.Chit_Started_Date)}</Td>
                       <Td right className="text-hd">{inr(num(c.Total_Amount_Chit))}</Td>
                       <Td right className="text-emerald-400">{inr(s.invested)}</Td>
                       <Td right className="text-slate-300">{num(c.No_Months_Completed)}/{num(c.No_Months)}</Td>
+                      <Td><Badge tone={taken ? 'green' : 'slate'}>{taken ? 'Taken' : 'Not taken'}</Badge></Td>
+                      <Td className="text-slate-400 whitespace-nowrap">{taken ? takenMonth(c) : '—'}</Td>
+                      <Td right className={taken ? 'text-emerald-300' : 'text-slate-500'}>{taken && num(c.Chit_Taken_Amount) ? inr(num(c.Chit_Taken_Amount)) : '—'}</Td>
                       <Td><Badge tone={statusTone(c.Chit_Status)}>{c.Chit_Status ?? '—'}</Badge></Td>
                     </tr>
                   )
@@ -70,14 +89,17 @@ export default function Chits() {
   const [creating, setCreating] = useState(false)
 
   const invested = useMemo(() => repo.investedChits(), [tick])
-  const { running, completed, contributed } = useMemo(() => {
-    let contributed = 0
+  const { running, completed, contributed, takenCount, takenAmt, notTakenCount, pendingNotTaken } = useMemo(() => {
+    let contributed = 0, takenCount = 0, takenAmt = 0, notTakenCount = 0, pendingNotTaken = 0
     const running: typeof invested = [], completed: typeof invested = []
     for (const c of invested) {
-      contributed += repo.investedChitSummary(c.Chit_ID).invested
+      const inv = repo.investedChitSummary(c.Chit_ID).invested
+      contributed += inv
       ;(isChitCompleted(c) ? completed : running).push(c)
+      if (isTaken(c)) { takenCount++; takenAmt += num(c.Chit_Taken_Amount) }
+      else { notTakenCount++; pendingNotTaken += inv } // money parked in chits not yet taken
     }
-    return { running, completed, contributed }
+    return { running, completed, contributed, takenCount, takenAmt, notTakenCount, pendingNotTaken }
   }, [invested])
 
   return (
@@ -90,10 +112,12 @@ export default function Chits() {
         )}
       />
 
-      <div className="mb-4 grid grid-cols-3 gap-3">
-        <StatCard label="Invested chits" value={invested.length} tone="blue" icon={<Boxes size={18} />} />
-        <StatCard label="Running" value={running.length} tone="green" />
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <StatCard label="Invested chits" value={invested.length} tone="blue" icon={<Boxes size={18} />} sub={`${running.length} running · ${completed.length} done`} />
         <StatCard label="Contributed so far" value={inr(contributed)} tone="amber" />
+        <StatCard label="Chit taken" value={takenCount} tone="green" icon={<HandCoins size={18} />} sub={`${inr(takenAmt)} received`} />
+        <StatCard label="Not taken" value={notTakenCount} tone="slate" />
+        <StatCard label="Pending (not taken)" value={inr(pendingNotTaken)} tone="red" sub="invested, not yet taken" />
       </div>
 
       {invested.length === 0 ? (

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, Pencil, Trash2, ImagePlus, Camera, CheckCircle2, RotateCcw,
+  ArrowLeft, Pencil, Trash2, Camera, CheckCircle2, RotateCcw,
 } from 'lucide-react'
 import {
   repo, fetchJewelPhotos, addJewelPhotos, deleteJewelPhoto, deleteJewelLoan, updateJewelLoan,
@@ -9,6 +9,7 @@ import {
 import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, EmptyState, ConfirmModal } from '../components/ui'
 import PhotoLightbox from '../components/PhotoLightbox'
+import PhotoInputs from '../components/PhotoInputs'
 import { inr, fmtDate, num } from '../lib/format'
 import { shrinkImages } from '../lib/image'
 import { JewelForm, DueCell, accruedInterest, JewelCloseModal } from './Jewel'
@@ -31,7 +32,6 @@ export default function JewelDetail() {
   const [delPhoto, setDelPhoto] = useState<JewelPhoto | null>(null)
   const [confirmClose, setConfirmClose] = useState(false)
   const [lightbox, setLightbox] = useState<number | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
 
   const loan = useMemo(() => repo.jewelLoan(id), [id, tick])
 
@@ -52,9 +52,7 @@ export default function JewelDetail() {
 
   const closed = (loan.Loan_Status ?? 'Active') === 'Closed'
 
-  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? [])
-    e.target.value = ''
+  async function onPick(files: File[]) {
     if (!files.length) return
     setBusy(`Processing 0 / ${files.length}…`)
     const urls = await shrinkImages(files, (d, t) => setBusy(`Processing ${d} / ${t}…`))
@@ -119,15 +117,10 @@ export default function JewelDetail() {
       </Card>
 
       <Card>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-hd">Jewel photos {list.length > 0 && <span className="text-slate-500">· {list.length}</span>}</h3>
-          {editable && (
-            <button className="btn-ghost !py-1.5 text-brand-300 ring-1 ring-inset ring-brand-500/30" onClick={() => fileRef.current?.click()}>
-              <ImagePlus size={15} /> Add photos
-            </button>
-          )}
+          {editable && <PhotoInputs onFiles={onPick} small />}
         </div>
-        <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={onPick} />
         {busy && <p className="mb-3 text-xs text-amber-300">{busy}</p>}
 
         {photos === null ? (
@@ -136,7 +129,7 @@ export default function JewelDetail() {
           <div className="grid place-items-center gap-2 py-10 text-center">
             <Camera size={28} className="text-slate-600" />
             <p className="text-sm text-slate-400">No photos yet.</p>
-            {editable && <p className="text-xs text-slate-500">Tap “Add photos” to attach pictures of the pledged jewels.</p>}
+            {editable && <p className="text-xs text-slate-500">Use “Take photo” or “Upload” to attach pictures of the pledged jewels.</p>}
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">

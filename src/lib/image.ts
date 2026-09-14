@@ -28,9 +28,12 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 // Rough size of a data URL's payload in KB (base64 is ~4/3 of the bytes).
 const kbOf = (dataUrl: string) => Math.round(((dataUrl.length - (dataUrl.indexOf(',') + 1)) * 0.75) / 1024)
 
-// Shrink one image file to a JPEG data URL. Falls back to the raw data URL if
-// the browser can't decode it (e.g. some HEIC files) so nothing is silently lost.
-export async function shrinkImage(file: File, maxDim = 1400, quality = 0.72): Promise<ShrinkResult> {
+// Shrink one image file to a JPEG data URL no larger than ~targetKb. We lower
+// the JPEG quality first, then step the dimensions down, retrying until the
+// encoded size is under the target (or we hit a sensible floor). Falls back to
+// the raw data URL if the browser can't decode it (e.g. some HEIC files) so
+// nothing is silently lost.
+export async function shrinkImage(file: File, targetKb = 150, startDim = 1400, minDim = 640): Promise<ShrinkResult> {
   const raw = await readAsDataUrl(file)
   if (!file.type.startsWith('image/')) return { dataUrl: raw, approxKb: kbOf(raw) }
   let img: HTMLImageElement
@@ -39,19 +42,36 @@ export async function shrinkImage(file: File, maxDim = 1400, quality = 0.72): Pr
   } catch {
     return { dataUrl: raw, approxKb: kbOf(raw) } // undecodable — keep original
   }
-  const longest = Math.max(img.width, img.height) || 1
-  const scale = Math.min(1, maxDim / longest)
-  const w = Math.max(1, Math.round(img.width * scale))
-  const h = Math.max(1, Math.round(img.height * scale))
   const canvas = document.createElement('canvas')
-  canvas.width = w; canvas.height = h
   const ctx = canvas.getContext('2d')
   if (!ctx) return { dataUrl: raw, approxKb: kbOf(raw) }
-  ctx.drawImage(img, 0, 0, w, h)
+  const longest = Math.max(img.width, img.height) || 1
+
+  const encodeAt = (dim: number): string => {
+    const scale = Math.min(1, dim / longest)
+    canvas.width = Math.max(1, Math.round(img.width * scale))
+    canvas.height = Math.max(1, Math.round(img.height * scale))
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    let q = 0.82
+    let out = canvas.toDataURL('image/jpeg', q)
+    while (kbOf(out) > targetKb && q > 0.42) {
+      q = Math.round((q - 0.1) * 100) / 100
+      out = canvas.toDataURL('image/jpeg', q)
+    }
+    return out
+  }
+
   try {
-    const out = canvas.toDataURL('image/jpeg', quality)
-    // Keep whichever is smaller (a tiny source can encode larger as JPEG).
-    const best = out.length < raw.length ? out : raw
+    let dim = Math.min(startDim, longest)
+    let best = encodeAt(dim)
+    // Still too big at this size → shrink the dimensions and try again.
+    while (kbOf(best) > targetKb && dim > minDim) {
+      dim = Math.max(minDim, Math.round(dim * 0.8))
+      best = encodeAt(dim)
+    }
+    // Never return something larger than the original (tiny PNGs etc.).
+    if (best.length >= raw.length) best = raw
     return { dataUrl: best, approxKb: kbOf(best) }
   } catch {
     return { dataUrl: raw, approxKb: kbOf(raw) }

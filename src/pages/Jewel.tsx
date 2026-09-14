@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, Plus, Gem, Scale, Trash2, ImagePlus, X, Camera, CheckCircle2 } from 'lucide-react'
+import { Search, Plus, Gem, Scale, Trash2, X, Camera, CheckCircle2 } from 'lucide-react'
 import {
   repo, addJewelLoan, updateJewelLoan, deleteJewelLoan, addJewelPhotos, nextJewelLoanNo, fetchJewelPhotos,
 } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal, AmountHint } from '../components/ui'
 import PhotoLightbox from '../components/PhotoLightbox'
+import PhotoInputs from '../components/PhotoInputs'
 import { inr, fmtDate, num } from '../lib/format'
 import { useCreateParam } from '../lib/useCreateParam'
 import { shrinkImages } from '../lib/image'
@@ -343,7 +344,6 @@ export function JewelForm({ finance, initial, onClose, onSaved }: {
   const [staged, setStaged] = useState<string[]>([])
   const [busy, setBusy] = useState('')
   const [saving, setSaving] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
 
   const loanNo = editing ? initial!.Loan_No : nextJewelLoanNo(finance)
   const valid = num(amount) > 0 && !saving
@@ -354,9 +354,7 @@ export function JewelForm({ finance, initial, onClose, onSaved }: {
     if (!dueTouched.current) setDue(defaultDueDate(date))
   }, [date])
 
-  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? [])
-    e.target.value = ''
+  async function onPick(files: File[]) {
     if (!files.length) return
     setBusy(`Processing 0 / ${files.length}…`)
     const urls = await shrinkImages(files, (d, t) => setBusy(`Processing ${d} / ${t}…`))
@@ -454,13 +452,10 @@ export function JewelForm({ finance, initial, onClose, onSaved }: {
 
       {!editing && (
         <div>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="label">Photos of the jewels</span>
-            <button type="button" className="btn-ghost !py-1 text-xs text-brand-300 ring-1 ring-inset ring-brand-500/30" onClick={() => fileRef.current?.click()}>
-              <ImagePlus size={14} /> Add photos
-            </button>
+            <PhotoInputs onFiles={onPick} small />
           </div>
-          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={onPick} />
           {busy && <p className="mt-2 text-xs text-amber-300">{busy}</p>}
           {staged.length > 0 ? (
             <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-5">

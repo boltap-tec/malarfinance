@@ -739,12 +739,16 @@ export async function updateJewelLoan(loanNo: string, patch: Partial<JewelLoan>)
 export async function deleteJewelLoan(loanNo: string): Promise<void> {
   const row = (db.Jewel_Loan ?? []).find(j => j.Loan_No === loanNo)
   if (!row) return
-  const photos = (db.Jewel_Loan_Photo ?? []).filter(p => p.Loan_No === loanNo)
+  // Pull the photos in first so the delete can be FULLY restored (loan + photos)
+  // from the Activity Log. If the fetch fails (offline), we keep whatever's in
+  // memory and skip the remote photo delete, so the photos aren't lost either.
+  let photos: JewelPhoto[] = []
+  try { photos = await fetchJewelPhotos(loanNo) } catch { photos = (db.Jewel_Loan_Photo ?? []).filter(p => p.Loan_No === loanNo) }
   db.Jewel_Loan = (db.Jewel_Loan ?? []).filter(j => j.Loan_No !== loanNo)
   db.Jewel_Loan_Photo = (db.Jewel_Loan_Photo ?? []).filter(p => p.Loan_No !== loanNo)
   await sDelete('Jewel_Loan', loanNo)
-  if (supabase) { const { error } = await supabase.from('Jewel_Loan_Photo').delete().eq('Loan_No', loanNo); noteErr('delete Jewel_Loan_Photo', error?.message) }
-  writeLog({ Action: 'delete', Entity: 'Jewel_Loan', Entity_Label: `${loanNo} · ${row.Loan_Taken_From ?? 'jewel loan'} (${photos.length} photo${photos.length === 1 ? '' : 's'})`, Before: row })
+  if (supabase && photos.length) { const { error } = await supabase.from('Jewel_Loan_Photo').delete().eq('Loan_No', loanNo); noteErr('delete Jewel_Loan_Photo', error?.message) }
+  writeLog({ Action: 'delete', Entity: 'Jewel_Loan', Entity_Label: `${loanNo} · ${row.Loan_Taken_From ?? 'jewel loan'} (${photos.length} photo${photos.length === 1 ? '' : 's'})`, Before: { loan: row, photos } })
   persist()
 }
 
@@ -752,11 +756,17 @@ export async function deleteJewelLoan(loanNo: string): Promise<void> {
 // last. In local mode this just returns whatever is already in memory.
 export async function fetchJewelPhotos(loanNo: string): Promise<JewelPhoto[]> {
   if (supabase) {
-    const { data, error } = await supabase.from('Jewel_Loan_Photo').select('*').eq('Loan_No', loanNo)
-    noteErr('fetch Jewel_Loan_Photo', error?.message)
-    if (!error && data) {
-      const others = (db.Jewel_Loan_Photo ?? []).filter(p => p.Loan_No !== loanNo)
-      db.Jewel_Loan_Photo = [...others, ...(data as JewelPhoto[])]
+    // Wrapped so a network failure never rejects — the UI then shows whatever
+    // photos are already in memory instead of hanging on "Loading…".
+    try {
+      const { data, error } = await supabase.from('Jewel_Loan_Photo').select('*').eq('Loan_No', loanNo)
+      noteErr('fetch Jewel_Loan_Photo', error?.message)
+      if (!error && data) {
+        const others = (db.Jewel_Loan_Photo ?? []).filter(p => p.Loan_No !== loanNo)
+        db.Jewel_Loan_Photo = [...others, ...(data as JewelPhoto[])]
+      }
+    } catch (e) {
+      noteErr('fetch Jewel_Loan_Photo', e instanceof Error ? e.message : String(e))
     }
   }
   return repo.jewelPhotos(loanNo)
@@ -1927,6 +1937,19 @@ export async function restoreFromLog(logId: string): Promise<void> {
     db.Log = (db.Log ?? []).map(l => l.id === logId ? { ...l, Restored: true } : l)
     await sUpdate('Log', logId, { Restored: true })
     writeLog({ Action: 'restore', Entity: 'Chit_Auction', Entity_Label: entry.Entity_Label })
+    persist()
+    return
+  }
+
+  // A deleted jewel loan stores { loan, photos } so both come back on restore.
+  if (entry.Entity === 'Jewel_Loan' && entry.Before && !Array.isArray(entry.Before) && (entry.Before as any).loan) {
+    const b = entry.Before as { loan: JewelLoan; photos: JewelPhoto[] }
+    db.Jewel_Loan = [b.loan, ...(db.Jewel_Loan ?? [])]
+    await sInsert('Jewel_Loan', b.loan)
+    if (b.photos?.length) { db.Jewel_Loan_Photo = [...b.photos, ...(db.Jewel_Loan_Photo ?? [])]; await sInsert('Jewel_Loan_Photo', b.photos) }
+    db.Log = (db.Log ?? []).map(l => l.id === logId ? { ...l, Restored: true } : l)
+    await sUpdate('Log', logId, { Restored: true })
+    writeLog({ Action: 'restore', Entity: 'Jewel_Loan', Entity_Label: entry.Entity_Label, After: b.loan })
     persist()
     return
   }

@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, Plus, Gem, Scale, Trash2, ImagePlus, X, Camera } from 'lucide-react'
+import { Search, Plus, Gem, Scale, Trash2, ImagePlus, X, Camera, CheckCircle2 } from 'lucide-react'
 import {
-  repo, addJewelLoan, updateJewelLoan, deleteJewelLoan, addJewelPhotos, nextJewelLoanNo,
+  repo, addJewelLoan, updateJewelLoan, deleteJewelLoan, addJewelPhotos, nextJewelLoanNo, fetchJewelPhotos,
 } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal, AmountHint } from '../components/ui'
+import PhotoLightbox from '../components/PhotoLightbox'
 import { inr, fmtDate, num } from '../lib/format'
 import { useCreateParam } from '../lib/useCreateParam'
 import { shrinkImages } from '../lib/image'
-import type { JewelLoan } from '../data/types'
+import type { JewelLoan, JewelPhoto } from '../data/types'
 
 const FILTERS = ['All', 'Active', 'Closed'] as const
 
@@ -50,6 +51,16 @@ export default function Jewel() {
   const [tick, setTick] = useState(0)
   const [edit, setEdit] = useState<JewelLoan | null>(null)
   const [del, setDel] = useState<JewelLoan | null>(null)
+  const [closing, setClosing] = useState<JewelLoan | null>(null)
+  // In-grid photo viewer: fetch a loan's photos on demand, then open the lightbox.
+  const [viewer, setViewer] = useState<{ photos: JewelPhoto[]; index: number } | null>(null)
+  const [loadingPhotos, setLoadingPhotos] = useState<string | null>(null)
+  async function openPhotos(loanNo: string) {
+    setLoadingPhotos(loanNo)
+    const photos = await fetchJewelPhotos(loanNo)
+    setLoadingPhotos(null)
+    if (photos.length) setViewer({ photos, index: 0 })
+  }
 
   const { rows, activeRows, closedRows, openCount, borrowed, grams } = useMemo(() => {
     let list = repo.jewelLoans(financeFilter(finance))
@@ -109,8 +120,8 @@ export default function Jewel() {
 
       {rows.length === 0 ? <EmptyState title="No jewel loans yet" hint={canEdit(role) ? 'Add one with the button above.' : undefined} /> : (
         <>
-          {activeRows.length > 0 && <JewelGroup title="Active" tone="green" rows={activeRows} isMd={isMd} onDelete={setDel} />}
-          {closedRows.length > 0 && <JewelGroup title="Closed" tone="slate" rows={closedRows} isMd={isMd} onDelete={setDel} />}
+          {activeRows.length > 0 && <JewelGroup title="Active" tone="green" rows={activeRows} isMd={isMd} editable={canEdit(role) && finance !== 'ALL'} onDelete={setDel} onClose={setClosing} onViewPhotos={openPhotos} loadingPhotos={loadingPhotos} />}
+          {closedRows.length > 0 && <JewelGroup title="Closed" tone="slate" rows={closedRows} isMd={isMd} editable={canEdit(role) && finance !== 'ALL'} onDelete={setDel} onClose={setClosing} onViewPhotos={openPhotos} loadingPhotos={loadingPhotos} />}
         </>
       )}
 
@@ -129,6 +140,9 @@ export default function Jewel() {
           onSaved={() => { setEdit(null); setTick(t => t + 1) }}
         />
       )}
+      {closing && (
+        <JewelCloseModal loan={closing} onClose={() => setClosing(null)} onClosed={() => { setClosing(null); setTick(t => t + 1) }} />
+      )}
       {del && (
         <ConfirmModal
           title="Delete jewel loan"
@@ -137,16 +151,76 @@ export default function Jewel() {
           onClose={() => setDel(null)}
         />
       )}
+      {viewer && (
+        <PhotoLightbox photos={viewer.photos} index={viewer.index} onClose={() => setViewer(null)} onIndex={i => setViewer(v => v && { ...v, index: i })} />
+      )}
     </div>
+  )
+}
+
+// Close a jewel loan: record the total interest actually paid and the close
+// date, with the pledged photos on hand to check before settling.
+export function JewelCloseModal({ loan, onClose, onClosed }: { loan: JewelLoan; onClose: () => void; onClosed: () => void }) {
+  const [interest, setInterest] = useState(String(accruedInterest(loan) || ''))
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [photos, setPhotos] = useState<JewelPhoto[] | null>(null)
+  const [lightbox, setLightbox] = useState<number | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { let alive = true; fetchJewelPhotos(loan.Loan_No).then(p => { if (alive) setPhotos(p) }); return () => { alive = false } }, [loan.Loan_No])
+
+  const list = photos ?? []
+  return (
+    <Modal
+      title={`Close ${loan.Loan_No}`}
+      onClose={onClose}
+      footer={<>
+        <button className="btn-ghost" onClick={onClose}>Cancel</button>
+        <button className="btn-primary" disabled={saving} onClick={async () => {
+          setSaving(true)
+          await updateJewelLoan(loan.Loan_No, { Loan_Closed_Date: date || new Date().toISOString().slice(0, 10), Total_Interest_Paid: interest ? num(interest) : undefined })
+          onClosed()
+        }}>{saving ? 'Saving…' : 'Mark closed'}</button>
+      </>}
+    >
+      <div className="rounded-xl bg-slate-800/40 p-3 text-sm">
+        <p className="font-semibold text-hd">{loan.Loan_Taken_From || 'Jewel loan'}</p>
+        <p className="text-xs text-slate-500">{inr(num(loan.Loan_Amount))} · taken {fmtDate(loan.Loan_Taken_Date)}</p>
+      </div>
+      <p className="text-sm text-slate-400">Interest accrued so far is about <b className="text-amber-300">{inr(accruedInterest(loan))}</b> — enter the total interest you actually paid.</p>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Total interest paid (₹)"><input className="input" inputMode="numeric" autoFocus value={interest} onChange={e => setInterest(e.target.value.replace(/[^\d.]/g, ''))} /></Field>
+        <Field label="Closed date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
+      </div>
+      <div>
+        <p className="label mb-1">Pledged jewels {list.length > 0 && <span className="text-slate-500">· {list.length}</span>}</p>
+        {photos === null ? (
+          <p className="text-xs text-slate-500">Loading photos…</p>
+        ) : list.length === 0 ? (
+          <p className="text-xs text-slate-500">No photos on this loan.</p>
+        ) : (
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+            {list.map((p, i) => (
+              <button key={p.id} type="button" onClick={() => setLightbox(i)} className="aspect-square overflow-hidden rounded-lg ring-1 ring-slate-700">
+                <img src={p.Data} alt="" loading="lazy" className="h-full w-full object-cover" />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {lightbox !== null && <PhotoLightbox photos={list} index={lightbox} onClose={() => setLightbox(null)} onIndex={setLightbox} />}
+    </Modal>
   )
 }
 
 // One status section (Active / Closed) with its own header carrying the group's
 // loan count and total loan amount, above its table of loans.
-function JewelGroup({ title, tone, rows, isMd, onDelete }: {
-  title: string; tone: 'green' | 'slate'; rows: JewelLoan[]; isMd: boolean; onDelete: (j: JewelLoan) => void
+function JewelGroup({ title, tone, rows, isMd, editable, onDelete, onClose, onViewPhotos, loadingPhotos }: {
+  title: string; tone: 'green' | 'slate'; rows: JewelLoan[]; isMd: boolean; editable: boolean
+  onDelete: (j: JewelLoan) => void; onClose: (j: JewelLoan) => void; onViewPhotos: (loanNo: string) => void; loadingPhotos: string | null
 }) {
   const closedGroup = title === 'Closed'
+  const hasActions = editable || isMd
   const total = rows.reduce((a, j) => a + num(j.Loan_Amount), 0)
   // Closed loans: sum the interest actually paid. Active loans: sum the interest
   // accrued so far.
@@ -170,7 +244,7 @@ function JewelGroup({ title, tone, rows, isMd, onDelete }: {
             <thead className="border-b border-slate-800 bg-slate-900/60">
               <tr>
                 <Th sticky>Loan no.</Th><Th>Taken from</Th><Th>By</Th><Th>Date</Th><Th>Due by</Th>
-                <Th right>Grams</Th><Th right>Amount</Th><Th right>Int / mo</Th><Th right>{intLabel}</Th><Th>Photos</Th><Th>Status</Th>{isMd && <Th>Del</Th>}
+                <Th right>Grams</Th><Th right>Amount</Th><Th right>Int / mo</Th><Th right>{intLabel}</Th><Th>Photos</Th><Th>Status</Th>{hasActions && <Th>Actions</Th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
@@ -191,12 +265,29 @@ function JewelGroup({ title, tone, rows, isMd, onDelete }: {
                   <Td right className="text-amber-300">{num(j.Interest_Rate) ? inr(monthlyInterest(num(j.Loan_Amount), num(j.Interest_Rate))) : '—'}</Td>
                   <Td right className={closedGroup ? 'text-emerald-300' : 'text-slate-300'}>{intVal ? inr(intVal) : '—'}</Td>
                   <Td>
-                    <Link to={`/jewel/${encodeURIComponent(j.Loan_No)}`} className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200">
-                      <Camera size={13} /> {num(j.Photo_Count) || 0}
-                    </Link>
+                    {num(j.Photo_Count) > 0 ? (
+                      <button title="View photos" onClick={() => onViewPhotos(j.Loan_No)} className="inline-flex items-center gap-1 text-xs text-brand-300 hover:text-brand-200">
+                        <Camera size={13} /> {loadingPhotos === j.Loan_No ? '…' : num(j.Photo_Count)}
+                      </button>
+                    ) : (
+                      <Link to={`/jewel/${encodeURIComponent(j.Loan_No)}`} title="Add photos" className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300">
+                        <Camera size={13} /> 0
+                      </Link>
+                    )}
                   </Td>
                   <Td><Badge tone={statusTone(j.Loan_Status)}>{j.Loan_Status ?? 'Active'}</Badge></Td>
-                  {isMd && <Td><button title="Delete jewel loan" className="btn-ghost !px-2 !py-1 text-xs text-rose-300" onClick={() => onDelete(j)}><Trash2 size={13} /></button></Td>}
+                  {hasActions && (
+                    <Td>
+                      <div className="flex gap-1.5">
+                        {editable && !closedGroup && (
+                          <button title="Close loan" onClick={() => onClose(j)} className="btn-ghost !px-2 !py-1 text-xs text-emerald-300 ring-1 ring-inset ring-emerald-500/30"><CheckCircle2 size={13} /></button>
+                        )}
+                        {isMd && (
+                          <button title="Delete jewel loan" onClick={() => onDelete(j)} className="btn-ghost !px-2 !py-1 text-xs text-rose-300"><Trash2 size={13} /></button>
+                        )}
+                      </div>
+                    </Td>
+                  )}
                 </tr>
               )})}
             </tbody>

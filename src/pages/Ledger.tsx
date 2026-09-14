@@ -4,7 +4,7 @@ import { Search, ArrowDownLeft, ArrowUpRight, Scale, Trash2, Pencil, TrendingDow
 import { repo, addBalanceCorrection, balanceForFinance, deleteLedgerEntry, updateLedgerEntry, addExpense, addOtherIncome, getLedgerCategories } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Th, Td, EmptyState, Badge, Modal, Field, ConfirmModal } from '../components/ui'
-import { inr, fmtDate, num } from '../lib/format'
+import { inr, fmtDate, num, custTag } from '../lib/format'
 import type { LedgerRow } from '../data/types'
 
 // View-only filters for the ledger: show just one kind of transaction.
@@ -145,7 +145,11 @@ export default function Ledger() {
                     <Td><Badge tone="slate">{t.Nature_Transaction ?? '—'}</Badge></Td>
                     <Td>
                       <p className="text-slate-200">{t.Description ?? '—'}</p>
-                      <p className="text-xs text-slate-500">{t.Customer_Name ?? t.STL_No ?? ''}</p>
+                      {/* Keep the customer name next to their STL number (e.g.
+                          "Priya · Mal-STL46"). Only real STL codes are appended —
+                          deposit/chit rows keep a long composite in STL_No, so
+                          those just show the name. */}
+                      <p className="text-xs text-slate-500">{custTag(t.Customer_Name, /stl/i.test(String(t.STL_No ?? '')) ? t.STL_No : '') || String(t.STL_No ?? '')}</p>
                     </Td>
                     <Td right className="text-emerald-400">{num(t.Receipt_Amount) ? inr(num(t.Receipt_Amount)) : ''}</Td>
                     <Td right className="text-rose-400">{num(t.Payment_Amount) ? inr(num(t.Payment_Amount)) : ''}</Td>

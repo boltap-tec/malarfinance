@@ -4,7 +4,7 @@
 import {
   LayoutDashboard, Users, HandCoins, Percent, BookOpenText, PiggyBank,
   Boxes, Gem, Building2, Users2, UserCog, History, Settings, MessageSquare,
-  Landmark, Wallet, ReceiptText, Banknote, Coins, Gavel, TrendingUp, Handshake, type LucideIcon,
+  Landmark, Wallet, ReceiptText, Banknote, Coins, Gavel, TrendingUp, Handshake, Scale, type LucideIcon,
 } from 'lucide-react'
 import { SHOW_OWN_CHIT_FUND } from './store/app'
 
@@ -70,6 +70,7 @@ export const navGroups: NavGroup[] = [
   {
     title: 'Organisation',
     items: [
+      { to: '/finance-summary', label: 'Finance Summary', icon: Scale, desc: 'Active positions & net finance amount' },
       { to: '/finances', label: 'Finances', icon: Landmark, desc: 'Your finance companies' },
       { to: '/partners', label: 'Partners', icon: Users2, desc: 'Owners & partners' },
       { to: '/workers', label: 'Workers', icon: UserCog, desc: 'Staff & their menus' },

@@ -23,6 +23,7 @@ import Partners from './pages/Partners'
 import PartnerDetail from './pages/PartnerDetail'
 import Finances from './pages/Finances'
 import FinanceDetail from './pages/FinanceDetail'
+import FinanceSummary from './pages/FinanceSummary'
 import Workers from './pages/Workers'
 import Logs from './pages/Logs'
 import Settings from './pages/Settings'
@@ -86,6 +87,7 @@ export default function App() {
         <Route path="/other-finance-interest" element={<OtherFinanceInterest />} />
         <Route path="/finances" element={<Finances />} />
         <Route path="/finances/:name" element={<FinanceDetail />} />
+        <Route path="/finance-summary" element={<FinanceSummary />} />
         <Route path="/partners" element={<Partners />} />
         <Route path="/partners/:id" element={<PartnerDetail />} />
         <Route path="/workers" element={<Workers />} />

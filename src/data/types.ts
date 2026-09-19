@@ -282,6 +282,23 @@ export interface ChitTakenMember {
   Remarks?: string                   // optional note on the last payout
 }
 
+// One row per individual payout installment given to a taker — the payment
+// history behind a ChitTakenMember's running Amount_Given_to_Member total.
+// Lets you see every payment made to a chit-taken member and correct a wrong one.
+export interface ChitTakenPayment {
+  Payment_ID: string
+  Chit_Taken_ID: string              // the taking this payment is against
+  Chit_ID: string
+  Member_ID: string
+  Member_Name?: string
+  Finance_Name: string
+  Month_Count?: number
+  Date?: string                      // when the money was given
+  Amount: number
+  Payment_Type?: string              // Cash | UPI | Account | Other
+  Remarks?: string
+}
+
 // One row per member per auction/month — their contribution obligation.
 export interface ChitLedgerRow {
   ID: string
@@ -455,6 +472,7 @@ export interface Dataset {
   Chit_Member: ChitMember[]
   Chit_Auction: ChitAuction[]
   Chit_Taken_Member: ChitTakenMember[]
+  Chit_Taken_Payment: ChitTakenPayment[]
   Chit_Ledger: ChitLedgerRow[]
   Other_Finance_Loan: OtherFinanceLoan[]
   Other_Finance_Interest: any[]

@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Phone, MapPin, Users2, HandCoins, Coins, Printer } from 'lucide-react'
-import { repo, collectChitDue, getSettings } from '../data/repository'
-import type { ChitLedgerRow } from '../data/types'
+import { ArrowLeft, Phone, MapPin, Users2, HandCoins, Coins, Printer, Plus, Pencil } from 'lucide-react'
+import { repo, collectChitDue, payChitTaker, editChitTakerPayment, deleteChitTakerPayment, getSettings } from '../data/repository'
+import type { ChitLedgerRow, ChitTakenMember, ChitTakenPayment } from '../data/types'
 import { useApp, canEdit } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
 import { AmountModal } from './ChitDetail'
 import ReminderButton from '../components/ReminderButton'
 import { buildChitMemberMessage } from '../lib/reminder'
@@ -20,12 +20,17 @@ export default function ChitMemberDetail() {
   const editable = canEdit(role)
   const [tick, setTick] = useState(0)
   const [collect, setCollect] = useState<ChitLedgerRow | null>(null)
+  const [payTaker, setPayTaker] = useState<ChitTakenMember | null>(null)
+  const [editPay, setEditPay] = useState<ChitTakenPayment | null>(null)
 
-  const { member, chit, dues, takings, totals } = useMemo(() => {
+  const { member, chit, dues, takings, payments, totals } = useMemo(() => {
     const member = repo.chitMember(id)
     const chit = member ? repo.chit(member.Chit_ID) : undefined
     const dues = repo.chitLedgerByMember(id)
     const takings = member ? repo.chitTakers(member.Chit_ID).filter(t => t.Member_ID === id) : []
+    // Payout installments grouped by the taking they belong to.
+    const payments: Record<string, ChitTakenPayment[]> = {}
+    for (const t of takings) payments[t.Chit_Taken_ID] = repo.chitTakerPayments(t.Chit_Taken_ID)
     const totals = {
       due: dues.reduce((s, r) => s + num(r.Due_Amount), 0),
       recv: dues.reduce((s, r) => s + num(r.Received_Amount), 0),
@@ -34,7 +39,7 @@ export default function ChitMemberDetail() {
       payoutGiven: takings.reduce((s, t) => s + num(t.Amount_Given_to_Member), 0),
       payoutPending: takings.reduce((s, t) => s + num(t.Pending_Amount), 0),
     }
-    return { member, chit, dues, takings, totals }
+    return { member, chit, dues, takings, payments, totals }
   }, [id, tick])
 
   if (!member) return <EmptyState title="Chit member not found" />
@@ -115,28 +120,62 @@ export default function ChitMemberDetail() {
       {takings.length > 0 && (
         <>
           <h3 className="mb-2 mt-6 flex items-center gap-2 font-semibold text-hd"><HandCoins size={16} /> Chit taken — payouts</h3>
-          <Card className="!p-0 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="border-b border-slate-800 bg-slate-900/60">
-                  <tr><Th>Month</Th><Th>Date</Th><Th right>Share</Th><Th right>Payout</Th><Th right>Given</Th><Th right>Pending</Th><Th>Status</Th></tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {takings.map(t => (
-                    <tr key={t.Chit_Taken_ID} className="hover:bg-slate-800/40">
-                      <Td className="text-slate-300">#{num(t.Month_Count)}</Td>
-                      <Td className="text-slate-400">{fmtDate(t.Date_Auction)}</Td>
-                      <Td right className="text-slate-400">{num(t.Percentage_Need_to_Take)}</Td>
-                      <Td right className="text-hd">{inr(num(t.Total_Amount_to_Member))}</Td>
-                      <Td right className="text-emerald-400">{inr(num(t.Amount_Given_to_Member))}</Td>
-                      <Td right className="text-rose-300">{num(t.Pending_Amount) ? inr(num(t.Pending_Amount)) : '—'}</Td>
-                      <Td><Badge tone={statusTone(t.Status)}>{t.Status ?? '—'}</Badge></Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          <div className="space-y-4">
+            {takings.map(t => {
+              const pays = payments[t.Chit_Taken_ID] ?? []
+              const recorded = pays.reduce((s, p) => s + num(p.Amount), 0)
+              // Payouts given before this history existed (legacy running total).
+              const earlier = Math.max(0, num(t.Amount_Given_to_Member) - recorded)
+              return (
+                <Card key={t.Chit_Taken_ID} className="!p-0 overflow-hidden">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 bg-slate-900/40 px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                      <span className="text-slate-300">Month #{num(t.Month_Count)}</span>
+                      <span className="text-slate-500">{fmtDate(t.Date_Auction)}</span>
+                      <span className="text-slate-400">Payout <b className="text-hd">{inr(num(t.Total_Amount_to_Member))}</b></span>
+                      <span className="text-emerald-400">Given {inr(num(t.Amount_Given_to_Member))}</span>
+                      {num(t.Pending_Amount) > 0 && <span className="text-rose-300">Pending {inr(num(t.Pending_Amount))}</span>}
+                      <Badge tone={statusTone(t.Status)}>{t.Status ?? '—'}</Badge>
+                    </div>
+                    {editable && num(t.Pending_Amount) > 0 && (
+                      <button className="btn-primary !py-1.5" onClick={() => setPayTaker(t)}><Plus size={14} /> Record payment</button>
+                    )}
+                  </div>
+                  {(pays.length > 0 || earlier > 0) ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="border-b border-slate-800 bg-slate-900/60">
+                          <tr><Th>Date</Th><Th>Type</Th><Th>Notes</Th><Th right>Amount</Th>{editable && <Th right>Edit</Th>}</tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                          {earlier > 0 && (
+                            <tr>
+                              <Td className="italic text-slate-500">Earlier payouts</Td>
+                              <Td className="text-slate-500">—</Td>
+                              <Td className="italic text-slate-500">before history was kept</Td>
+                              <Td right className="text-emerald-400/70">{inr(earlier)}</Td>
+                              {editable && <Td right className="text-slate-600">—</Td>}
+                            </tr>
+                          )}
+                          {pays.map(p => (
+                            <tr key={p.Payment_ID} className="hover:bg-slate-800/40">
+                              <Td className="text-slate-400">{fmtDate(p.Date)}</Td>
+                              <Td className="text-slate-400">{p.Payment_Type ?? '—'}</Td>
+                              <Td className="text-slate-400">{p.Remarks ?? '—'}</Td>
+                              <Td right className="text-emerald-400">{inr(num(p.Amount))}</Td>
+                              {editable && <Td right><button className="btn-ghost !py-1 !px-2 text-xs text-brand-300" onClick={() => setEditPay(p)}><Pencil size={12} /> Edit</button></Td>}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="px-4 py-4 text-sm text-slate-500">No payments recorded yet.{editable && num(t.Pending_Amount) > 0 ? ' Use “Record payment” to add one.' : ''}</p>
+                  )}
+                </Card>
+              )
+            })}
+          </div>
         </>
       )}
 
@@ -148,7 +187,71 @@ export default function ChitMemberDetail() {
           onSave={(amt, date, pt, remarks) => collectChitDue(collect.ID, amt, date, pt, remarks).then(() => { setCollect(null); setTick(t => t + 1) })}
         />
       )}
+
+      {payTaker && (
+        <AmountModal
+          title={`Record payout — ${payTaker.Member_Name}`}
+          max={num(payTaker.Pending_Amount)}
+          onClose={() => setPayTaker(null)}
+          onSave={(amt, date, pt, remarks) => payChitTaker(payTaker.Chit_Taken_ID, amt, date, pt, remarks).then(() => { setPayTaker(null); setTick(t => t + 1) })}
+        />
+      )}
+
+      {editPay && (
+        <PaymentEditModal
+          payment={editPay}
+          onClose={() => setEditPay(null)}
+          onSave={patch => editChitTakerPayment(editPay.Payment_ID, patch).then(() => { setEditPay(null); setTick(t => t + 1) })}
+          onDelete={() => deleteChitTakerPayment(editPay.Payment_ID).then(() => { setEditPay(null); setTick(t => t + 1) })}
+        />
+      )}
     </div>
+  )
+}
+
+// Edit (or delete) one recorded payout installment to a chit-taken member.
+function PaymentEditModal({ payment, onClose, onSave, onDelete }: {
+  payment: ChitTakenPayment
+  onClose: () => void
+  onSave: (patch: { amount: number; date: string; payType: string; remarks?: string }) => Promise<void>
+  onDelete: () => Promise<void>
+}) {
+  const [amount, setAmount] = useState(String(num(payment.Amount)))
+  const [date, setDate] = useState(payment.Date ?? new Date().toISOString().slice(0, 10))
+  const [payType, setPayType] = useState(payment.Payment_Type ?? 'Cash')
+  const [remarks, setRemarks] = useState(payment.Remarks ?? '')
+  const [busy, setBusy] = useState(false)
+  const amt = num(amount)
+  const valid = amt > 0
+
+  async function save() {
+    if (!valid || busy) return
+    setBusy(true)
+    await onSave({ amount: amt, date, payType, remarks: remarks.trim() || undefined })
+  }
+  async function remove() {
+    if (busy) return
+    if (!window.confirm('Delete this payout entry? The given/pending totals will be adjusted.')) return
+    setBusy(true)
+    await onDelete()
+  }
+
+  return (
+    <Modal title="Edit payout" onClose={onClose} footer={<>
+      <button className="btn-ghost !text-rose-300" disabled={busy} onClick={remove}>Delete</button>
+      <div className="flex-1" />
+      <button className="btn-ghost" onClick={onClose}>Cancel</button>
+      <button className="btn-primary" disabled={!valid || busy} onClick={save}>Save</button>
+    </>}>
+      <Field label="Amount (₹)" hint="Given/pending totals adjust by the difference"><input type="number" className="input" value={amount} onChange={e => setAmount(e.target.value)} /></Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
+        <Field label="Payment type">
+          <select className="input" value={payType} onChange={e => setPayType(e.target.value)}><option>Cash</option><option>UPI</option><option>Account</option><option>Other</option></select>
+        </Field>
+      </div>
+      <Field label="Notes / remarks" hint="Optional"><input className="input" value={remarks} onChange={e => setRemarks(e.target.value)} /></Field>
+    </Modal>
   )
 }
 

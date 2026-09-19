@@ -9,7 +9,7 @@ import { supabase, isSupabaseConfigured } from './supabase'
 import type {
   Dataset, Loan, Customer, InterestRow, LedgerRow, Partner, Finance, Deposit,
   OtherFinanceLoan, Worker, AppNotification, LogEntry, Message,
-  ChitCreation, ChitMember, ChitAuction, ChitTakenMember, ChitLedgerRow,
+  ChitCreation, ChitMember, ChitAuction, ChitTakenMember, ChitTakenPayment, ChitLedgerRow,
   InvestedChit, InvestedChitTrans, HandExchange, PostingLog,
   JewelLoan, JewelPhoto,
 } from './types'
@@ -376,6 +376,15 @@ export const repo = {
   chitTakersByAuction(auctionId: string): ChitTakenMember[] {
     return (db.Chit_Taken_Member ?? []).filter(t => t.Chit_Auction_ID === auctionId && t.Member_Type !== 'Company_Topup')
   },
+  // Individual payout installments recorded against one taking, oldest first.
+  chitTakerPayments(takenId: string): ChitTakenPayment[] {
+    return (db.Chit_Taken_Payment ?? []).filter(p => p.Chit_Taken_ID === takenId)
+      .sort((a, b) => new Date(a.Date ?? 0).getTime() - new Date(b.Date ?? 0).getTime())
+  },
+  // Every payout payment made across a whole chit fund (for the chit ledger).
+  chitTakerPaymentsByChit(chitId: string): ChitTakenPayment[] {
+    return (db.Chit_Taken_Payment ?? []).filter(p => p.Chit_ID === chitId)
+  },
   // The company chit pool: money the company holds from months it took, plus
   // manual top-ups, minus what later members have drawn from it.
   chitCompanyPool(chitId: string): number {
@@ -601,7 +610,7 @@ const PK: Partial<Record<keyof Dataset, string>> = {
   Depositer_Interest: 'ID', Other_Finance_Interest: 'ID',
   Notification: 'id', Message: 'id', Log: 'id',
   Chit_Creation: 'Chit_ID', Chit_Member: 'Member_ID', Chit_Auction: 'Chit_Auction_ID',
-  Chit_Taken_Member: 'Chit_Taken_ID', Chit_Ledger: 'ID',
+  Chit_Taken_Member: 'Chit_Taken_ID', Chit_Taken_Payment: 'Payment_ID', Chit_Ledger: 'ID',
   Invested_Chit: 'Chit_ID', Invested_Chit_Trans: 'ID',
   Hand_Exchange: 'ID', Interest_Posting_Log: 'ID',
   Jewel_Loan: 'Loan_No', Jewel_Loan_Photo: 'id',
@@ -2470,8 +2479,93 @@ export async function payChitTaker(takenId: string, amount?: number, date?: stri
     db.Chit_Member = (db.Chit_Member ?? []).map(m => m.Member_ID === row.Member_ID ? { ...m, ...mp } : m)
     await sUpdate('Chit_Member', row.Member_ID, mp)
   }
+
+  // Record this installment in the payout history so every payment to the taker
+  // is kept (and can later be corrected), not just the running total.
+  const payment: ChitTakenPayment = {
+    Payment_ID: `${takenId}_P${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    Chit_Taken_ID: takenId,
+    Chit_ID: row.Chit_ID,
+    Member_ID: row.Member_ID,
+    Member_Name: row.Member_Name,
+    Finance_Name: row.Finance_Name,
+    Month_Count: row.Month_Count,
+    Date: date ?? new Date().toISOString().slice(0, 10),
+    Amount: pay,
+    Payment_Type: payType,
+    Remarks: remarks?.trim() || undefined,
+  }
+  db.Chit_Taken_Payment = [...(db.Chit_Taken_Payment ?? []), payment]
+  await sInsert('Chit_Taken_Payment', payment)
+
   writeLog({ Action: 'update', Entity: 'Chit_Taken_Member', Entity_Label: `Payout — ${row.Member_Name} · ${inrFmt(pay)}`, Before: row })
   persist()
+}
+
+// Edit one recorded payout installment. The taking's running total and the
+// member's payout figures are shifted by the difference, so everything stays in
+// sync — including takings whose earlier payouts predate this history (legacy).
+export async function editChitTakerPayment(
+  paymentId: string,
+  patch: { amount?: number; date?: string; payType?: string; remarks?: string },
+): Promise<void> {
+  const before = (db.Chit_Taken_Payment ?? []).find(p => p.Payment_ID === paymentId)
+  if (!before) return
+  const taking = (db.Chit_Taken_Member ?? []).find(t => t.Chit_Taken_ID === before.Chit_Taken_ID)
+  const oldAmt = num(before.Amount)
+  // Clamp the new amount so total given never exceeds the payout owed.
+  const total = taking ? num(taking.Total_Amount_to_Member) : Infinity
+  const givenExThis = taking ? num(taking.Amount_Given_to_Member) - oldAmt : 0
+  const wanted = patch.amount !== undefined ? Math.max(0, num(patch.amount)) : oldAmt
+  const newAmt = taking ? Math.min(wanted, Math.max(0, total - givenExThis)) : wanted
+  const delta = newAmt - oldAmt
+
+  const updated: ChitTakenPayment = {
+    ...before,
+    Amount: newAmt,
+    Date: patch.date ?? before.Date,
+    Payment_Type: patch.payType ?? before.Payment_Type,
+    Remarks: patch.remarks !== undefined ? (patch.remarks.trim() || undefined) : before.Remarks,
+  }
+  db.Chit_Taken_Payment = (db.Chit_Taken_Payment ?? []).map(p => p.Payment_ID === paymentId ? updated : p)
+  await sUpdate('Chit_Taken_Payment', paymentId, updated)
+
+  if (taking && delta !== 0) await shiftTakingGiven(taking, delta)
+  writeLog({ Action: 'update', Entity: 'Chit_Taken_Payment', Entity_Label: `Edit payout — ${before.Member_Name} · ${inrFmt(oldAmt)} → ${inrFmt(newAmt)}`, Before: before, After: updated })
+  persist()
+}
+
+// Delete a recorded payout installment and roll its amount back out of the
+// taking's and member's running totals.
+export async function deleteChitTakerPayment(paymentId: string): Promise<void> {
+  const before = (db.Chit_Taken_Payment ?? []).find(p => p.Payment_ID === paymentId)
+  if (!before) return
+  const taking = (db.Chit_Taken_Member ?? []).find(t => t.Chit_Taken_ID === before.Chit_Taken_ID)
+  db.Chit_Taken_Payment = (db.Chit_Taken_Payment ?? []).filter(p => p.Payment_ID !== paymentId)
+  await sDelete('Chit_Taken_Payment', paymentId)
+  if (taking) await shiftTakingGiven(taking, -num(before.Amount))
+  writeLog({ Action: 'delete', Entity: 'Chit_Taken_Payment', Entity_Label: `Delete payout — ${before.Member_Name} · ${inrFmt(num(before.Amount))}`, Before: before })
+  persist()
+}
+
+// Apply a signed change to a taking's given/pending totals (and the member's
+// payout figures), used when a payout history entry is edited or removed.
+async function shiftTakingGiven(taking: ChitTakenMember, delta: number): Promise<void> {
+  const given = Math.max(0, num(taking.Amount_Given_to_Member) + delta)
+  const left = Math.max(0, num(taking.Total_Amount_to_Member) - given)
+  const tp: Partial<ChitTakenMember> = { Amount_Given_to_Member: given, Pending_Amount: left, Status: left <= 0 && given > 0 ? 'Given' : 'Pending' }
+  db.Chit_Taken_Member = (db.Chit_Taken_Member ?? []).map(t => t.Chit_Taken_ID === taking.Chit_Taken_ID ? { ...t, ...tp } : t)
+  await sUpdate('Chit_Taken_Member', taking.Chit_Taken_ID, tp)
+
+  const member = (db.Chit_Member ?? []).find(m => m.Member_ID === taking.Member_ID)
+  if (member) {
+    const mp: Partial<ChitMember> = {
+      Amount_Given: Math.max(0, num(member.Amount_Given) + delta),
+      Remaining_Amount: Math.max(0, num(member.Remaining_Amount) - delta),
+    }
+    db.Chit_Member = (db.Chit_Member ?? []).map(m => m.Member_ID === taking.Member_ID ? { ...m, ...mp } : m)
+    await sUpdate('Chit_Member', taking.Member_ID, mp)
+  }
 }
 
 // ── Invested chit writes (chits you join at another company) ─────────────────

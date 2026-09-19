@@ -3,11 +3,11 @@ import { Zap, Check, Percent } from 'lucide-react'
 import {
   repo, appendInterestRows, appendDepositInterest, appendOtherFinanceInterest,
   markCustomerPostedUpto, markDepositPostedUpto, markOtherFinancePostedUpto,
-  appendPostingLog, getSettings, resetWriteError, getWriteError, source,
+  appendPostingLog, getSettings, resetWriteError, getWriteError, source, isRepayInterest,
 } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { previewPosting, computeInterest, distributeRounding, resumeFrom } from '../lib/interestEngine'
-import { PageHeader, Card, StatCard, Badge, Th, Td, EmptyState } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, Th, Td, EmptyState, Modal } from '../components/ui'
 import { inr, num } from '../lib/format'
 import type { Loan, InterestRow } from '../data/types'
 
@@ -304,7 +304,49 @@ export default function Interest() {
 
 // The interest-posting register — every month that's been posted, newest first.
 // This is the record that removes any doubt about whether a month was run.
+type BreakdownCat = 'customer' | 'deposit' | 'other'
+interface BreakdownState { cat: BreakdownCat; finance: string; month: string }
+
+// The individual interest rows that make up one posted cell (finance + month +
+// category). Monthly-posting rows only — partial-closure "-repay-" rows excluded,
+// so this matches the line count shown in the register.
+function postedBreakdown(cat: BreakdownCat, finance: string, month: string): { name: string; code: string; days: number; amt: number }[] {
+  const f = financeFilter(finance)
+  // The register stores the month as YYYY-MM, but posted interest rows store it as
+  // MM-YYYY (see interestEngine) — convert so the filter actually matches.
+  const [a, b] = month.split('-')
+  const rowMonth = a?.length === 4 ? `${b}-${a}` : month
+  const monthly = (i: any) => i.Month === rowMonth && !isRepayInterest(i.ID)
+  if (cat === 'customer') {
+    return repo.interest(f).filter(monthly)
+      .map(i => ({ name: i.Customer_Name ?? '', code: String(i.Customer_STL_NO || i.Loan_No || '—'), days: num(i.No_Days), amt: num(i.Interest_Amount) }))
+      .sort((a, b) => b.amt - a.amt)
+  }
+  if (cat === 'deposit') {
+    return repo.depositInterest(f).filter(monthly)
+      .map((i: any) => ({ name: i.Depositer_Name ?? '', code: String(i.Deposit_No || '—'), days: num(i.No_Days), amt: num(i.Interest_Amount) }))
+      .sort((a, b) => b.amt - a.amt)
+  }
+  return repo.otherFinanceInterest(f).filter(monthly)
+    .map((i: any) => ({ name: i.Loan_bought_Finance_Name ?? '', code: String(i.Loan_No || '—'), days: num(i.No_Days), amt: num(i.Interest_Amount) }))
+    .sort((a, b) => b.amt - a.amt)
+}
+
 function PostingRegister({ rows }: { rows: ReturnType<typeof repo.postingLog> }) {
+  const [open, setOpen] = useState<BreakdownState | null>(null)
+  // A right-aligned amount + line-count cell that opens the breakdown when there
+  // is something posted; plain text (not a button) when the count is zero.
+  function Cell({ amount, lines, tone, cat, r }: { amount: number; lines: number; tone: string; cat: BreakdownCat; r: (typeof rows)[number] }) {
+    const body = <>{inr(amount)} <span className="text-slate-500">· {lines}</span></>
+    if (lines <= 0) return <Td right className={tone}>{body}</Td>
+    return (
+      <Td right>
+        <button type="button" className={`${tone} underline decoration-dotted underline-offset-2 hover:opacity-80`} onClick={() => setOpen({ cat, finance: r.Finance_Name, month: r.Month })}>
+          {body}
+        </button>
+      </Td>
+    )
+  }
   return (
     <Card className="!p-0 mt-4 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2.5">
@@ -329,9 +371,9 @@ function PostingRegister({ rows }: { rows: ReturnType<typeof repo.postingLog> })
                   <tr key={r.ID} className="hover:bg-slate-800/40">
                     <Td className="font-medium text-hd">{monthLabel(r.Month)}</Td>
                     <Td className="text-slate-400">{r.From_Date} → {r.To_Date}</Td>
-                    <Td right className="text-emerald-300">{inr(num(r.Customer_Amount))} <span className="text-slate-500">· {r.Customer_Lines ?? 0}</span></Td>
-                    <Td right className="text-amber-300">{inr(num(r.Deposit_Amount))} <span className="text-slate-500">· {r.Deposit_Lines ?? 0}</span></Td>
-                    <Td right className="text-rose-300">{inr(num(r.Other_Amount))} <span className="text-slate-500">· {r.Other_Lines ?? 0}</span></Td>
+                    <Cell amount={num(r.Customer_Amount)} lines={num(r.Customer_Lines)} tone="text-emerald-300" cat="customer" r={r} />
+                    <Cell amount={num(r.Deposit_Amount)} lines={num(r.Deposit_Lines)} tone="text-amber-300" cat="deposit" r={r} />
+                    <Cell amount={num(r.Other_Amount)} lines={num(r.Other_Lines)} tone="text-rose-300" cat="other" r={r} />
                     <Td right className="font-semibold text-hd">{inr(total)}</Td>
                     <Td className="text-slate-400">{fmtDateTime(r.Posted_On)}{r.Posted_By ? ` · ${r.Posted_By}` : ''}</Td>
                   </tr>
@@ -341,7 +383,47 @@ function PostingRegister({ rows }: { rows: ReturnType<typeof repo.postingLog> })
           </table>
         </div>
       )}
+      {open && <PostedBreakdownModal state={open} onClose={() => setOpen(null)} />}
     </Card>
+  )
+}
+
+// Lists the posted interest entries behind one clicked register cell.
+function PostedBreakdownModal({ state, onClose }: { state: BreakdownState; onClose: () => void }) {
+  const rows = useMemo(() => postedBreakdown(state.cat, state.finance, state.month), [state])
+  const total = rows.reduce((s, r) => s + r.amt, 0)
+  const label = { customer: 'Customer', deposit: 'Deposit', other: 'Other-finance' }[state.cat]
+  const nameHd = { customer: 'Customer', deposit: 'Depositor', other: 'Lender' }[state.cat]
+  return (
+    <Modal title={`${label} interest · ${monthLabel(state.month)}`} onClose={onClose} footer={<button className="btn-primary" onClick={onClose}>Close</button>}>
+      {rows.length === 0 ? (
+        <p className="text-sm text-slate-400">No posted entries found for this month.</p>
+      ) : (
+        <div className="-mx-1 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-slate-800 bg-slate-900/60">
+              <tr><Th>{nameHd}</Th><Th>Code</Th><Th right>Days</Th><Th right>Interest</Th></tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {rows.map((r, i) => (
+                <tr key={i} className="hover:bg-slate-800/40">
+                  <Td className="text-slate-200">{r.name || '—'}</Td>
+                  <Td className="font-medium text-brand-300">{r.code}</Td>
+                  <Td right className="text-slate-400">{r.days || '—'}</Td>
+                  <Td right className="font-semibold text-hd">{inr(r.amt)}</Td>
+                </tr>
+              ))}
+              <tr className="border-t border-slate-700 bg-slate-900/40">
+                <Td className="font-semibold text-hd">Total</Td>
+                <Td>{''}</Td>
+                <Td right className="text-slate-500">{rows.length}</Td>
+                <Td right className="font-semibold text-hd">{inr(total)}</Td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Modal>
   )
 }
 

@@ -29,8 +29,17 @@ export default function ChitLedger() {
       }
     }
     for (const t of repo.chitTakers(activeFund)) {
-      if (num(t.Amount_Given_to_Member) > 0) {
-        out.push({ date: t.Date_Auction ?? '', nature: 'Payout to taker', who: t.Member_Name ?? t.Member_ID, month: num(t.Month_Count), receipt: 0, payment: num(t.Amount_Given_to_Member) })
+      // Prefer the individual payout installments (dated, typed); fall back to a
+      // single lump for any amount given before the payment history was kept.
+      const pays = repo.chitTakerPayments(t.Chit_Taken_ID)
+      let recorded = 0
+      for (const p of pays) {
+        recorded += num(p.Amount)
+        out.push({ date: p.Date ?? t.Date_Auction ?? '', nature: 'Payout to taker', who: t.Member_Name ?? t.Member_ID, month: num(t.Month_Count), receipt: 0, payment: num(p.Amount), payType: p.Payment_Type })
+      }
+      const earlier = num(t.Amount_Given_to_Member) - recorded
+      if (earlier > 0) {
+        out.push({ date: t.Date_Auction ?? '', nature: 'Payout to taker', who: t.Member_Name ?? t.Member_ID, month: num(t.Month_Count), receipt: 0, payment: earlier })
       }
     }
     out.sort((a, b) => {

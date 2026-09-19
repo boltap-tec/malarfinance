@@ -269,13 +269,14 @@ function printMemberStatement(d: PrintData): void {
   const rup = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
   // Dues received from the member — one row per month, now with the paid-on date.
+  const paid = (s?: string) => /paid/i.test(String(s ?? '')) ? 'ok' : /partial/i.test(String(s ?? '')) ? 'part' : 'due'
   const dueRows = d.dues.map(r => `<tr>
-    <td>#${num(r.Month_Count)} · ${esc(fmtDate(r.Date_Auction))}</td>
+    <td class="muted">#${num(r.Month_Count)} · ${esc(fmtDate(r.Date_Auction))}</td>
     <td class="r">${rup(num(r.Due_Amount))}</td>
-    <td class="r">${rup(num(r.Received_Amount))}</td>
-    <td>${num(r.Received_Amount) ? esc(fmtDate(r.Paid_Date)) : '—'}</td>
-    <td class="r">${num(r.Pending_Amount) ? rup(num(r.Pending_Amount)) : '—'}</td>
-    <td>${esc(r.Status)}</td></tr>`).join('')
+    <td class="r pos">${rup(num(r.Received_Amount))}</td>
+    <td class="muted">${num(r.Received_Amount) ? esc(fmtDate(r.Paid_Date)) : '—'}</td>
+    <td class="r neg">${num(r.Pending_Amount) ? rup(num(r.Pending_Amount)) : '—'}</td>
+    <td><span class="tag ${paid(r.Status)}">${esc(r.Status)}</span></td></tr>`).join('')
   // Payouts given to the member when they took the chit — the full installment
   // history (each dated payment), not just the running total.
   const payoutSection = d.takings.length ? `
@@ -285,12 +286,12 @@ function printMemberStatement(d: PrintData): void {
       const recorded = pays.reduce((s, p) => s + num(p.Amount), 0)
       const earlier = Math.max(0, num(t.Amount_Given_to_Member) - recorded)
       const instRows = [
-        earlier > 0 ? `<tr><td>Earlier payouts</td><td>—</td><td><i>before history was kept</i></td><td class="r">${rup(earlier)}</td></tr>` : '',
+        earlier > 0 ? `<tr><td class="muted">Earlier payouts</td><td class="muted">—</td><td class="muted"><i>before history was kept</i></td><td class="r pos">${rup(earlier)}</td></tr>` : '',
         ...pays.map(p => `<tr>
-          <td>${esc(fmtDate(p.Date))}</td>
-          <td>${esc(p.Payment_Type ?? '—')}</td>
-          <td>${esc(p.Remarks ?? '—')}</td>
-          <td class="r">${rup(num(p.Amount))}</td></tr>`),
+          <td class="muted">${esc(fmtDate(p.Date))}</td>
+          <td><span class="pill">${esc(p.Payment_Type ?? '—')}</span></td>
+          <td class="muted">${esc(p.Remarks ?? '—')}</td>
+          <td class="r pos">${rup(num(p.Amount))}</td></tr>`),
       ].join('')
       return `
         <p class="sub2">Month #${num(t.Month_Count)} · ${esc(fmtDate(t.Date_Auction))} — payout ${rup(num(t.Total_Amount_to_Member))}, given ${rup(num(t.Amount_Given_to_Member))}${num(t.Pending_Amount) ? `, pending ${rup(num(t.Pending_Amount))}` : ''}</p>
@@ -299,35 +300,49 @@ function printMemberStatement(d: PrintData): void {
     }).join('')}` : ''
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Chit statement — ${esc(d.member.Member_Name)}</title>
   <style>
-    *{box-sizing:border-box} body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;margin:32px;font-size:13px}
-    h1{font-size:20px;margin:0} h2{font-size:14px;color:#475569;margin:2px 0 16px} h3{font-size:13px;margin:20px 0 6px;text-transform:uppercase;letter-spacing:.04em;color:#475569}
-    .meta{color:#475569;font-size:12px;margin-bottom:14px} .meta span{margin-right:14px}
-    .cards{display:flex;gap:10px;margin:10px 0 4px} .cards div{flex:1;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px}
-    .cards .k{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#64748b} .cards .v{font-size:16px;font-weight:700}
-    table{width:100%;border-collapse:collapse;margin-top:4px} th,td{border-bottom:1px solid #e2e8f0;padding:6px 8px;text-align:left}
-    th{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#64748b} .r{text-align:right;font-variant-numeric:tabular-nums}
-    .sub2{font-size:12px;color:#334155;margin:16px 0 4px;font-weight:600}
-    .foot{margin-top:24px;color:#94a3b8;font-size:11px} @media print{body{margin:12mm}}
-  </style></head><body>
-    <h1>Chit Statement</h1>
-    <h2>${esc(d.member.Finance_Name)}${d.chitName ? ` · Chit ${esc(d.chitName)}` : ''}</h2>
-    <div class="meta">
-      <span><b>${esc(d.member.Member_Name)}</b></span>
-      <span>${esc(d.member.Member_ID)}</span>
-      <span>Share ${num(d.member.Member_Percentage)}</span>
-      <span>${esc(d.member.Member_Phone_No ?? '')}</span>
-      <span>Chit ${d.member.Chit_Taken === 'Taken' ? 'taken' : 'not taken'}</span>
+    *{box-sizing:border-box} html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;margin:0;font-size:13px;background:#fff}
+    .wrap{margin:28px 32px}
+    .hero{background:linear-gradient(120deg,#7c3aed,#db2777);color:#fff;border-radius:14px;padding:18px 22px;margin:0 0 16px}
+    .hero h1{font-size:21px;margin:0} .hero .fin{font-size:13px;opacity:.9;margin-top:2px}
+    .hero .who{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px}
+    .hero .who .chip{background:rgba(255,255,255,.18);border-radius:999px;padding:2px 10px} .hero .who .chip b{font-size:14px}
+    h3{font-size:12px;margin:20px 0 6px;text-transform:uppercase;letter-spacing:.05em;color:#7c3aed;font-weight:800}
+    .cards{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 4px} .cards div{flex:1;min-width:120px;border:1px solid;border-radius:10px;padding:9px 12px}
+    .cards .k{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#64748b} .cards .v{font-size:16px;font-weight:800}
+    table{width:100%;border-collapse:collapse;margin-top:4px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden}
+    thead tr{background:#7c3aed} th{color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.04em;padding:8px;text-align:left}
+    td{border-top:1px solid #eef2f7;padding:7px 8px;text-align:left} tbody tr:nth-child(even){background:#faf5ff}
+    .r{text-align:right;font-variant-numeric:tabular-nums} .muted{color:#64748b}
+    .pos{color:#15803d;font-weight:600} .neg{color:#dc2626;font-weight:600}
+    .pill{display:inline-block;background:#f3e8ff;color:#7c3aed;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:600}
+    .tag{display:inline-block;border-radius:999px;padding:1px 9px;font-size:11px;font-weight:700}
+    .tag.ok{background:#dcfce7;color:#15803d} .tag.part{background:#fef3c7;color:#b45309} .tag.due{background:#fee2e2;color:#dc2626}
+    .sub2{font-size:12px;color:#334155;margin:16px 0 4px;font-weight:700}
+    .foot{margin-top:22px;color:#94a3b8;font-size:11px} @media print{.wrap{margin:12mm}}
+  </style></head><body><div class="wrap">
+    <div class="hero">
+      <h1>Chit Statement</h1>
+      <div class="fin">${esc(d.member.Finance_Name)}${d.chitName ? ` · Chit ${esc(d.chitName)}` : ''}</div>
+      <div class="who">
+        <span class="chip"><b>${esc(d.member.Member_Name)}</b></span>
+        <span class="chip">${esc(d.member.Member_ID)}</span>
+        <span class="chip">Share ${num(d.member.Member_Percentage)}</span>
+        ${d.member.Member_Phone_No ? `<span class="chip">${esc(d.member.Member_Phone_No)}</span>` : ''}
+        <span class="chip">Chit ${d.member.Chit_Taken === 'Taken' ? 'taken' : 'not taken'}</span>
+      </div>
     </div>
     <div class="cards">
-      <div><div class="k">Total due</div><div class="v">${rup(d.due)}</div></div>
-      <div><div class="k">Paid</div><div class="v">${rup(d.recv)}</div></div>
-      <div><div class="k">Pending</div><div class="v">${rup(d.pend)}</div></div>
+      <div style="background:#eff6ff;border-color:#bfdbfe"><div class="k">Total due</div><div class="v" style="color:#1d4ed8">${rup(d.due)}</div></div>
+      <div style="background:#f0fdf4;border-color:#bbf7d0"><div class="k">Paid</div><div class="v" style="color:#15803d">${rup(d.recv)}</div></div>
+      <div style="background:#fef2f2;border-color:#fecaca"><div class="k">Pending</div><div class="v" style="color:#dc2626">${rup(d.pend)}</div></div>
     </div>
     <h3>Monthly dues — received from member</h3>
     <table><thead><tr><th>Month</th><th class="r">Due</th><th class="r">Paid</th><th>Paid on</th><th class="r">Pending</th><th>Status</th></tr></thead>
     <tbody>${dueRows || '<tr><td colspan="6">No dues yet.</td></tr>'}</tbody></table>
     ${payoutSection}
     <div class="foot">Generated ${today} · Arul Finance</div>
+  </div>
     <script>window.onload=function(){window.print()}</script>
   </body></html>`
   const w = window.open('', '_blank')

@@ -200,9 +200,9 @@ export default function DepositDetail() {
           party={{ kind: 'Deposit statement', name: first.Depositer_Name, code: id, finance: first.Finance_Name, phone: first.Depositer_Phone_No, address: first.Depositer_Address }}
           rows={ledger}
           cards={[
-            { label: 'Total deposited', value: inr(deposited) },
-            { label: 'Outstanding payable', value: inr(outstanding) },
-            { label: 'Interest payable', value: inr(interestPending) },
+            { label: 'Total deposited', value: inr(deposited), tone: 'blue' },
+            { label: 'Outstanding payable', value: inr(outstanding), tone: 'red' },
+            { label: 'Interest payable', value: inr(interestPending), tone: 'amber' },
           ]}
         />
       )}

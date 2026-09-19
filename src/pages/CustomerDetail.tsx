@@ -206,10 +206,10 @@ export default function CustomerDetail() {
           party={{ kind: 'Loan statement', name: customer.Customer_Name, code: customer.Customer_STL_NO, finance: customer.Finance_Name, phone: customer.Customer_Phone_No }}
           rows={ledger}
           cards={[
-            { label: 'Total loan given', value: inr(totals.given) },
-            { label: 'Outstanding', value: inr(totals.outstanding) },
-            { label: 'Interest paid', value: inr(num(customer.Total_Interest_Paid)) },
-            { label: 'Interest due', value: inr(totals.interestDue) },
+            { label: 'Total loan given', value: inr(totals.given), tone: 'blue' },
+            { label: 'Outstanding', value: inr(totals.outstanding), tone: 'amber' },
+            { label: 'Interest paid', value: inr(num(customer.Total_Interest_Paid)), tone: 'green' },
+            { label: 'Interest due', value: inr(totals.interestDue), tone: 'red' },
           ]}
         />
       )}

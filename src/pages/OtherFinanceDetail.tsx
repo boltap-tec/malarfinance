@@ -192,9 +192,9 @@ export default function OtherFinanceDetail() {
           party={{ kind: 'Other-finance statement', name: first.Loan_bought_Finance_Name, code: id, finance: first.Finance_Name, phone: first.Loan_bought_Finance_Phone_No, address: first.Loan_bought_Finance_Address }}
           rows={ledger}
           cards={[
-            { label: 'Total borrowed', value: inr(borrowed) },
-            { label: 'Outstanding payable', value: inr(outstanding) },
-            { label: 'Interest payable', value: inr(interestPending) },
+            { label: 'Total borrowed', value: inr(borrowed), tone: 'blue' },
+            { label: 'Outstanding payable', value: inr(outstanding), tone: 'red' },
+            { label: 'Interest payable', value: inr(interestPending), tone: 'amber' },
           ]}
         />
       )}

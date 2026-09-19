@@ -319,7 +319,20 @@ function printMemberStatement(d: PrintData): void {
     .tag{display:inline-block;border-radius:999px;padding:1px 9px;font-size:11px;font-weight:700}
     .tag.ok{background:#dcfce7;color:#15803d} .tag.part{background:#fef3c7;color:#b45309} .tag.due{background:#fee2e2;color:#dc2626}
     .sub2{font-size:12px;color:#334155;margin:16px 0 4px;font-weight:700}
-    .foot{margin-top:22px;color:#94a3b8;font-size:11px} @media print{.wrap{margin:12mm}}
+    .foot{margin-top:22px;color:#94a3b8;font-size:11px}
+    /* Printer-friendly: colourful on screen, clean black & white on paper. */
+    @media print{
+      .wrap{margin:12mm}
+      .hero{background:#fff !important;color:#000 !important;border:1.5px solid #000;border-radius:8px}
+      .hero .fin{opacity:1;color:#000 !important} .hero .who .chip{background:#fff !important;color:#000 !important;border:1px solid #000}
+      .cards div{background:#fff !important;border-color:#000 !important} .cards .k{color:#000} .cards .v{color:#000 !important}
+      h3{color:#000}
+      table{border-color:#000} thead tr{background:#fff !important} th{color:#000 !important;border-bottom:1.5px solid #000}
+      td{border-top:1px solid #999} tbody tr:nth-child(even){background:#fff !important}
+      .muted,.pos,.neg{color:#000 !important} .pill{background:#fff !important;color:#000 !important;border:1px solid #000}
+      .tag{border:1px solid #000} .tag.ok,.tag.part,.tag.due{background:#fff !important;color:#000 !important}
+      .sub2{color:#000} .foot{color:#000}
+    }
   </style></head><body><div class="wrap">
     <div class="hero">
       <h1>Chit Statement</h1>

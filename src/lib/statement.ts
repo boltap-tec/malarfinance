@@ -110,7 +110,20 @@ export function printLedgerStatement(
     tr.open td{color:#475569;font-style:italic;background:#fafafa}
     tr.tot td{font-weight:800;background:#eef2ff;border-top:2px solid #c7d2fe}
     .close{margin-top:12px;display:inline-block;background:#4f46e5;color:#fff;border-radius:10px;padding:8px 14px;font-weight:700}
-    .foot{margin-top:22px;color:#94a3b8;font-size:11px} @media print{.wrap{margin:12mm}}
+    .foot{margin-top:22px;color:#94a3b8;font-size:11px}
+    /* Printer-friendly: colourful on screen, clean black & white on paper. */
+    @media print{
+      .wrap{margin:12mm}
+      .hero{background:#fff !important;color:#000 !important;border:1.5px solid #000;border-radius:8px}
+      .hero .fin{opacity:1;color:#000 !important} .hero .who .chip{background:#fff !important;color:#000 !important;border:1px solid #000}
+      .cards div{background:#fff !important;border-color:#000 !important} .cards .k{color:#000} .cards .v{color:#000 !important}
+      h3{color:#000}
+      table{border-color:#000} thead tr{background:#fff !important} th{color:#000 !important;border-bottom:1.5px solid #000}
+      td{border-top:1px solid #999} tbody tr:nth-child(even){background:#fff !important}
+      .muted,.pos,.neg,.bal{color:#000 !important} .pill{background:#fff !important;color:#000 !important;border:1px solid #000}
+      tr.open td{background:#fff !important;color:#000 !important} tr.tot td{background:#fff !important;border-top:2px solid #000}
+      .close{background:#fff !important;color:#000 !important;border:1.5px solid #000} .foot{color:#000}
+    }
   </style></head><body><div class="wrap">
     <div class="hero">
       <h1>${esc(party.kind)}</h1>

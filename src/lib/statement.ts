@@ -92,38 +92,26 @@ export function printLedgerStatement(
     *{box-sizing:border-box} html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
     body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;margin:0;font-size:13px;background:#fff}
     .wrap{margin:28px 32px}
-    .hero{background:linear-gradient(120deg,#4f46e5,#0ea5e9);color:#fff;border-radius:14px;padding:18px 22px;margin:0 0 16px}
-    .hero h1{font-size:21px;margin:0;letter-spacing:.2px} .hero .fin{font-size:13px;opacity:.9;margin-top:2px}
+    .hero{background:linear-gradient(120deg,#eef2ff,#e0f2fe);color:#0f172a;border:1px solid #dbeafe;border-radius:14px;padding:18px 22px;margin:0 0 16px}
+    .hero h1{font-size:21px;margin:0;letter-spacing:.2px;color:#3730a3} .hero .fin{font-size:13px;color:#475569;margin-top:2px}
     .hero .who{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px}
-    .hero .who b{font-size:14px} .hero .who .chip{background:rgba(255,255,255,.18);border-radius:999px;padding:2px 10px}
+    .hero .who b{font-size:14px;color:#1e293b} .hero .who .chip{background:#fff;border:1px solid #c7d2fe;color:#334155;border-radius:999px;padding:2px 10px}
     .period{font-size:12px;color:#334155;margin:2px 0 10px} .period b{color:#0f172a}
     .cards{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 6px} .cards div{flex:1;min-width:120px;border:1px solid;border-radius:10px;padding:9px 12px}
     .cards .k{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#64748b} .cards .v{font-size:16px;font-weight:800}
-    h3{font-size:12px;margin:20px 0 6px;text-transform:uppercase;letter-spacing:.05em;color:#4f46e5;font-weight:800}
+    h3{font-size:12px;margin:20px 0 6px;text-transform:uppercase;letter-spacing:.05em;color:#4338ca;font-weight:800}
     table{width:100%;border-collapse:collapse;margin-top:4px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden}
-    thead tr{background:#4f46e5} th{color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.04em;padding:8px;text-align:left}
+    thead tr{background:#eef2ff} th{color:#3730a3;font-size:10px;text-transform:uppercase;letter-spacing:.04em;padding:8px;text-align:left;border-bottom:1px solid #dbeafe}
     td{border-top:1px solid #eef2f7;padding:7px 8px;text-align:left;vertical-align:top}
     tbody tr:nth-child(even){background:#f8fafc} .r{text-align:right;font-variant-numeric:tabular-nums}
-    .muted{color:#64748b} .pos{color:#15803d;font-weight:600} .neg{color:#dc2626;font-weight:600} .bal{font-weight:700;color:#0f172a}
+    .muted{color:#64748b} .pos{color:#047857;font-weight:600} .neg{color:#b91c1c;font-weight:600} .bal{font-weight:700;color:#1e293b}
     .pill{display:inline-block;background:#eef2ff;color:#4338ca;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:600}
     .sub{display:block;font-size:11px;color:#94a3b8;margin-top:2px}
-    tr.open td{color:#475569;font-style:italic;background:#fafafa}
-    tr.tot td{font-weight:800;background:#eef2ff;border-top:2px solid #c7d2fe}
-    .close{margin-top:12px;display:inline-block;background:#4f46e5;color:#fff;border-radius:10px;padding:8px 14px;font-weight:700}
+    tr.open td{color:#475569;font-style:italic;background:#f8fafc}
+    tr.tot td{font-weight:800;background:#eef2ff;border-top:2px solid #c7d2fe;color:#1e293b}
+    .close{margin-top:12px;display:inline-block;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:10px;padding:8px 14px;font-weight:700}
     .foot{margin-top:22px;color:#94a3b8;font-size:11px}
-    /* Printer-friendly: colourful on screen, clean black & white on paper. */
-    @media print{
-      .wrap{margin:12mm}
-      .hero{background:#fff !important;color:#000 !important;border:1.5px solid #000;border-radius:8px}
-      .hero .fin{opacity:1;color:#000 !important} .hero .who .chip{background:#fff !important;color:#000 !important;border:1px solid #000}
-      .cards div{background:#fff !important;border-color:#000 !important} .cards .k{color:#000} .cards .v{color:#000 !important}
-      h3{color:#000}
-      table{border-color:#000} thead tr{background:#fff !important} th{color:#000 !important;border-bottom:1.5px solid #000}
-      td{border-top:1px solid #999} tbody tr:nth-child(even){background:#fff !important}
-      .muted,.pos,.neg,.bal{color:#000 !important} .pill{background:#fff !important;color:#000 !important;border:1px solid #000}
-      tr.open td{background:#fff !important;color:#000 !important} tr.tot td{background:#fff !important;border-top:2px solid #000}
-      .close{background:#fff !important;color:#000 !important;border:1.5px solid #000} .foot{color:#000}
-    }
+    @media print{.wrap{margin:12mm}}
   </style></head><body><div class="wrap">
     <div class="hero">
       <h1>${esc(party.kind)}</h1>

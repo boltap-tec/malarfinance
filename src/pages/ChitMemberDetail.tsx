@@ -303,36 +303,24 @@ function printMemberStatement(d: PrintData): void {
     *{box-sizing:border-box} html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
     body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;margin:0;font-size:13px;background:#fff}
     .wrap{margin:28px 32px}
-    .hero{background:linear-gradient(120deg,#7c3aed,#db2777);color:#fff;border-radius:14px;padding:18px 22px;margin:0 0 16px}
-    .hero h1{font-size:21px;margin:0} .hero .fin{font-size:13px;opacity:.9;margin-top:2px}
+    .hero{background:linear-gradient(120deg,#f5f3ff,#fdf2f8);color:#0f172a;border:1px solid #f3e8ff;border-radius:14px;padding:18px 22px;margin:0 0 16px}
+    .hero h1{font-size:21px;margin:0;color:#7e22ce} .hero .fin{font-size:13px;color:#475569;margin-top:2px}
     .hero .who{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px}
-    .hero .who .chip{background:rgba(255,255,255,.18);border-radius:999px;padding:2px 10px} .hero .who .chip b{font-size:14px}
-    h3{font-size:12px;margin:20px 0 6px;text-transform:uppercase;letter-spacing:.05em;color:#7c3aed;font-weight:800}
+    .hero .who .chip{background:#fff;border:1px solid #e9d5ff;color:#334155;border-radius:999px;padding:2px 10px} .hero .who .chip b{font-size:14px;color:#1e293b}
+    h3{font-size:12px;margin:20px 0 6px;text-transform:uppercase;letter-spacing:.05em;color:#7e22ce;font-weight:800}
     .cards{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 4px} .cards div{flex:1;min-width:120px;border:1px solid;border-radius:10px;padding:9px 12px}
     .cards .k{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#64748b} .cards .v{font-size:16px;font-weight:800}
     table{width:100%;border-collapse:collapse;margin-top:4px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden}
-    thead tr{background:#7c3aed} th{color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.04em;padding:8px;text-align:left}
+    thead tr{background:#f5f3ff} th{color:#7e22ce;font-size:10px;text-transform:uppercase;letter-spacing:.04em;padding:8px;text-align:left;border-bottom:1px solid #ede9fe}
     td{border-top:1px solid #eef2f7;padding:7px 8px;text-align:left} tbody tr:nth-child(even){background:#faf5ff}
     .r{text-align:right;font-variant-numeric:tabular-nums} .muted{color:#64748b}
-    .pos{color:#15803d;font-weight:600} .neg{color:#dc2626;font-weight:600}
-    .pill{display:inline-block;background:#f3e8ff;color:#7c3aed;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:600}
+    .pos{color:#047857;font-weight:600} .neg{color:#b91c1c;font-weight:600}
+    .pill{display:inline-block;background:#f3e8ff;color:#7e22ce;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:600}
     .tag{display:inline-block;border-radius:999px;padding:1px 9px;font-size:11px;font-weight:700}
-    .tag.ok{background:#dcfce7;color:#15803d} .tag.part{background:#fef3c7;color:#b45309} .tag.due{background:#fee2e2;color:#dc2626}
+    .tag.ok{background:#dcfce7;color:#047857} .tag.part{background:#fef3c7;color:#b45309} .tag.due{background:#fee2e2;color:#b91c1c}
     .sub2{font-size:12px;color:#334155;margin:16px 0 4px;font-weight:700}
     .foot{margin-top:22px;color:#94a3b8;font-size:11px}
-    /* Printer-friendly: colourful on screen, clean black & white on paper. */
-    @media print{
-      .wrap{margin:12mm}
-      .hero{background:#fff !important;color:#000 !important;border:1.5px solid #000;border-radius:8px}
-      .hero .fin{opacity:1;color:#000 !important} .hero .who .chip{background:#fff !important;color:#000 !important;border:1px solid #000}
-      .cards div{background:#fff !important;border-color:#000 !important} .cards .k{color:#000} .cards .v{color:#000 !important}
-      h3{color:#000}
-      table{border-color:#000} thead tr{background:#fff !important} th{color:#000 !important;border-bottom:1.5px solid #000}
-      td{border-top:1px solid #999} tbody tr:nth-child(even){background:#fff !important}
-      .muted,.pos,.neg{color:#000 !important} .pill{background:#fff !important;color:#000 !important;border:1px solid #000}
-      .tag{border:1px solid #000} .tag.ok,.tag.part,.tag.due{background:#fff !important;color:#000 !important}
-      .sub2{color:#000} .foot{color:#000}
-    }
+    @media print{.wrap{margin:12mm}}
   </style></head><body><div class="wrap">
     <div class="hero">
       <h1>Chit Statement</h1>

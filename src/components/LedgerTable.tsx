@@ -5,29 +5,67 @@ import { Card, Th, Td, Badge, EmptyState, Modal, Field, ConfirmModal } from './u
 import { inr, fmtDate, num } from '../lib/format'
 import type { LedgerRow } from '../data/types'
 
+// A quick-view filter over a scoped ledger: each chip narrows the table to one
+// kind of movement (e.g. loan given / repayment). `natures` lists the
+// Nature_Transaction values it matches; an empty list means "show all".
+export type LedgerFilter = { key: string; label: string; natures: string[] }
+
 // A ledger table scoped to one entity (customer / depositor / other-finance).
 // When `canManage` is true (MD), each row can be edited or deleted — the change
 // recomputes the finance balance and is recorded in the Activity Log.
+// When `filters` is given, quick-view chips appear above the table to narrow it
+// to one kind of movement (loan given, repayment, interest, …).
 export default function LedgerTable({
-  rows, canManage = false, emptyHint, onChanged,
+  rows, canManage = false, filters, emptyHint, onChanged,
 }: {
   rows: LedgerRow[]
   canManage?: boolean
+  filters?: LedgerFilter[]
   emptyHint?: string
   onChanged?: () => void
 }) {
   const [edit, setEdit] = useState<LedgerRow | null>(null)
   const [del, setDel] = useState<LedgerRow | null>(null)
+  const [view, setView] = useState('all')
 
   if (rows.length === 0) return <EmptyState title="No ledger entries yet" hint={emptyHint} />
 
-  const sorted = rows.slice().sort((a, b) => {
+  const natures = filters?.find(f => f.key === view)?.natures ?? []
+  const filtered = natures.length
+    ? rows.filter(t => natures.includes(String(t.Nature_Transaction ?? '')))
+    : rows
+
+  const sorted = filtered.slice().sort((a, b) => {
     const d = new Date(b.Date_Transaction ?? 0).getTime() - new Date(a.Date_Transaction ?? 0).getTime()
     return d !== 0 ? d : Number(String(b.Ref_ID).replace(/\D/g, '')) - Number(String(a.Ref_ID).replace(/\D/g, ''))
   })
 
   return (
     <>
+      {filters && filters.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {filters.map(f => {
+            const count = f.natures.length
+              ? rows.filter(t => f.natures.includes(String(t.Nature_Transaction ?? ''))).length
+              : rows.length
+            return (
+              <button
+                key={f.key}
+                onClick={() => setView(f.key)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                  view === f.key ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                {f.label}<span className="ml-1.5 opacity-60">{count}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {sorted.length === 0 ? (
+        <EmptyState title="No entries for this view" hint="Pick another filter above." />
+      ) : (
       <Card className="!p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -62,6 +100,7 @@ export default function LedgerTable({
           </table>
         </div>
       </Card>
+      )}
 
       {del && (
         <ConfirmModal

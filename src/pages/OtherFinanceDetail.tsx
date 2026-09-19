@@ -12,6 +12,14 @@ import { inr, phone, fmtDate, num, monthName, monthKey } from '../lib/format'
 
 type TabKey = 'borrowings' | 'interest' | 'ledger'
 
+// Quick-view filters for an other-finance (lender) ledger.
+const OTHER_FINANCE_LEDGER_FILTERS = [
+  { key: 'all', label: 'All', natures: [] },
+  { key: 'borrowed', label: 'Borrowed', natures: ['Other_Receipt'] },
+  { key: 'repay', label: 'Repay', natures: ['Other_Finance_Loan_Refund'] },
+  { key: 'interest', label: 'Interest', natures: ['Other_Finance_Interest'] },
+]
+
 export default function OtherFinanceDetail() {
   const { code = '' } = useParams()
   const id = decodeURIComponent(code)
@@ -168,21 +176,13 @@ export default function OtherFinanceDetail() {
       )}
 
       {tab === 'ledger' && (
-        <>
-          {editable && (
-            <div className="mb-3 flex flex-wrap gap-2">
-              <button className="btn-primary !py-1.5" onClick={() => { setFinance(first.Finance_Name); navigate(`/other-finance?new=1&code=${encodeURIComponent(id)}`) }}><Plus size={15} /> Add loan</button>
-              {outstanding > 0 && <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setModal('repay')}><HandCoins size={15} /> Repay</button>}
-              {repo.otherFinanceInterestPending(id) > 0 && <button className="btn-ghost !py-1.5 text-amber-300 ring-1 ring-inset ring-amber-500/30" onClick={() => { setTab('interest'); setModal('interest') }}><Percent size={15} /> Pay interest</button>}
-            </div>
-          )}
-          <LedgerTable
-            rows={ledger}
-            canManage={isMd}
-            emptyHint="Borrowing, refund and interest movements appear here."
-            onChanged={() => setTick(t => t + 1)}
-          />
-        </>
+        <LedgerTable
+          rows={ledger}
+          canManage={isMd}
+          filters={OTHER_FINANCE_LEDGER_FILTERS}
+          emptyHint="Borrowing, refund and interest movements appear here."
+          onChanged={() => setTick(t => t + 1)}
+        />
       )}
 
       {modal && (

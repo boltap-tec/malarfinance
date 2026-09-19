@@ -181,12 +181,25 @@ export default function CustomerDetail() {
       )}
 
       {tab === 'ledger' && (
-        <LedgerTable
-          rows={ledger}
-          canManage={isMd}
-          emptyHint="Loan, repayment and interest movements appear here."
-          onChanged={() => setTick(t => t + 1)}
-        />
+        <>
+          {editable && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              <button className="btn-primary !py-1.5" onClick={giveLoan}><Plus size={15} /> Give loan</button>
+              {totals.outstanding > 0 && (
+                <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setRepayModal(true)}><HandCoins size={15} /> Repay loan</button>
+              )}
+              {totals.interestDue > 0 && (
+                <button className="btn-ghost !py-1.5 text-amber-300 ring-1 ring-inset ring-amber-500/30" onClick={() => { setTab('interest'); setPayInterest(true) }}><Percent size={15} /> Pay interest</button>
+              )}
+            </div>
+          )}
+          <LedgerTable
+            rows={ledger}
+            canManage={isMd}
+            emptyHint="Loan, repayment and interest movements appear here."
+            onChanged={() => setTick(t => t + 1)}
+          />
+        </>
       )}
 
       {repayModal && (

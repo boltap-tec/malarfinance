@@ -176,12 +176,21 @@ export default function DepositDetail() {
       )}
 
       {tab === 'ledger' && (
-        <LedgerTable
-          rows={ledger}
-          canManage={isMd}
-          emptyHint="Deposit, refund and interest movements appear here."
-          onChanged={() => setTick(t => t + 1)}
-        />
+        <>
+          {editable && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              <button className="btn-primary !py-1.5" onClick={() => { setFinance(first.Finance_Name); navigate(`/deposits?new=1&code=${encodeURIComponent(id)}`) }}><Plus size={15} /> Add deposit</button>
+              {outstanding > 0 && <button className="btn-ghost !py-1.5 text-emerald-300 ring-1 ring-inset ring-emerald-500/30" onClick={() => setModal('repay')}><HandCoins size={15} /> Repay</button>}
+              {repo.depositInterestPending(id) > 0 && <button className="btn-ghost !py-1.5 text-amber-300 ring-1 ring-inset ring-amber-500/30" onClick={() => { setTab('interest'); setModal('interest') }}><Percent size={15} /> Pay interest</button>}
+            </div>
+          )}
+          <LedgerTable
+            rows={ledger}
+            canManage={isMd}
+            emptyHint="Deposit, refund and interest movements appear here."
+            onChanged={() => setTick(t => t + 1)}
+          />
+        </>
       )}
 
       {modal && (

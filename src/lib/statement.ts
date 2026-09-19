@@ -44,13 +44,20 @@ const dayKey = (d?: string | null): string => {
 // "Customer Loan Prin Repayment").
 const natureLabel = (n?: string) => String(n ?? '—').replace(/_/g, ' ')
 
-export function printLedgerStatement(
+// A safe, descriptive file name for the saved/shared statement.
+export function statementFilename(party: StatementParty, fromDate: string, toDate: string): string {
+  const slug = (s: string) => s.replace(/[^\w]+/g, '-').replace(/^-|-$/g, '')
+  return `${slug(party.kind)}-${slug(party.code || party.name)}-${fromDate}_to_${toDate}.pdf`
+}
+
+// Build the self-contained statement HTML (used for both print and PDF share).
+export function buildLedgerStatementHtml(
   party: StatementParty,
   rows: LedgerRow[],
   fromDate: string,
   toDate: string,
   cards: StatementCard[] = [],
-): void {
+): string {
   const lo = fromDate, hi = toDate
   const withDay = rows.map(r => ({ r, d: dayKey(r.Date_Transaction) }))
 
@@ -139,6 +146,18 @@ export function printLedgerStatement(
     <script>window.onload=function(){window.print()}</script>
   </body></html>`
 
+  return html
+}
+
+// Open the statement in a new window ready to print / save as PDF.
+export function printLedgerStatement(
+  party: StatementParty,
+  rows: LedgerRow[],
+  fromDate: string,
+  toDate: string,
+  cards: StatementCard[] = [],
+): void {
+  const html = buildLedgerStatementHtml(party, rows, fromDate, toDate, cards)
   const w = window.open('', '_blank')
   if (!w) { alert('Allow pop-ups to open the statement.'); return }
   w.document.open(); w.document.write(html); w.document.close()

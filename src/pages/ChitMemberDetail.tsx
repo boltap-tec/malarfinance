@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Phone, MapPin, Users2, HandCoins, Coins, Printer, Plus, Pencil } from 'lucide-react'
+import { ArrowLeft, Phone, MapPin, Users2, HandCoins, Coins, Printer, Plus, Pencil, Share2, Loader2 } from 'lucide-react'
 import { repo, collectChitDue, payChitTaker, editChitTakerPayment, deleteChitTakerPayment, getSettings } from '../data/repository'
 import type { ChitLedgerRow, ChitTakenMember, ChitTakenPayment } from '../data/types'
 import { useApp, canEdit } from '../store/app'
@@ -8,6 +8,7 @@ import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Moda
 import { AmountModal } from './ChitDetail'
 import ReminderButton from '../components/ReminderButton'
 import { buildChitMemberMessage } from '../lib/reminder'
+import { shareStatementPdf } from '../lib/statementShare'
 import { inr, phone, fmtDate, num } from '../lib/format'
 
 // Full 360° view of one chit member — mirrors the customer/lender detail pages.
@@ -22,6 +23,7 @@ export default function ChitMemberDetail() {
   const [collect, setCollect] = useState<ChitLedgerRow | null>(null)
   const [payTaker, setPayTaker] = useState<ChitTakenMember | null>(null)
   const [editPay, setEditPay] = useState<ChitTakenPayment | null>(null)
+  const [sharing, setSharing] = useState(false)
 
   const { member, chit, dues, takings, payments, totals } = useMemo(() => {
     const member = repo.chitMember(id)
@@ -68,6 +70,17 @@ export default function ChitMemberDetail() {
                 note: getSettings().paymentNote,
               })}
             />
+            <button
+              className="btn-primary !py-1.5"
+              disabled={sharing}
+              onClick={async () => {
+                const d = { member, chitName: chit?.Chit_Name, dues, takings, payments, ...totals }
+                setSharing(true)
+                try { await shareStatementPdf(buildMemberStatementHtml(d), memberStatementFilename(d), `Chit statement — ${member.Member_Name}`) }
+                catch { alert('Could not build the PDF. Use “Statement” to print instead.') }
+                finally { setSharing(false) }
+              }}
+            >{sharing ? <Loader2 size={15} className="animate-spin" /> : <Share2 size={15} />} Share PDF</button>
             <button className="btn-ghost !py-1.5" onClick={() => printMemberStatement({ member, chitName: chit?.Chit_Name, dues, takings, payments, ...totals })}><Printer size={15} /> Statement</button>
           </div>
         }
@@ -264,7 +277,7 @@ interface PrintData {
   payments: Record<string, ChitTakenPayment[]>
   due: number; recv: number; pend: number; payout: number; payoutGiven: number; payoutPending: number
 }
-function printMemberStatement(d: PrintData): void {
+function buildMemberStatementHtml(d: PrintData): string {
   const esc = (s: unknown) => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string))
   const rup = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -346,7 +359,15 @@ function printMemberStatement(d: PrintData): void {
   </div>
     <script>window.onload=function(){window.print()}</script>
   </body></html>`
+  return html
+}
+
+// Open the member statement in a new window ready to print / save as PDF.
+function printMemberStatement(d: PrintData): void {
   const w = window.open('', '_blank')
   if (!w) { alert('Allow pop-ups to print the statement.'); return }
-  w.document.open(); w.document.write(html); w.document.close()
+  w.document.open(); w.document.write(buildMemberStatementHtml(d)); w.document.close()
 }
+
+const memberStatementFilename = (d: PrintData) =>
+  `Chit-statement-${String(d.member.Member_ID || d.member.Member_Name).replace(/[^\w]+/g, '-')}.pdf`

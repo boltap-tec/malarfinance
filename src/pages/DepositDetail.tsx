@@ -7,11 +7,11 @@ import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Tabs
 import LiabilityRepayModal from '../components/LiabilityRepayModal'
 import InterestPayModal from '../components/InterestPayModal'
 import LedgerTable from '../components/LedgerTable'
-import StatementModal from '../components/StatementModal'
+import StatementPanel from '../components/StatementPanel'
 import ReminderButton from '../components/ReminderButton'
 import { inr, phone, fmtDate, num, monthName, monthKey } from '../lib/format'
 
-type TabKey = 'deposits' | 'interest' | 'ledger'
+type TabKey = 'deposits' | 'interest' | 'ledger' | 'statement'
 
 // Quick-view filters for a depositor's ledger.
 const DEPOSIT_LEDGER_FILTERS = [
@@ -42,7 +42,6 @@ export default function DepositDetail() {
   const [pay, setPay] = useState<any | null>(null)
   const [editProfile, setEditProfile] = useState(false)
   const [editRow, setEditRow] = useState<any | null>(null)
-  const [statement, setStatement] = useState(false)
 
   const { rows, ledger, interest, interestPending, outstanding, deposited, first } = useMemo(() => {
     const rows = repo.depositsByCode(id)
@@ -83,7 +82,6 @@ export default function DepositDetail() {
               phone={first.Depositer_Phone_No}
               items={interest.map((i: any) => ({ month: i.Month, amount: num(i.Interest_Amount), pending: num(i.Interest_Pending) }))}
             />
-            <button className="btn-ghost !py-1.5" onClick={() => setStatement(true)}><FileDown size={15} /> Statement</button>
             {editable && (
               <button className="btn-ghost !py-1.5" onClick={() => setEditProfile(true)}><Pencil size={15} /> Edit</button>
             )}
@@ -125,6 +123,7 @@ export default function DepositDetail() {
           { key: 'deposits', label: <span className="flex items-center gap-1.5"><PiggyBank size={14} /> Deposits</span>, badge: rows.length || '' },
           { key: 'interest', label: <span className="flex items-center gap-1.5"><Percent size={14} /> Interest</span>, badge: interestPending > 0 ? '!' : '' },
           { key: 'ledger', label: <span className="flex items-center gap-1.5"><BookText size={14} /> Ledger</span>, badge: ledger.length || '' },
+          { key: 'statement', label: <span className="flex items-center gap-1.5"><FileDown size={14} /> Statement</span> },
         ]}
       />
 
@@ -196,6 +195,18 @@ export default function DepositDetail() {
         />
       )}
 
+      {tab === 'statement' && (
+        <StatementPanel
+          party={{ kind: 'Deposit statement', name: first.Depositer_Name, code: id, finance: first.Finance_Name, phone: first.Depositer_Phone_No, address: first.Depositer_Address }}
+          rows={ledger}
+          cards={[
+            { label: 'Total deposited', value: inr(deposited) },
+            { label: 'Outstanding payable', value: inr(outstanding) },
+            { label: 'Interest payable', value: inr(interestPending) },
+          ]}
+        />
+      )}
+
       {modal && (
         <LiabilityRepayModal
           title={modal === 'interest' ? `Pay deposit interest — ${first.Depositer_Name}` : `Deposit — ${first.Depositer_Name}`}
@@ -259,18 +270,6 @@ export default function DepositDetail() {
         />
       )}
 
-      {statement && (
-        <StatementModal
-          party={{ kind: 'Deposit statement', name: first.Depositer_Name, code: id, finance: first.Finance_Name, phone: first.Depositer_Phone_No, address: first.Depositer_Address }}
-          rows={ledger}
-          cards={[
-            { label: 'Total deposited', value: inr(deposited) },
-            { label: 'Outstanding payable', value: inr(outstanding) },
-            { label: 'Interest payable', value: inr(interestPending) },
-          ]}
-          onClose={() => setStatement(false)}
-        />
-      )}
     </div>
   )
 }

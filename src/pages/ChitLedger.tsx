@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BookOpenText, Search } from 'lucide-react'
+import { BookOpenText, Search, SquarePen } from 'lucide-react'
 import { repo } from '../data/repository'
 import { useApp, financeFilter } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, Th, Td, EmptyState } from '../components/ui'
@@ -93,7 +93,7 @@ export default function ChitLedger() {
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead className="border-b border-slate-800 bg-slate-900/60">
-                        <tr><Th>Date</Th><Th>Nature</Th><Th>Member</Th><Th right>Month</Th><Th right>Receipt</Th><Th right>Payment</Th><Th right>Balance</Th></tr>
+                        <tr><Th>Date</Th><Th>Nature</Th><Th>Member</Th><Th right>Month</Th><Th right>Receipt</Th><Th right>Payment</Th><Th right>Balance</Th><Th>Manage</Th></tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800">
                         {shown.map((r, i) => (
@@ -109,6 +109,11 @@ export default function ChitLedger() {
                             <Td right className="text-emerald-400">{r.receipt ? inr(r.receipt) : '—'}</Td>
                             <Td right className="text-rose-300">{r.payment ? inr(r.payment) : '—'}</Td>
                             <Td right className="text-hd">{inr(r.balance)}</Td>
+                            <Td>
+                              {r.memberId
+                                ? <Link to={`/chit/member/${encodeURIComponent(r.memberId)}`} title="Edit / delete on the member page" className="btn-ghost !px-2 !py-1 text-xs text-brand-300"><SquarePen size={13} /></Link>
+                                : <span className="text-xs text-slate-600">—</span>}
+                            </Td>
                           </tr>
                         ))}
                       </tbody>

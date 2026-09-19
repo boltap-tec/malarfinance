@@ -7,11 +7,11 @@ import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Tabs
 import CustomerRepayModal from '../components/CustomerRepayModal'
 import CustomerInterestPayModal from '../components/CustomerInterestPayModal'
 import LedgerTable from '../components/LedgerTable'
-import StatementModal from '../components/StatementModal'
+import StatementPanel from '../components/StatementPanel'
 import ReminderButton from '../components/ReminderButton'
 import { inr, phone, fmtDate, num, monthName, monthKey } from '../lib/format'
 
-type TabKey = 'loans' | 'interest' | 'ledger'
+type TabKey = 'loans' | 'interest' | 'ledger' | 'statement'
 
 // Quick-view filters for a customer's ledger — jump straight to the loan
 // disbursals or the repayments without scanning interest rows.
@@ -40,7 +40,6 @@ export default function CustomerDetail() {
   const [repayModal, setRepayModal] = useState(false)
   const [payInterest, setPayInterest] = useState(false)
   const [editProfile, setEditProfile] = useState(false)
-  const [statement, setStatement] = useState(false)
 
   const { customer, loans, interest, ledger, totals } = useMemo(() => {
     const customer = repo.customer(id)
@@ -81,9 +80,6 @@ export default function CustomerDetail() {
               phone={customer.Customer_Phone_No}
               items={interest.map(i => ({ month: i.Month, amount: num(i.Interest_Amount), pending: num(i.Interest_Pending) }))}
             />
-            <button className="btn-ghost !py-1.5" onClick={() => setStatement(true)}>
-              <FileDown size={15} /> Statement
-            </button>
             {editable && <>
               <button className="btn-ghost !py-1.5" onClick={() => setEditProfile(true)}>
                 <Pencil size={15} /> Edit
@@ -132,6 +128,7 @@ export default function CustomerDetail() {
           { key: 'loans', label: <span className="flex items-center gap-1.5"><HandCoins size={14} /> Loans</span>, badge: loans.length || '' },
           { key: 'interest', label: <span className="flex items-center gap-1.5"><Percent size={14} /> Interest</span>, badge: totals.interestDue > 0 ? '!' : '' },
           { key: 'ledger', label: <span className="flex items-center gap-1.5"><BookText size={14} /> Ledger</span>, badge: ledger.length || '' },
+          { key: 'statement', label: <span className="flex items-center gap-1.5"><FileDown size={14} /> Statement</span> },
         ]}
       />
 
@@ -204,6 +201,19 @@ export default function CustomerDetail() {
         />
       )}
 
+      {tab === 'statement' && (
+        <StatementPanel
+          party={{ kind: 'Loan statement', name: customer.Customer_Name, code: customer.Customer_STL_NO, finance: customer.Finance_Name, phone: customer.Customer_Phone_No }}
+          rows={ledger}
+          cards={[
+            { label: 'Total loan given', value: inr(totals.given) },
+            { label: 'Outstanding', value: inr(totals.outstanding) },
+            { label: 'Interest paid', value: inr(num(customer.Total_Interest_Paid)) },
+            { label: 'Interest due', value: inr(totals.interestDue) },
+          ]}
+        />
+      )}
+
       {repayModal && (
         <CustomerRepayModal
           stl={customer.Customer_STL_NO}
@@ -234,19 +244,6 @@ export default function CustomerDetail() {
         />
       )}
 
-      {statement && (
-        <StatementModal
-          party={{ kind: 'Loan statement', name: customer.Customer_Name, code: customer.Customer_STL_NO, finance: customer.Finance_Name, phone: customer.Customer_Phone_No }}
-          rows={ledger}
-          cards={[
-            { label: 'Total loan given', value: inr(totals.given) },
-            { label: 'Outstanding', value: inr(totals.outstanding) },
-            { label: 'Interest paid', value: inr(num(customer.Total_Interest_Paid)) },
-            { label: 'Interest due', value: inr(totals.interestDue) },
-          ]}
-          onClose={() => setStatement(false)}
-        />
-      )}
     </div>
   )
 }

@@ -7,11 +7,11 @@ import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Tabs
 import LiabilityRepayModal from '../components/LiabilityRepayModal'
 import InterestPayModal from '../components/InterestPayModal'
 import LedgerTable from '../components/LedgerTable'
-import StatementModal from '../components/StatementModal'
+import StatementPanel from '../components/StatementPanel'
 import ReminderButton from '../components/ReminderButton'
 import { inr, phone, fmtDate, num, monthName, monthKey } from '../lib/format'
 
-type TabKey = 'borrowings' | 'interest' | 'ledger'
+type TabKey = 'borrowings' | 'interest' | 'ledger' | 'statement'
 
 // Quick-view filters for an other-finance (lender) ledger.
 const OTHER_FINANCE_LEDGER_FILTERS = [
@@ -42,7 +42,6 @@ export default function OtherFinanceDetail() {
   const [pay, setPay] = useState<any | null>(null)
   const [editProfile, setEditProfile] = useState(false)
   const [editRow, setEditRow] = useState<any | null>(null)
-  const [statement, setStatement] = useState(false)
 
   const { rows, ledger, interest, interestPending, outstanding, borrowed, first } = useMemo(() => {
     const rows = repo.otherFinanceByCode(id)
@@ -76,7 +75,6 @@ export default function OtherFinanceDetail() {
               phone={first.Loan_bought_Finance_Phone_No}
               items={interest.map((i: any) => ({ month: i.Month, amount: num(i.Interest_Amount), pending: num(i.Interest_Pending) }))}
             />
-            <button className="btn-ghost !py-1.5" onClick={() => setStatement(true)}><FileDown size={15} /> Statement</button>
             {editable && (
               <button className="btn-ghost !py-1.5" onClick={() => setEditProfile(true)}><Pencil size={15} /> Edit</button>
             )}
@@ -117,6 +115,7 @@ export default function OtherFinanceDetail() {
           { key: 'borrowings', label: <span className="flex items-center gap-1.5"><Building2 size={14} /> Borrowings</span>, badge: rows.length || '' },
           { key: 'interest', label: <span className="flex items-center gap-1.5"><Percent size={14} /> Interest</span>, badge: interestPending > 0 ? '!' : '' },
           { key: 'ledger', label: <span className="flex items-center gap-1.5"><BookText size={14} /> Ledger</span>, badge: ledger.length || '' },
+          { key: 'statement', label: <span className="flex items-center gap-1.5"><FileDown size={14} /> Statement</span> },
         ]}
       />
 
@@ -188,6 +187,18 @@ export default function OtherFinanceDetail() {
         />
       )}
 
+      {tab === 'statement' && (
+        <StatementPanel
+          party={{ kind: 'Other-finance statement', name: first.Loan_bought_Finance_Name, code: id, finance: first.Finance_Name, phone: first.Loan_bought_Finance_Phone_No, address: first.Loan_bought_Finance_Address }}
+          rows={ledger}
+          cards={[
+            { label: 'Total borrowed', value: inr(borrowed) },
+            { label: 'Outstanding payable', value: inr(outstanding) },
+            { label: 'Interest payable', value: inr(interestPending) },
+          ]}
+        />
+      )}
+
       {modal && (
         <LiabilityRepayModal
           title={modal === 'interest' ? `Pay interest — ${first.Loan_bought_Finance_Name}` : `Other-finance — ${first.Loan_bought_Finance_Name}`}
@@ -252,18 +263,6 @@ export default function OtherFinanceDetail() {
         />
       )}
 
-      {statement && (
-        <StatementModal
-          party={{ kind: 'Other-finance statement', name: first.Loan_bought_Finance_Name, code: id, finance: first.Finance_Name, phone: first.Loan_bought_Finance_Phone_No, address: first.Loan_bought_Finance_Address }}
-          rows={ledger}
-          cards={[
-            { label: 'Total borrowed', value: inr(borrowed) },
-            { label: 'Outstanding payable', value: inr(outstanding) },
-            { label: 'Interest payable', value: inr(interestPending) },
-          ]}
-          onClose={() => setStatement(false)}
-        />
-      )}
     </div>
   )
 }

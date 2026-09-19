@@ -68,7 +68,7 @@ export default function ChitMemberDetail() {
                 note: getSettings().paymentNote,
               })}
             />
-            <button className="btn-ghost !py-1.5" onClick={() => printMemberStatement({ member, chitName: chit?.Chit_Name, dues, takings, payments, ...totals })}><Printer size={15} /> Print / PDF</button>
+            <button className="btn-ghost !py-1.5" onClick={() => printMemberStatement({ member, chitName: chit?.Chit_Name, dues, takings, payments, ...totals })}><Printer size={15} /> Statement</button>
           </div>
         }
       />

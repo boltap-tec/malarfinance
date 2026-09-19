@@ -68,7 +68,7 @@ export default function ChitMemberDetail() {
                 note: getSettings().paymentNote,
               })}
             />
-            <button className="btn-ghost !py-1.5" onClick={() => printMemberStatement({ member, chitName: chit?.Chit_Name, dues, takings, ...totals })}><Printer size={15} /> Print / PDF</button>
+            <button className="btn-ghost !py-1.5" onClick={() => printMemberStatement({ member, chitName: chit?.Chit_Name, dues, takings, payments, ...totals })}><Printer size={15} /> Print / PDF</button>
           </div>
         }
       />
@@ -261,27 +261,42 @@ interface PrintData {
   chitName?: string
   dues: ChitLedgerRow[]
   takings: import('../data/types').ChitTakenMember[]
+  payments: Record<string, ChitTakenPayment[]>
   due: number; recv: number; pend: number; payout: number; payoutGiven: number; payoutPending: number
 }
 function printMemberStatement(d: PrintData): void {
   const esc = (s: unknown) => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string))
   const rup = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  // Dues received from the member — one row per month, now with the paid-on date.
   const dueRows = d.dues.map(r => `<tr>
     <td>#${num(r.Month_Count)} · ${esc(fmtDate(r.Date_Auction))}</td>
     <td class="r">${rup(num(r.Due_Amount))}</td>
     <td class="r">${rup(num(r.Received_Amount))}</td>
+    <td>${num(r.Received_Amount) ? esc(fmtDate(r.Paid_Date)) : '—'}</td>
     <td class="r">${num(r.Pending_Amount) ? rup(num(r.Pending_Amount)) : '—'}</td>
     <td>${esc(r.Status)}</td></tr>`).join('')
+  // Payouts given to the member when they took the chit — the full installment
+  // history (each dated payment), not just the running total.
   const payoutSection = d.takings.length ? `
     <h3>Chit taken — payout ${rup(d.payoutGiven)} of ${rup(d.payout)}</h3>
-    <table><thead><tr><th>Month</th><th class="r">Share</th><th class="r">Payout</th><th class="r">Given</th><th class="r">Pending</th></tr></thead>
-    <tbody>${d.takings.map(t => `<tr>
-      <td>#${num(t.Month_Count)} · ${esc(fmtDate(t.Date_Auction))}</td>
-      <td class="r">${num(t.Percentage_Need_to_Take)}</td>
-      <td class="r">${rup(num(t.Total_Amount_to_Member))}</td>
-      <td class="r">${rup(num(t.Amount_Given_to_Member))}</td>
-      <td class="r">${num(t.Pending_Amount) ? rup(num(t.Pending_Amount)) : '—'}</td></tr>`).join('')}</tbody></table>` : ''
+    ${d.takings.map(t => {
+      const pays = (d.payments[t.Chit_Taken_ID] ?? []).slice().sort((a, b) => new Date(a.Date ?? 0).getTime() - new Date(b.Date ?? 0).getTime())
+      const recorded = pays.reduce((s, p) => s + num(p.Amount), 0)
+      const earlier = Math.max(0, num(t.Amount_Given_to_Member) - recorded)
+      const instRows = [
+        earlier > 0 ? `<tr><td>Earlier payouts</td><td>—</td><td><i>before history was kept</i></td><td class="r">${rup(earlier)}</td></tr>` : '',
+        ...pays.map(p => `<tr>
+          <td>${esc(fmtDate(p.Date))}</td>
+          <td>${esc(p.Payment_Type ?? '—')}</td>
+          <td>${esc(p.Remarks ?? '—')}</td>
+          <td class="r">${rup(num(p.Amount))}</td></tr>`),
+      ].join('')
+      return `
+        <p class="sub2">Month #${num(t.Month_Count)} · ${esc(fmtDate(t.Date_Auction))} — payout ${rup(num(t.Total_Amount_to_Member))}, given ${rup(num(t.Amount_Given_to_Member))}${num(t.Pending_Amount) ? `, pending ${rup(num(t.Pending_Amount))}` : ''}</p>
+        <table><thead><tr><th>Date</th><th>Type</th><th>Notes</th><th class="r">Amount</th></tr></thead>
+        <tbody>${instRows || '<tr><td colspan="4">No payouts recorded yet.</td></tr>'}</tbody></table>`
+    }).join('')}` : ''
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Chit statement — ${esc(d.member.Member_Name)}</title>
   <style>
     *{box-sizing:border-box} body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;margin:32px;font-size:13px}
@@ -291,6 +306,7 @@ function printMemberStatement(d: PrintData): void {
     .cards .k{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#64748b} .cards .v{font-size:16px;font-weight:700}
     table{width:100%;border-collapse:collapse;margin-top:4px} th,td{border-bottom:1px solid #e2e8f0;padding:6px 8px;text-align:left}
     th{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#64748b} .r{text-align:right;font-variant-numeric:tabular-nums}
+    .sub2{font-size:12px;color:#334155;margin:16px 0 4px;font-weight:600}
     .foot{margin-top:24px;color:#94a3b8;font-size:11px} @media print{body{margin:12mm}}
   </style></head><body>
     <h1>Chit Statement</h1>
@@ -307,9 +323,9 @@ function printMemberStatement(d: PrintData): void {
       <div><div class="k">Paid</div><div class="v">${rup(d.recv)}</div></div>
       <div><div class="k">Pending</div><div class="v">${rup(d.pend)}</div></div>
     </div>
-    <h3>Monthly dues</h3>
-    <table><thead><tr><th>Month</th><th class="r">Due</th><th class="r">Paid</th><th class="r">Pending</th><th>Status</th></tr></thead>
-    <tbody>${dueRows || '<tr><td colspan="5">No dues yet.</td></tr>'}</tbody></table>
+    <h3>Monthly dues — received from member</h3>
+    <table><thead><tr><th>Month</th><th class="r">Due</th><th class="r">Paid</th><th>Paid on</th><th class="r">Pending</th><th>Status</th></tr></thead>
+    <tbody>${dueRows || '<tr><td colspan="6">No dues yet.</td></tr>'}</tbody></table>
     ${payoutSection}
     <div class="foot">Generated ${today} · Arul Finance</div>
     <script>window.onload=function(){window.print()}</script>

@@ -119,6 +119,12 @@ export default function FinanceSummary() {
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-700 bg-slate-900/50 font-semibold">
+                  <td className="px-3 py-2.5 text-sm text-slate-300" colSpan={4}>Total · {data.customers.length} customer{data.customers.length === 1 ? '' : 's'}</td>
+                  <td className="px-3 py-2.5 text-right text-sm tabular-nums text-emerald-300">{inr(t.loanOut)}</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </Card>
@@ -143,6 +149,12 @@ export default function FinanceSummary() {
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-700 bg-slate-900/50 font-semibold">
+                  <td className="px-3 py-2.5 text-sm text-slate-300" colSpan={3}>Total · {data.depositors.length} depositor{data.depositors.length === 1 ? '' : 's'}</td>
+                  <td className="px-3 py-2.5 text-right text-sm tabular-nums text-rose-300">{inr(t.depOut)}</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </Card>
@@ -167,6 +179,12 @@ export default function FinanceSummary() {
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-700 bg-slate-900/50 font-semibold">
+                  <td className="px-3 py-2.5 text-sm text-slate-300" colSpan={3}>Total · {data.others.length} lender{data.others.length === 1 ? '' : 's'}</td>
+                  <td className="px-3 py-2.5 text-right text-sm tabular-nums text-rose-300">{inr(t.othOut)}</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </Card>
@@ -193,6 +211,14 @@ export default function FinanceSummary() {
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-700 bg-slate-900/50 font-semibold">
+                  <td className="px-3 py-2.5 text-sm text-slate-300" colSpan={3}>Total · {data.jewels.length} loan{data.jewels.length === 1 ? '' : 's'}</td>
+                  <td className="px-3 py-2.5 text-right text-sm tabular-nums text-slate-300">{(() => { const g = data.jewels.reduce((s, j) => s + (j.grams || 0), 0); return g ? `${num(g)} g` : '—' })()}</td>
+                  <td className="px-3 py-2.5"></td>
+                  <td className="px-3 py-2.5 text-right text-sm tabular-nums text-rose-300">{inr(t.jewOut)}</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </Card>

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Phone, Mail, HandCoins, Plus, Percent, IndianRupee, BookText, Pencil } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, HandCoins, Plus, Percent, IndianRupee, BookText, Pencil, FileDown } from 'lucide-react'
 import { repo, repayCustomer, updateCustomer } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Tabs, Modal, Field } from '../components/ui'
 import CustomerRepayModal from '../components/CustomerRepayModal'
 import CustomerInterestPayModal from '../components/CustomerInterestPayModal'
 import LedgerTable from '../components/LedgerTable'
+import StatementModal from '../components/StatementModal'
 import ReminderButton from '../components/ReminderButton'
 import { inr, phone, fmtDate, num, monthName, monthKey } from '../lib/format'
 
@@ -39,6 +40,7 @@ export default function CustomerDetail() {
   const [repayModal, setRepayModal] = useState(false)
   const [payInterest, setPayInterest] = useState(false)
   const [editProfile, setEditProfile] = useState(false)
+  const [statement, setStatement] = useState(false)
 
   const { customer, loans, interest, ledger, totals } = useMemo(() => {
     const customer = repo.customer(id)
@@ -79,6 +81,9 @@ export default function CustomerDetail() {
               phone={customer.Customer_Phone_No}
               items={interest.map(i => ({ month: i.Month, amount: num(i.Interest_Amount), pending: num(i.Interest_Pending) }))}
             />
+            <button className="btn-ghost !py-1.5" onClick={() => setStatement(true)}>
+              <FileDown size={15} /> Statement
+            </button>
             {editable && <>
               <button className="btn-ghost !py-1.5" onClick={() => setEditProfile(true)}>
                 <Pencil size={15} /> Edit
@@ -226,6 +231,20 @@ export default function CustomerDetail() {
           customer={customer}
           onClose={() => setEditProfile(false)}
           onSaved={() => { setEditProfile(false); setTick(t => t + 1) }}
+        />
+      )}
+
+      {statement && (
+        <StatementModal
+          party={{ kind: 'Loan statement', name: customer.Customer_Name, code: customer.Customer_STL_NO, finance: customer.Finance_Name, phone: customer.Customer_Phone_No }}
+          rows={ledger}
+          cards={[
+            { label: 'Total loan given', value: inr(totals.given) },
+            { label: 'Outstanding', value: inr(totals.outstanding) },
+            { label: 'Interest paid', value: inr(num(customer.Total_Interest_Paid)) },
+            { label: 'Interest due', value: inr(totals.interestDue) },
+          ]}
+          onClose={() => setStatement(false)}
         />
       )}
     </div>

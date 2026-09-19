@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Building2, HandCoins, Percent, Plus, IndianRupee, BookText, Pencil } from 'lucide-react'
+import { ArrowLeft, Building2, HandCoins, Percent, Plus, IndianRupee, BookText, Pencil, FileDown } from 'lucide-react'
 import { repo, repayOtherFinance, payOtherFinanceInterest, editOtherFinance, updateOtherFinanceProfile } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Tabs, Modal, Field } from '../components/ui'
 import LiabilityRepayModal from '../components/LiabilityRepayModal'
 import InterestPayModal from '../components/InterestPayModal'
 import LedgerTable from '../components/LedgerTable'
+import StatementModal from '../components/StatementModal'
 import ReminderButton from '../components/ReminderButton'
 import { inr, phone, fmtDate, num, monthName, monthKey } from '../lib/format'
 
@@ -41,6 +42,7 @@ export default function OtherFinanceDetail() {
   const [pay, setPay] = useState<any | null>(null)
   const [editProfile, setEditProfile] = useState(false)
   const [editRow, setEditRow] = useState<any | null>(null)
+  const [statement, setStatement] = useState(false)
 
   const { rows, ledger, interest, interestPending, outstanding, borrowed, first } = useMemo(() => {
     const rows = repo.otherFinanceByCode(id)
@@ -74,6 +76,7 @@ export default function OtherFinanceDetail() {
               phone={first.Loan_bought_Finance_Phone_No}
               items={interest.map((i: any) => ({ month: i.Month, amount: num(i.Interest_Amount), pending: num(i.Interest_Pending) }))}
             />
+            <button className="btn-ghost !py-1.5" onClick={() => setStatement(true)}><FileDown size={15} /> Statement</button>
             {editable && (
               <button className="btn-ghost !py-1.5" onClick={() => setEditProfile(true)}><Pencil size={15} /> Edit</button>
             )}
@@ -246,6 +249,19 @@ export default function OtherFinanceDetail() {
           row={editRow}
           onClose={() => setEditRow(null)}
           onSaved={() => { setEditRow(null); setTick(t => t + 1) }}
+        />
+      )}
+
+      {statement && (
+        <StatementModal
+          party={{ kind: 'Other-finance statement', name: first.Loan_bought_Finance_Name, code: id, finance: first.Finance_Name, phone: first.Loan_bought_Finance_Phone_No, address: first.Loan_bought_Finance_Address }}
+          rows={ledger}
+          cards={[
+            { label: 'Total borrowed', value: inr(borrowed) },
+            { label: 'Outstanding payable', value: inr(outstanding) },
+            { label: 'Interest payable', value: inr(interestPending) },
+          ]}
+          onClose={() => setStatement(false)}
         />
       )}
     </div>

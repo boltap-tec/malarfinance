@@ -47,7 +47,7 @@ function InvestedSection({ title, tone, rows, empty, className }: {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-slate-800 bg-slate-900/60">
-                <tr><Th>Chit</Th><Th>Company</Th><Th>Started</Th><Th right>Pot value</Th><Th right>Invested</Th><Th right>Months</Th><Th>Taken</Th><Th>Taken month</Th><Th right>Taken amount</Th><Th>Status</Th></tr>
+                <tr><Th>Chit</Th><Th>Company</Th><Th>Started</Th><Th right>Pot value</Th><Th right>Invested</Th><Th right>Months</Th><Th>Last paid</Th><Th>Taken</Th><Th>Taken month</Th><Th right>Taken amount</Th><Th>Status</Th></tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {rows.map((c) => {
@@ -66,6 +66,7 @@ function InvestedSection({ title, tone, rows, empty, className }: {
                       <Td right className="text-hd">{inr(num(c.Total_Amount_Chit))}</Td>
                       <Td right className="text-emerald-400">{inr(s.invested)}</Td>
                       <Td right className="text-slate-300">{num(c.No_Months_Completed)}/{num(c.No_Months)}</Td>
+                      <Td className="text-slate-400 whitespace-nowrap">{s.lastPaidPeriod ? (s.lastPaidMonthCount ? `#${s.lastPaidMonthCount} · ${s.lastPaidPeriod}` : s.lastPaidPeriod) : '—'}</Td>
                       <Td><Badge tone={taken ? 'green' : 'slate'}>{taken ? 'Taken' : 'Not taken'}</Badge></Td>
                       <Td className="text-slate-400 whitespace-nowrap">{taken ? takenMonth(c) : '—'}</Td>
                       <Td right className={taken ? 'text-emerald-300' : 'text-slate-500'}>{taken && num(c.Chit_Taken_Amount) ? inr(num(c.Chit_Taken_Amount)) : '—'}</Td>

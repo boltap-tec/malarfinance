@@ -443,10 +443,20 @@ export const repo = {
   investedChitSummary(chitId: string) {
     const trans = (db.Invested_Chit_Trans ?? []).filter(t => t.Chit_ID === chitId)
     const payments = trans.filter(t => t.Kind !== 'Receipt')
+    // Most recent contribution — by period number, falling back to paid date.
+    const lastPaid = payments.reduce<InvestedChitTrans | undefined>((best, t) => {
+      if (!best) return t
+      const by = num(t.Month_Count) - num(best.Month_Count)
+      if (by !== 0) return by > 0 ? t : best
+      return new Date(t.Paid_Date ?? t.Date ?? 0) > new Date(best.Paid_Date ?? best.Date ?? 0) ? t : best
+    }, undefined)
     return {
       invested: payments.reduce((s, t) => s + num(t.Chit_This_Month_Amount), 0),
       received: trans.filter(t => t.Kind === 'Receipt').reduce((s, t) => s + num(t.Chit_This_Month_Amount), 0),
       months: payments.length,
+      lastPaidPeriod: lastPaid?.Month_Year || undefined,
+      lastPaidMonthCount: lastPaid ? num(lastPaid.Month_Count) : 0,
+      lastPaidDate: lastPaid?.Paid_Date ?? lastPaid?.Date,
     }
   },
 

@@ -719,11 +719,18 @@ export function jewelDueAlerts(finance?: string): JewelDueAlert[] {
 // e.g. "kannan_finance" and "kannan_personal" both yield "kan", which makes
 // every code collide between them (and lookups match on the code alone, so the
 // two finances' records get mixed). Give such a finance a distinct prefix here.
+// Keyed by the NORMALISED finance name (lower-cased, letters/digits only) so the
+// override matches regardless of case, underscores/spaces, or the "Kannnan"
+// (three-n) vs "Kannan" (two-n) spelling the data has carried in different
+// places. The personal house and the "Kannan_Finance" house both start with
+// "Kan", so without this both yield the "Kan" prefix and every code collides.
+const normFin = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 const PREFIX_OVERRIDES: Record<string, string> = {
-  kannan_personal: 'kanp',
+  kannnanpersonal: 'Kanp',   // "Kannnan_Personal" (three-n typo from the xlsx import)
+  kannanpersonal: 'Kanp',    // "Kannan_Personal" / "Kannan Personal" (corrected spelling)
 }
 export function financePrefix(finance: string): string {
-  return PREFIX_OVERRIDES[finance] ?? (finance.slice(0, 3) || 'Fin')
+  return PREFIX_OVERRIDES[normFin(finance)] ?? (finance.slice(0, 3) || 'Fin')
 }
 
 // Rewrite a code so its leading prefix (the part before the first "-") becomes
@@ -1626,7 +1633,16 @@ export async function fixFinancePrefixes(): Promise<{ codes: number; finances: s
       for (const c of changed) r[c] = patch[c]
       codes += changed.length
       touched.add(r.Finance_Name)
-      await sUpdate(table, String(pkOld), patch)
+      // Scope the DB write by Finance_Name as well as the primary key. These
+      // tables have no enforced primary key in the live DB (same reason the
+      // ledger had duplicate Ref_IDs), so another finance can hold the very same
+      // code — filtering by the code alone would overwrite that other house's
+      // row too. The extra Finance_Name filter guarantees only this house moves.
+      if (supabase) {
+        const { error } = await supabase.from(table as string)
+          .update(clean(patch)).eq(pk, String(pkOld)).eq('Finance_Name', r.Finance_Name)
+        noteErr(`update ${table}`, error?.message)
+      }
     }
   }
 

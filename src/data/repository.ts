@@ -712,8 +712,32 @@ export function jewelDueAlerts(finance?: string): JewelDueAlert[] {
   return out.sort((a, b) => a.daysLeft - b.daysLeft)
 }
 
+// ── Finance code prefix ───────────────────────────────────────────────────────
+// Every human code (STL numbers, loan numbers, deposit/other-finance/partner
+// codes) is built as `${financePrefix(name)}-…`. The default is the first three
+// letters of the finance name, but two finances can share those three letters —
+// e.g. "kannan_finance" and "kannan_personal" both yield "kan", which makes
+// every code collide between them (and lookups match on the code alone, so the
+// two finances' records get mixed). Give such a finance a distinct prefix here.
+const PREFIX_OVERRIDES: Record<string, string> = {
+  kannan_personal: 'kanp',
+}
+export function financePrefix(finance: string): string {
+  return PREFIX_OVERRIDES[finance] ?? (finance.slice(0, 3) || 'Fin')
+}
+
+// Rewrite a code so its leading prefix (the part before the first "-") becomes
+// `want`, keeping the rest. No-op when it already matches, so re-running the
+// migration is safe. `kan-STL1` → `kanp-STL1`, `kan-1` → `kanp-1`, `kan-JL-1`
+// → `kanp-JL-1`.
+function reprefix(code: string, want: string): string {
+  const i = code.indexOf('-')
+  if (i < 0) return code
+  return code.slice(0, i) === want ? code : want + code.slice(i)
+}
+
 export function nextJewelLoanNo(finance: string): string {
-  const prefix = (finance.slice(0, 3) || 'Fin')
+  const prefix = financePrefix(finance)
   const n = (db.Jewel_Loan ?? []).filter(j => j.Finance_Name === finance).reduce((m, j) => {
     const x = Number(String(j.Loan_No).replace(/\D/g, ''))
     return isNaN(x) ? m : Math.max(m, x)
@@ -1081,7 +1105,7 @@ export async function updateCustomer(stl: string, patch: Partial<Customer>): Pro
 
 // Next STL number for a finance, based on the max numeric suffix already used.
 export function nextStlNo(finance: string): string {
-  const prefix = finance.slice(0, 3) || 'Fin'
+  const prefix = financePrefix(finance)
   const max = (db.STL_CRM ?? [])
     .filter(c => c.Finance_Name === finance)
     .reduce((m, c) => {
@@ -1488,7 +1512,7 @@ export async function renumberCodes(): Promise<{ deposits: number; other: number
     const nameCode = new Map<string, string>()
     const seq = new Map<string, number>()
     for (const d of db.Deposit_Amount ?? []) {
-      const prefix = (d.Finance_Name || 'Fin').slice(0, 3)
+      const prefix = financePrefix(d.Finance_Name || 'Fin')
       const nameKey = `${d.Finance_Name}::${(d.Depositer_Name || '').toLowerCase()}`
       let code = nameCode.get(nameKey)
       if (!code) {
@@ -1508,7 +1532,7 @@ export async function renumberCodes(): Promise<{ deposits: number; other: number
     const nameCode = new Map<string, string>()
     const seq = new Map<string, number>()
     for (const o of db.Other_Finance_Loan ?? []) {
-      const prefix = (o.Finance_Name || 'Fin').slice(0, 3)
+      const prefix = financePrefix(o.Finance_Name || 'Fin')
       const nameKey = `${o.Finance_Name}::${(o.Loan_bought_Finance_Name || '').toLowerCase()}`
       let code = nameCode.get(nameKey)
       if (!code) {
@@ -1546,6 +1570,78 @@ export async function renumberCodes(): Promise<{ deposits: number; other: number
   writeLog({ Action: 'update', Entity: 'Deposit_Amount', Entity_Label: `Renumbered ${depOldToNew.size} deposit + ${finOldToNew.size} other-finance codes` })
   persist()
   return { deposits: depOldToNew.size, other: finOldToNew.size }
+}
+
+// Tables (all carry Finance_Name) and the columns in each that hold a finance
+// code. Jewel_Loan_Photo has no Finance_Name, so its Loan_No is fixed separately.
+const CODE_COLUMNS: { table: keyof Dataset; cols: string[] }[] = [
+  { table: 'STL_CRM', cols: ['Customer_STL_NO'] },
+  { table: 'Loan_Processing', cols: ['Loan_No', 'Customer_STL_NO', 'Referred_Partner'] },
+  { table: 'Interest_Details', cols: ['Loan_No', 'Customer_STL_NO', 'Referred_Partner'] },
+  { table: 'Deposit_Amount', cols: ['Deposit_No'] },
+  { table: 'Depositer_Interest', cols: ['Deposit_No'] },
+  { table: 'Other_Finance_Loan', cols: ['Loan_No'] },
+  { table: 'Other_Finance_Interest', cols: ['Loan_No'] },
+  { table: 'Jewel_Loan', cols: ['Loan_No'] },
+  { table: 'Transaction_Ledger', cols: ['STL_No', 'Loan_No'] },
+  { table: 'Partner', cols: ['Partner_ID'] },
+]
+
+// Re-code every existing row so its codes carry the finance's current
+// financePrefix. Only rows whose prefix differs change, so finances already in
+// sync (and any finance keeping its default 3-letter prefix) are untouched, and
+// re-running is a no-op. Fixes the "two finances share one prefix" collision for
+// data created before the distinct prefix was assigned.
+//
+// Each row is patched IN PLACE by its primary key — only the linking code
+// columns change. Amounts, dates, balances, Ref_IDs and the opaque ID keys are
+// never deleted or re-inserted, so every transaction stays intact and the move
+// is atomic per row. Rows whose Finance_Name isn't a known finance are skipped
+// so a stray row can never be mangled.
+export async function fixFinancePrefixes(): Promise<{ codes: number; finances: string[] }> {
+  let codes = 0
+  const touched = new Set<string>()
+  const jewelMap = new Map<string, string>()   // old jewel Loan_No → new, for its photos
+  const known = new Set((db.Finance_Details ?? []).map(f => f.Finance_Name))
+
+  for (const { table, cols } of CODE_COLUMNS) {
+    const pk = PK[table]
+    const rows = (db[table] as any[] | undefined) ?? []
+    if (!pk || !rows.length) continue
+    for (const r of rows) {
+      if (!known.has(r.Finance_Name)) continue
+      const want = financePrefix(r.Finance_Name)
+      const pkOld = r[pk]            // capture before we mutate (pk may be a code column)
+      const patch: Record<string, string> = {}
+      for (const c of cols) {
+        const v = r[c]
+        if (typeof v !== 'string' || !v) continue
+        const nv = reprefix(v, want)
+        if (nv === v) continue
+        patch[c] = nv
+        if (table === 'Jewel_Loan' && c === 'Loan_No') jewelMap.set(v, nv)
+      }
+      const changed = Object.keys(patch)
+      if (!changed.length) continue
+      for (const c of changed) r[c] = patch[c]
+      codes += changed.length
+      touched.add(r.Finance_Name)
+      await sUpdate(table, String(pkOld), patch)
+    }
+  }
+
+  // Jewel photos key off Loan_No only — fix the ones whose loan was recoded.
+  if (jewelMap.size) {
+    for (const p of (db.Jewel_Loan_Photo as any[] | undefined) ?? []) {
+      const nn = jewelMap.get(p.Loan_No)
+      if (!nn) continue
+      p.Loan_No = nn; await sUpdate('Jewel_Loan_Photo', p.id, { Loan_No: nn }); codes++
+    }
+  }
+
+  writeLog({ Action: 'update', Entity: 'STL_CRM', Entity_Label: `Re-prefixed ${codes} code(s) across ${touched.size} finance(s): ${[...touched].join(', ') || 'none'}` })
+  persist()
+  return { codes, finances: [...touched] }
 }
 
 // ── Mandatory-field configuration (which columns each form requires) ──────────

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Search, Plus, Trash2 } from 'lucide-react'
-import { repo, addLoan, addCustomer, deleteLoan, missingRequired, FORM_FIELDS } from '../data/repository'
+import { repo, addLoan, addCustomer, deleteLoan, missingRequired, FORM_FIELDS, financePrefix } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal, AmountHint } from '../components/ui'
 import { inr, fmtDate, num, phone } from '../lib/format'
@@ -129,7 +129,7 @@ function LoanForm({ finance, initialStl, onClose, onSaved }: { finance: string; 
   const customers = repo.customers(finance)
   const existingLoans = repo.loans(finance)
   const partners = repo.partners(finance)
-  const prefix = (finance.slice(0, 3) || 'Fin')
+  const prefix = financePrefix(finance)
 
   // Customer selection
   const [mode, setMode] = useState<'existing' | 'new'>(initialStl || customers.length ? 'existing' : 'new')

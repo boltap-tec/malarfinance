@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Users2, Plus, Pencil, Trash2 } from 'lucide-react'
-import { repo, addPartner, updatePartner, deletePartner } from '../data/repository'
+import { repo, addPartner, updatePartner, deletePartner, financePrefix } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Th, Td, EmptyState, Modal, Field } from '../components/ui'
 import { phone, inr, num } from '../lib/format'
@@ -128,7 +128,7 @@ function PartnerForm({ mode, partner, finances, onClose, onSaved }: {
   const valid = name.trim() && phoneNo.trim() && finance
 
   function nextPartnerId(fin: string): string {
-    const prefix = fin.slice(0, 3) || 'Fin'
+    const prefix = financePrefix(fin)
     const max = repo.partners(fin).reduce((m, p) => {
       const n = Number(String(p.Partner_ID).replace(/\D/g, ''))
       return isNaN(n) ? m : Math.max(m, n)

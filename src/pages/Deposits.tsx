@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { PiggyBank, Plus, HandCoins, Percent, Trash2 } from 'lucide-react'
-import { repo, addDeposit, deleteDeposit, missingRequired, FORM_FIELDS } from '../data/repository'
+import { repo, addDeposit, deleteDeposit, missingRequired, FORM_FIELDS, financePrefix } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import {
   PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal, AmountHint,
@@ -108,7 +108,7 @@ interface Depositor { code: string; name: string; phone?: number | string; email
 
 function DepositForm({ finance, initialCode, onClose, onSaved }: { finance: string; initialCode?: string; onClose: () => void; onSaved: () => void }) {
   const existing = repo.deposits(finance)
-  const prefix = (finance.slice(0, 3) || 'Fin')
+  const prefix = financePrefix(finance)
 
   // Distinct depositors already on record, so a repeat deposit links to the same DEP code.
   const depositors = useMemo(() => {

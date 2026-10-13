@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Building2, Plus, HandCoins, Percent, Trash2 } from 'lucide-react'
-import { repo, addOtherFinanceLoan, deleteOtherFinance, missingRequired, FORM_FIELDS } from '../data/repository'
+import { repo, addOtherFinanceLoan, deleteOtherFinance, missingRequired, FORM_FIELDS, financePrefix } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import {
   PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal, AmountHint,
@@ -140,7 +140,7 @@ interface Lender { code: string; name: string; phone?: number | string; out: num
 
 function BorrowForm({ finance, initialCode, onClose, onSaved }: { finance: string; initialCode?: string; onClose: () => void; onSaved: () => void }) {
   const existing = repo.otherFinanceLoans(finance)
-  const prefix = (finance.slice(0, 3) || 'Fin')
+  const prefix = financePrefix(finance)
 
   // Distinct lender finances already on record, so a repeat borrowing links to the same FIN code.
   const lenders = useMemo(() => {

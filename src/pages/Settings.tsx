@@ -4,7 +4,7 @@ import {
   repo, getSettings, setSettings, revokeInterestForMonth, isRepayInterest, updateFinance, renumberCodes,
   getMandatory, setMandatory, FORM_FIELDS, type FormKind, type MandatoryConfig,
   getLedgerCategories, setLedgerCategories, type LedgerCategories,
-  datasetSnapshot, reconcileBalances,
+  datasetSnapshot, reconcileBalances, fixFinancePrefixes,
 } from '../data/repository'
 import { useApp } from '../store/app'
 import { PageHeader, Card, EmptyState } from '../components/ui'
@@ -23,6 +23,8 @@ export default function Settings() {
   const [cutSaved, setCutSaved] = useState(false)
   const [mand, setMand] = useState<MandatoryConfig>(getMandatory())
   const [renumberMsg, setRenumberMsg] = useState<string | null>(null)
+  const [prefixMsg, setPrefixMsg] = useState<string | null>(null)
+  const [fixingPrefix, setFixingPrefix] = useState(false)
   const [reconcileMsg, setReconcileMsg] = useState<string | null>(null)
   const [reconciling, setReconciling] = useState(false)
   const [cats, setCats] = useState<LedgerCategories>(getLedgerCategories())
@@ -65,6 +67,20 @@ export default function Settings() {
   async function runRenumber() {
     const r = await renumberCodes()
     setRenumberMsg(`Renumbered ${r.deposits} deposit and ${r.other} other-finance codes to DEP/FIN format.`)
+  }
+
+  async function runFixPrefixes() {
+    setFixingPrefix(true)
+    try {
+      const r = await fixFinancePrefixes()
+      setPrefixMsg(
+        r.codes === 0
+          ? 'All finance codes already have a unique prefix — nothing to change.'
+          : `Re-coded ${r.codes} code(s) for ${r.finances.join(', ')}. Refresh to see the updated numbers.`,
+      )
+    } finally {
+      setFixingPrefix(false)
+    }
   }
 
   function toggleMand(kind: FormKind, key: string) {
@@ -221,6 +237,25 @@ export default function Settings() {
         {renumberMsg && (
           <div className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300 ring-1 ring-emerald-500/30">
             <Check size={15} /> {renumberMsg}
+          </div>
+        )}
+      </Card>
+
+      <Card className="mt-4">
+        <h3 className="mb-1 flex items-center gap-2 font-semibold text-hd"><RotateCcw size={16} /> Fix clashing finance code prefixes</h3>
+        <p className="mb-3 text-xs text-slate-500">
+          When two finances share the same first three letters (e.g. <code>kannan_finance</code> and
+          <code> kannan_personal</code> both become <code>kan-…</code>), their STL, loan, deposit and
+          partner codes collide. This re-codes each finance to its own unique prefix
+          (<code>kannan_personal</code> → <code>kanp-…</code>) and updates every reference. Only rows
+          that still clash change — safe to run more than once. <b>Download a backup first.</b>
+        </p>
+        <button className="btn-primary" onClick={runFixPrefixes} disabled={fixingPrefix}>
+          {fixingPrefix ? 'Fixing…' : 'Fix prefixes now'}
+        </button>
+        {prefixMsg && (
+          <div className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300 ring-1 ring-emerald-500/30">
+            <Check size={15} /> {prefixMsg}
           </div>
         )}
       </Card>

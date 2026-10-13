@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Search, Plus, HandCoins, Percent, Users } from 'lucide-react'
-import { repo, addCustomer, customerRisk } from '../data/repository'
+import { repo, addCustomer, customerRisk, financePrefix } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, CallLink } from '../components/ui'
 import ReminderButton from '../components/ReminderButton'
@@ -203,7 +203,7 @@ function RiskBadge({ stl }: { stl: string }) {
 
 function CustomerForm({ finance, onClose, onSaved }: { finance: string; onClose: () => void; onSaved: () => void }) {
   const existing = repo.customers(finance)
-  const prefix = (finance.slice(0, 3) || 'Fin')
+  const prefix = financePrefix(finance)
   const [name, setName] = useState('')
   const [phoneNo, setPhoneNo] = useState('')
   const [email, setEmail] = useState('')

@@ -4,7 +4,7 @@ import { ArrowLeft, Calculator, HandCoins, Pencil } from 'lucide-react'
 import { repo, editLoan } from '../data/repository'
 import { computeInterest } from '../lib/interestEngine'
 import { useApp, canEdit } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, AmountHint } from '../components/ui'
 import RepayModal from '../components/RepayModal'
 import { inr, fmtDate, num } from '../lib/format'
 import type { Loan } from '../data/types'
@@ -135,19 +135,28 @@ export default function LoanDetail() {
   )
 }
 
-// Admin correction of a loan. Outstanding is what you set; Repaid is kept
+// Admin correction of a loan — the full loan-giving form in edit mode, so every
+// detail entered when the loan was disbursed can be fixed. Repaid is kept
 // consistent as (loan amount − outstanding). Logged & restorable.
 function EditLoanModal({ loan, onClose, onSaved }: { loan: Loan; onClose: () => void; onSaved: () => void }) {
-  const perMonth = loan.Interest_Type === 'Per_Month'
+  const partners = repo.partners(loan.Finance_Name)
   const [amount, setAmount] = useState(String(num(loan.Loan_Amount)))
   const [outstanding, setOutstanding] = useState(String(num(loan.Outstand_Amount)))
-  const [rate, setRate] = useState(String(perMonth ? num(loan.Interest_Per_Month_Per_Lakh) : num(loan.Interest_Per_day_Per_Lakh)))
+  const [date, setDate] = useState((loan.Loan_Given_Date ?? '').slice(0, 10))
+  const [type, setType] = useState<'Per_Day' | 'Per_Month'>(loan.Interest_Type === 'Per_Month' ? 'Per_Month' : 'Per_Day')
+  const [rate, setRate] = useState(String(loan.Interest_Type === 'Per_Month' ? num(loan.Interest_Per_Month_Per_Lakh) : num(loan.Interest_Per_day_Per_Lakh)))
+  const [bonds, setBonds] = useState(loan.No_Bond_Received != null ? String(num(loan.No_Bond_Received)) : '')
+  const [chqs, setChqs] = useState(loan.No_Chq_Received != null ? String(num(loan.No_Chq_Received)) : '')
+  const [partner, setPartner] = useState(loan.Referred_Partner ?? '')
+  const [payType, setPayType] = useState(loan.Payment_Type ?? 'Cash')
+  const [remarks, setRemarks] = useState(loan.Remarks ?? '')
   const [status, setStatus] = useState(loan.Loan_Status ?? 'Active')
   const [busy, setBusy] = useState(false)
 
+  const perMonth = type === 'Per_Month'
   const amt = num(amount), out = num(outstanding)
   const repaid = Math.max(0, amt - out)
-  const valid = amt > 0 && out >= 0 && out <= amt && !busy
+  const valid = amt > 0 && out >= 0 && out <= amt && num(rate) >= 0 && !busy
 
   async function save() {
     if (!valid) return
@@ -156,8 +165,17 @@ function EditLoanModal({ loan, onClose, onSaved }: { loan: Loan; onClose: () => 
       Loan_Amount: amt,
       Outstand_Amount: out,
       Repaid_Amount: repaid,
+      Loan_Given_Date: date || loan.Loan_Given_Date,
+      Interest_Type: type,
+      // Keep both rate columns consistent with the chosen type (the other is zeroed).
+      Interest_Per_day_Per_Lakh: perMonth ? 0 : num(rate),
+      Interest_Per_Month_Per_Lakh: perMonth ? num(rate) : 0,
+      No_Bond_Received: bonds.trim() ? num(bonds) : undefined,
+      No_Chq_Received: chqs.trim() ? num(chqs) : undefined,
+      Referred_Partner: partner || undefined,
+      Payment_Type: payType,
+      Remarks: remarks.trim() || undefined,
       Loan_Status: status,
-      ...(perMonth ? { Interest_Per_Month_Per_Lakh: num(rate) } : { Interest_Per_day_Per_Lakh: num(rate) }),
     })
     onSaved()
   }
@@ -167,23 +185,59 @@ function EditLoanModal({ loan, onClose, onSaved }: { loan: Loan; onClose: () => 
       <button className="btn-ghost" onClick={onClose}>Cancel</button>
       <button className="btn-primary" disabled={!valid} onClick={save}>Save changes</button>
     </>}>
-      <p className="text-sm text-slate-400">Correct this loan's figures. Repaid is kept as (amount − outstanding). This is logged and can be restored from the Activity Log.</p>
+      <p className="text-sm text-slate-400">Correct any detail entered when this loan was given. Repaid is kept as (amount − outstanding). This is logged and can be restored from the Activity Log.</p>
+      <div className="rounded-xl bg-slate-800/40 p-3 text-sm text-slate-300">
+        Customer: <b className="text-hd">{loan.Customer_Name}</b> · {loan.Customer_STL_NO}
+      </div>
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Loan amount (₹)"><input className="input" inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} /></Field>
         <Field label="Outstanding (₹)"><input className="input" inputMode="numeric" value={outstanding} onChange={e => setOutstanding(e.target.value)} /></Field>
       </div>
+      <AmountHint value={amount} />
       {out > amt && <p className="text-xs text-rose-300">Outstanding can't be more than the loan amount.</p>}
       <div className="rounded-xl bg-slate-800/40 p-3 text-sm">
         <div className="flex justify-between"><span className="text-slate-400">Repaid (auto)</span><span className="font-semibold text-hd">{inr(repaid)}</span></div>
       </div>
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label={perMonth ? 'Rate (₹/lakh/month)' : 'Rate (₹/lakh/day)'}><input className="input" inputMode="numeric" value={rate} onChange={e => setRate(e.target.value)} /></Field>
+        <Field label="Given date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
         <Field label="Status">
           <select className="input" value={status} onChange={e => setStatus(e.target.value)}>
             <option>Active</option><option>Closed</option>
+            {status && !['Active', 'Closed'].includes(status) && <option value={status}>{status}</option>}
           </select>
         </Field>
       </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Interest type">
+          <select className="input" value={type} onChange={e => setType(e.target.value as 'Per_Day' | 'Per_Month')}>
+            <option value="Per_Day">Per day / lakh</option>
+            <option value="Per_Month">Per month / lakh</option>
+          </select>
+        </Field>
+        <Field label={perMonth ? 'Rate (₹/lakh/month)' : 'Rate (₹/lakh/day)'}><input className="input" inputMode="numeric" value={rate} onChange={e => setRate(e.target.value)} /></Field>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Bonds received"><input className="input" inputMode="numeric" value={bonds} onChange={e => setBonds(e.target.value)} /></Field>
+        <Field label="Cheques received"><input className="input" inputMode="numeric" value={chqs} onChange={e => setChqs(e.target.value)} /></Field>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Referred partner">
+          <select className="input" value={partner} onChange={e => setPartner(e.target.value)}>
+            <option value="">—</option>
+            {partners.map(p => <option key={p.Partner_ID} value={p.Partner_ID}>{p.Partner_Name} · {p.Partner_ID}</option>)}
+          </select>
+        </Field>
+        <Field label="Payment type">
+          <select className="input" value={payType} onChange={e => setPayType(e.target.value)}>
+            {['Cash', 'Bank', 'UPI', 'Cheque'].map(o => <option key={o} value={o}>{o}</option>)}
+            {/* Preserve a legacy value (e.g. "Other") that isn't one of the standard options. */}
+            {payType && !['Cash', 'Bank', 'UPI', 'Cheque'].includes(payType) && <option value={payType}>{payType}</option>}
+          </select>
+        </Field>
+      </div>
+      <Field label="Remarks"><input className="input" value={remarks} onChange={e => setRemarks(e.target.value)} /></Field>
       <p className="text-xs text-slate-500">Note: this fixes the loan record only. If you're reversing a wrong repayment, also delete its entry from the Ledger tab so the cash balance matches.</p>
     </Modal>
   )

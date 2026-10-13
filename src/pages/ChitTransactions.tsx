@@ -4,7 +4,7 @@ import { Coins, HandCoins } from 'lucide-react'
 import { repo, collectChitDue } from '../data/repository'
 import type { ChitLedgerRow } from '../data/types'
 import { useApp, canEdit, financeFilter } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, CallLink } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, CallLink, SearchInput } from '../components/ui'
 import { AmountModal } from './ChitDetail'
 import { inr, fmtDate, num } from '../lib/format'
 
@@ -22,13 +22,19 @@ export default function ChitTransactions() {
   const activeFund = fund || chits[0]?.Chit_ID || ''
   const auctions = useMemo(() => activeFund ? repo.chitAuctions(activeFund) : [], [activeFund, tick])
   const [month, setMonth] = useState<number | null>(null)
+  const [q, setQ] = useState('')
   const latest = auctions.length ? num(auctions[auctions.length - 1].Month_Count) : null
   const shownMonth = month ?? latest
   const auction = auctions.find(a => num(a.Month_Count) === shownMonth)
-  const rows = useMemo(() => auction ? repo.chitLedgerByAuction(auction.Chit_Auction_ID) : [], [auction, tick])
+  const allRows = useMemo(() => auction ? repo.chitLedgerByAuction(auction.Chit_Auction_ID) : [], [auction, tick])
+  const rows = useMemo(() => {
+    const s = q.trim().toLowerCase()
+    return s ? allRows.filter(r => r.Member_Name?.toLowerCase().includes(s)) : allRows
+  }, [allRows, q])
 
-  const due = rows.reduce((s, r) => s + num(r.Due_Amount), 0)
-  const recv = rows.reduce((s, r) => s + num(r.Received_Amount), 0)
+  // Totals cover the whole month; search narrows only the member rows shown.
+  const due = allRows.reduce((s, r) => s + num(r.Due_Amount), 0)
+  const recv = allRows.reduce((s, r) => s + num(r.Received_Amount), 0)
 
   return (
     <div>
@@ -59,6 +65,11 @@ export default function ChitTransactions() {
             <StatCard label="Pending" value={inr(due - recv)} tone="red" />
           </div>
 
+          <Card className="mb-4 !p-3">
+            <SearchInput value={q} onChange={setQ} placeholder="Search member by name…" />
+          </Card>
+
+          {rows.length === 0 ? <EmptyState title="No matching members" hint="Try a different search." /> : (
           <Card className="!p-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -87,6 +98,7 @@ export default function ChitTransactions() {
               </table>
             </div>
           </Card>
+          )}
         </>
       )}
 

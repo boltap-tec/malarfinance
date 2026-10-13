@@ -1,7 +1,24 @@
 import { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Phone } from 'lucide-react'
+import { X, Phone, Search } from 'lucide-react'
 import { inr, amountWords, phone as fmtPhone } from '../lib/format'
+
+// Standard search box with a leading magnifier and a clear (✕) button. Shared so
+// every list filters the same way and looks identical across pages.
+export function SearchInput({ value, onChange, placeholder = 'Search…', className = '', autoFocus }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; className?: string; autoFocus?: boolean
+}) {
+  return (
+    <div className={`relative ${className}`}>
+      <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+      <input className="input pl-9 pr-9" placeholder={placeholder} value={value} autoFocus={autoFocus} onChange={e => onChange(e.target.value)} />
+      {value && (
+        <button type="button" title="Clear" onClick={() => onChange('')}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"><X size={14} /></button>
+      )}
+    </div>
+  )
+}
 
 // Click-to-call icon shown next to a name. A tel: link that opens the dialer;
 // renders nothing when there is no number. stopPropagation so it never triggers

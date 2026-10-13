@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Boxes, Building2, Plus, HandCoins } from 'lucide-react'
 import { repo, addInvestedChit } from '../data/repository'
 import { useApp, canEdit } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, Modal, Field, SearchInput } from '../components/ui'
 import { inr, fmtDate, num, monthName, mmYyyy } from '../lib/format'
 import type { InvestedChit } from '../data/types'
 
@@ -87,20 +87,33 @@ export default function Chits() {
   const editable = canEdit(role)
   const [tick, setTick] = useState(0)
   const [creating, setCreating] = useState(false)
+  const [q, setQ] = useState('')
 
   const invested = useMemo(() => repo.investedChits(), [tick])
-  const { running, completed, contributed, takenCount, takenAmt, notTakenCount, pendingNotTaken } = useMemo(() => {
+  // Totals stay whole (computed over every chit); search filters only the shown rows.
+  const { contributed, takenCount, takenAmt, notTakenCount, pendingNotTaken } = useMemo(() => {
     let contributed = 0, takenCount = 0, takenAmt = 0, notTakenCount = 0, pendingNotTaken = 0
-    const running: typeof invested = [], completed: typeof invested = []
     for (const c of invested) {
       const inv = repo.investedChitSummary(c.Chit_ID).invested
       contributed += inv
-      ;(isChitCompleted(c) ? completed : running).push(c)
       if (isTaken(c)) { takenCount++; takenAmt += num(c.Chit_Taken_Amount) }
       else { notTakenCount++; pendingNotTaken += inv } // money parked in chits not yet taken
     }
-    return { running, completed, contributed, takenCount, takenAmt, notTakenCount, pendingNotTaken }
+    return { contributed, takenCount, takenAmt, notTakenCount, pendingNotTaken }
   }, [invested])
+
+  const { running, completed } = useMemo(() => {
+    const s = q.trim().toLowerCase()
+    const list = s
+      ? invested.filter(c =>
+          (c.Chit_Name ?? c.Chit_ID)?.toLowerCase().includes(s) ||
+          (c.Chit_Invested_Company ?? '').toLowerCase().includes(s) ||
+          (c.Chit_Invested_By ?? '').toLowerCase().includes(s))
+      : invested
+    const running: typeof invested = [], completed: typeof invested = []
+    for (const c of list) (isChitCompleted(c) ? completed : running).push(c)
+    return { running, completed }
+  }, [invested, q])
 
   return (
     <div>
@@ -124,8 +137,17 @@ export default function Chits() {
         <EmptyState title="No invested chits" hint={editable ? 'Use “New invested chit” to add one.' : undefined} />
       ) : (
         <>
-          <InvestedSection title="Running" tone="text-emerald-400" rows={running} empty="No running chits." />
-          {completed.length > 0 && <InvestedSection title="Completed" tone="text-slate-400" rows={completed} className="mt-8" />}
+          <Card className="mb-4 !p-3">
+            <SearchInput value={q} onChange={setQ} placeholder="Search chit name, company or invested by…" />
+          </Card>
+          {running.length === 0 && completed.length === 0 ? (
+            <EmptyState title="No matching chits" hint="Try a different search." />
+          ) : (
+            <>
+              <InvestedSection title="Running" tone="text-emerald-400" rows={running} empty="No running chits." />
+              {completed.length > 0 && <InvestedSection title="Completed" tone="text-slate-400" rows={completed} className="mt-8" />}
+            </>
+          )}
         </>
       )}
 

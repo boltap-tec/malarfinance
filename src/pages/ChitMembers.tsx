@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { UserPlus } from 'lucide-react'
 import { repo, getSettings } from '../data/repository'
 import { useApp, canEdit, financeFilter } from '../store/app'
-import { PageHeader, Card, StatCard, Badge, Th, Td, EmptyState, CallLink } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, Th, Td, EmptyState, CallLink, SearchInput } from '../components/ui'
 import { AddMemberModal } from './ChitDetail'
 import ReminderButton from '../components/ReminderButton'
 import { buildChitMemberMessage } from '../lib/reminder'
@@ -17,13 +17,19 @@ export default function ChitMembers() {
   const [tick, setTick] = useState(0)
   const [adding, setAdding] = useState(false)
 
+  const [q, setQ] = useState('')
   const chits = useMemo(() => repo.chits(finance), [finance, tick])
   const [fund, setFund] = useState<string>('')
   const activeFund = fund || chits[0]?.Chit_ID || ''
-  const members = useMemo(() => activeFund ? repo.chitMembers(activeFund) : [], [activeFund, tick])
+  const allMembers = useMemo(() => activeFund ? repo.chitMembers(activeFund) : [], [activeFund, tick])
+  const members = useMemo(() => {
+    const s = q.trim().toLowerCase()
+    return s ? allMembers.filter(m => m.Member_Name?.toLowerCase().includes(s) || String(m.Member_Phone_No ?? '').includes(s)) : allMembers
+  }, [allMembers, q])
 
-  const shares = members.reduce((s, m) => s + num(m.Member_Percentage), 0)
-  const taken = members.filter(m => m.Chit_Taken === 'Taken').length
+  // Totals reflect the whole fund; search narrows only the list below.
+  const shares = allMembers.reduce((s, m) => s + num(m.Member_Percentage), 0)
+  const taken = allMembers.filter(m => m.Chit_Taken === 'Taken').length
 
   return (
     <div>
@@ -45,11 +51,16 @@ export default function ChitMembers() {
       {!activeFund ? <EmptyState title="No chit funds yet" hint="Create a chit fund first." /> : (
         <>
           <div className="mb-4 grid grid-cols-3 gap-3">
-            <StatCard label="Members" value={members.length} tone="blue" />
+            <StatCard label="Members" value={allMembers.length} tone="blue" />
             <StatCard label="Total shares" value={shares} tone="slate" />
             <StatCard label="Have taken" value={taken} tone="green" />
           </div>
 
+          <Card className="mb-4 !p-3">
+            <SearchInput value={q} onChange={setQ} placeholder="Search member by name or phone…" />
+          </Card>
+
+          {members.length === 0 ? <EmptyState title="No matching members" hint="Try a different search." /> : (
           <Card className="!p-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -96,6 +107,7 @@ export default function ChitMembers() {
               </table>
             </div>
           </Card>
+          )}
         </>
       )}
 

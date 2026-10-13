@@ -329,6 +329,25 @@ function PersonModal({ person, finance, editable, canAdd, onClose, onChanged }: 
   const afterChange = () => { setForm(null); setTick(t => t + 1); onChanged() }
   const nl = netLabel(net)
 
+  // This person's statement, oldest → newest, for export.
+  const gaveTotal = history.filter(e => e.Direction === 'out').reduce((s, e) => s + num(e.Amount), 0)
+  const gotTotal = history.filter(e => e.Direction === 'in').reduce((s, e) => s + num(e.Amount), 0)
+  const scope = finance === 'ALL' ? 'All firms' : finance
+  const statement = (): { headers: string[]; data: (string | number)[][] } => ({
+    headers: ['Date', 'Type', 'Mode', 'Note', 'You Gave', 'You Got', 'Balance'],
+    data: [...rows].reverse().map(({ e, balance }) => [
+      fmtDateTime(e.Date), e.Type, e.Mode ?? '', e.Note ?? '',
+      e.Direction === 'out' ? num(e.Amount) : '', e.Direction === 'in' ? num(e.Amount) : '',
+      balance === 0 ? 'Settled' : netLabel(balance).text,
+    ]),
+  })
+  const sub = `${category} · ${scope} · ${history.length} entries · Net ${net === 0 ? 'Settled' : nl.text}`
+  const slug = person.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'person'
+  const doPdf = () => { const t = statement(); printReport(`Statement — ${person}`, sub, t.headers, t.data,
+    [{ label: 'You Gave', value: inr(gaveTotal) }, { label: 'You Got', value: inr(gotTotal) }, { label: 'Net Balance', value: net === 0 ? 'Settled' : inr(Math.abs(net)) }]) }
+  const doCsv = () => { const t = statement(); downloadCSV(`statement-${slug}.csv`, [['Statement', person, sub], t.headers, ...t.data,
+    [], ['You Gave', gaveTotal], ['You Got', gotTotal], ['Net Balance', net]]) }
+
   return (
     <Modal
       title={person}
@@ -351,6 +370,14 @@ function PersonModal({ person, finance, editable, canAdd, onClose, onChanged }: 
           </div>
         </div>
       </div>
+
+      {/* Export this person's full statement as PDF or Excel. */}
+      {rows.length > 0 && (
+        <div className="flex justify-end gap-2">
+          <button className="btn-ghost !py-1.5 text-sm" onClick={doPdf}><Printer size={14} /> PDF</button>
+          <button className="btn-ghost !py-1.5 text-sm" onClick={doCsv}><Download size={14} /> Excel</button>
+        </div>
+      )}
 
       {/* Two-column statement: ENTRIES | YOU GAVE | YOU GOT. The body scrolls
           on its own so a long history reads top → bottom inside the dialog. */}

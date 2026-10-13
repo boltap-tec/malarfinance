@@ -4,7 +4,7 @@ import { Boxes, Users, Plus } from 'lucide-react'
 import { repo } from '../data/repository'
 import { useApp, canEdit, financeFilter } from '../store/app'
 import { useCreateParam } from '../lib/useCreateParam'
-import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState } from '../components/ui'
+import { PageHeader, Card, StatCard, Badge, statusTone, Th, Td, EmptyState, SearchInput } from '../components/ui'
 import { CreateChitModal } from './ChitDetail'
 import { inr, fmtDate, num } from '../lib/format'
 
@@ -16,8 +16,13 @@ export default function ChitFunds() {
   const finance = financeFilter(financeSel)
   const [tick, setTick] = useState(0)
   const [creating, setCreating] = useCreateParam()
+  const [q, setQ] = useState('')
 
   const chits = useMemo(() => repo.chits(finance), [finance, tick])
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase()
+    return s ? chits.filter(c => String(c.Chit_Name ?? '').toLowerCase().includes(s) || c.Chit_ID?.toLowerCase().includes(s)) : chits
+  }, [chits, q])
   const totals = useMemo(() => {
     let collected = 0, payoutPending = 0, open = 0
     for (const c of chits) {
@@ -48,6 +53,11 @@ export default function ChitFunds() {
       {chits.length === 0 ? (
         <EmptyState title="No chit funds yet" hint={editable ? 'Use “New chit” to start one.' : undefined} />
       ) : (
+        <>
+        <Card className="mb-4 !p-3">
+          <SearchInput value={q} onChange={setQ} placeholder="Search chit by name…" />
+        </Card>
+        {shown.length === 0 ? <EmptyState title="No matching chits" hint="Try a different search." /> : (
         <Card className="!p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -55,7 +65,7 @@ export default function ChitFunds() {
                 <tr><Th>Chit</Th><Th>Started</Th><Th right>Pot</Th><Th right>Members</Th><Th right>Month</Th><Th right>Taken</Th><Th>Status</Th></tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {chits.map((c) => {
+                {shown.map((c) => {
                   const members = repo.chitMembers(c.Chit_ID).length
                   return (
                     <tr key={c.Chit_ID} className="hover:bg-slate-800/40">
@@ -76,6 +86,8 @@ export default function ChitFunds() {
             </table>
           </div>
         </Card>
+        )}
+        </>
       )}
 
       {creating && (

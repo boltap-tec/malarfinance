@@ -247,7 +247,7 @@ export default function Settings() {
           When two finances share the same first three letters (e.g. <code>kannan_finance</code> and
           <code> kannan_personal</code> both become <code>kan-…</code>), their STL, loan, deposit and
           partner codes collide. This re-codes each finance to its own unique prefix
-          (<code>kannan_personal</code> → <code>kanp-…</code>) and updates every reference. Only rows
+          (<code>kannan_personal</code> → <code>kanp-…</code>, <code>Malar_Appa</code> → <code>MalA-…</code>) and updates every reference. Only rows
           that still clash change — safe to run more than once. <b>Download a backup first.</b>
         </p>
         <button className="btn-primary" onClick={runFixPrefixes} disabled={fixingPrefix}>

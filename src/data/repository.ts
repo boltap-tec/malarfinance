@@ -648,19 +648,41 @@ async function sInsert(table: keyof Dataset, rows: any): Promise<void> {
   const { error } = await supabase.from(table as string).insert(arr)
   noteErr(`insert ${table}`, error?.message)
 }
+// Tables keyed by a finance code (STL / loan / partner / deposit … numbers). The
+// live tables don't enforce these keys, so two finances that once shared a
+// prefix (Malar_Finance & Malar_Appa were both "Mal") can each hold the very
+// same code. A write keyed on that code alone would hit BOTH houses' rows, so
+// it's refused until Settings → Fix prefixes gives each house its own codes.
+const CODE_KEYED = new Set<keyof Dataset>(['STL_CRM', 'Loan_Processing', 'Partner', 'Deposit_Amount', 'Other_Finance_Loan', 'Jewel_Loan'])
+function sharedCode(table: keyof Dataset, keyVal: string): string[] | null {
+  const k = PK[table]
+  if (!k || !CODE_KEYED.has(table)) return null
+  const fins = new Set(((db[table] as any[] | undefined) ?? []).filter(r => String(r[k]) === keyVal).map(r => r.Finance_Name))
+  return fins.size > 1 ? [...fins] : null
+}
+function refuseShared(table: keyof Dataset, keyVal: string): boolean {
+  const fins = sharedCode(table, keyVal)
+  if (!fins) return false
+  noteErr(`update ${table}`, `${keyVal} is used by ${fins.join(' and ')} — run Settings → Fix prefixes first`)
+  return true
+}
+
 async function sUpdate(table: keyof Dataset, keyVal: string, patch: any): Promise<void> {
   if (!supabase) return
   const k = PK[table]; if (!k) return
+  if (refuseShared(table, keyVal)) return
   const { error } = await supabase.from(table as string).update(clean(patch)).eq(k, keyVal)
   noteErr(`update ${table}`, error?.message)
 }
 async function sDelete(table: keyof Dataset, keyVal: string): Promise<void> {
   if (!supabase) return
   const k = PK[table]; if (!k) return
+  if (refuseShared(table, keyVal)) return
   const { error } = await supabase.from(table as string).delete().eq(k, keyVal)
   noteErr(`delete ${table}`, error?.message)
 }
 async function sReplace(table: keyof Dataset, keyVal: string, rows: any[]): Promise<void> {
+  if (refuseShared(table, keyVal)) return   // else the insert would run after a refused delete
   await sDelete(table, keyVal); await sInsert(table, rows)
 }
 
@@ -738,6 +760,7 @@ const normFin = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 const PREFIX_OVERRIDES: Record<string, string> = {
   kannnanpersonal: 'Kanp',   // "Kannnan_Personal" (three-n typo from the xlsx import)
   kannanpersonal: 'Kanp',    // "Kannan_Personal" / "Kannan Personal" (corrected spelling)
+  malarappa: 'MalA',         // "Malar_Appa" — otherwise "Mal", same as "Malar_Finance"
 }
 export function financePrefix(finance: string): string {
   return PREFIX_OVERRIDES[normFin(finance)] ?? (finance.slice(0, 3) || 'Fin')
@@ -1063,6 +1086,7 @@ function sameOther(a: OtherFinanceLoan, b: OtherFinanceLoan): boolean {
 }
 
 export async function updateLoan(loanNo: string, patch: Partial<Loan>): Promise<void> {
+  if (refuseShared('Loan_Processing', loanNo)) return
   db.Loan_Processing = (db.Loan_Processing ?? []).map(l =>
     l.Loan_No === loanNo ? { ...l, ...patch } : l)
   await sUpdate('Loan_Processing', loanNo, patch)
@@ -1075,7 +1099,7 @@ export async function updateLoan(loanNo: string, patch: Partial<Loan>): Promise<
 // restorable. Use it to fix a mis-recorded repayment, etc.
 export async function editLoan(loanNo: string, patch: Partial<Loan>): Promise<void> {
   const before = (db.Loan_Processing ?? []).find(l => l.Loan_No === loanNo)
-  if (!before) return
+  if (!before || refuseShared('Loan_Processing', loanNo)) return
   const after = { ...before, ...patch }
   db.Loan_Processing = (db.Loan_Processing ?? []).map(l => l.Loan_No === loanNo ? after : l)
   await sUpdate('Loan_Processing', loanNo, patch)
@@ -1114,6 +1138,7 @@ export async function addCustomer(c: Customer): Promise<void> {
 }
 
 export async function updateCustomer(stl: string, patch: Partial<Customer>): Promise<void> {
+  if (refuseShared('STL_CRM', stl)) return
   db.STL_CRM = (db.STL_CRM ?? []).map(c =>
     c.Customer_STL_NO === stl ? { ...c, ...patch } : c)
   await sUpdate('STL_CRM', stl, patch)
@@ -2102,9 +2127,10 @@ export async function restoreFromLog(logId: string): Promise<void> {
 // so the numbers stay correct no matter which flow changed them.
 export function recomputeCustomer(stl: string): void {
   const cust = (db.STL_CRM ?? []).find(c => c.Customer_STL_NO === stl)
-  if (!cust) return
-  const loans = (db.Loan_Processing ?? []).filter(l => l.Customer_STL_NO === stl)
-  const interest = (db.Interest_Details ?? []).filter(i => i.Customer_STL_NO === stl)
+  if (!cust || refuseShared('STL_CRM', stl)) return
+  // Same finance only — another house may still carry this STL number.
+  const loans = (db.Loan_Processing ?? []).filter(l => l.Customer_STL_NO === stl && l.Finance_Name === cust.Finance_Name)
+  const interest = (db.Interest_Details ?? []).filter(i => i.Customer_STL_NO === stl && i.Finance_Name === cust.Finance_Name)
   const rollup = {
     Total_Loan_Given: loans.reduce((s, l) => s + num(l.Loan_Amount), 0),
     Outstand_Loan: loans.reduce((s, l) => s + num(l.Outstand_Amount), 0),

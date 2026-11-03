@@ -30,6 +30,11 @@ export default function ChitMembers() {
   // Totals reflect the whole fund; search narrows only the list below.
   const shares = allMembers.reduce((s, m) => s + num(m.Member_Percentage), 0)
   const taken = allMembers.filter(m => m.Chit_Taken === 'Taken').length
+  // Unpaid installments per member — same ledger sum the member detail page shows as "Pending".
+  const duesByMember = useMemo(() => new Map(allMembers.map(m => [m.Member_ID, repo.chitLedgerByMember(m.Member_ID)])), [allMembers])
+  const pendingOf = (id: string) => (duesByMember.get(id) ?? []).reduce((s, r) => s + num(r.Pending_Amount), 0)
+  const totalPending = allMembers.reduce((s, m) => s + pendingOf(m.Member_ID), 0)
+  const owing = allMembers.filter(m => pendingOf(m.Member_ID) > 0).length
 
   return (
     <div>
@@ -50,10 +55,11 @@ export default function ChitMembers() {
 
       {!activeFund ? <EmptyState title="No chit funds yet" hint="Create a chit fund first." /> : (
         <>
-          <div className="mb-4 grid grid-cols-3 gap-3">
+          <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard label="Members" value={allMembers.length} tone="blue" />
             <StatCard label="Total shares" value={shares} tone="slate" />
             <StatCard label="Have taken" value={taken} tone="green" />
+            <StatCard label="Pending dues" value={<span className={totalPending > 0 ? 'text-rose-300' : ''}>{inr(totalPending)}</span>} tone="red" sub={owing ? `${owing} member${owing === 1 ? '' : 's'} owe` : 'all paid'} />
           </div>
 
           <Card className="mb-4 !p-3">
@@ -65,18 +71,17 @@ export default function ChitMembers() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="border-b border-slate-800 bg-slate-900/60">
-                  <tr><Th sticky>Member</Th><Th>Phone</Th><Th right>Share</Th><Th>Chit</Th><Th right>Taken amount</Th><Th right>Payout pending</Th><Th right>Message</Th></tr>
+                  <tr><Th sticky>Member</Th><Th>Phone</Th><Th right>Share</Th><Th>Chit</Th><Th right>Pending dues</Th><Th right>Taken amount</Th><Th right>Payout pending</Th><Th right>Message</Th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                   {members.map(m => {
-                    const dues = repo.chitLedgerByMember(m.Member_ID)
+                    const dues = duesByMember.get(m.Member_ID) ?? []
+                    const pending = pendingOf(m.Member_ID)
+                    const unpaid = dues.filter(r => num(r.Pending_Amount) > 0)
                     const message = buildChitMemberMessage({
                       name: m.Member_Name,
-                      totalPending: dues.reduce((s, r) => s + num(r.Pending_Amount), 0),
-                      months: dues
-                        .filter(r => num(r.Pending_Amount) > 0)
-                        .sort((a, b) => num(a.Month_Count) - num(b.Month_Count))
-                        .map(r => ({ month: num(r.Month_Count), pending: num(r.Pending_Amount) })),
+                      totalPending: pending,
+                      months: unpaid.map(r => ({ month: num(r.Month_Count), pending: num(r.Pending_Amount) })),
                       status: m.Chit_Taken,
                       completedMonth: dues.reduce((mx, r) => Math.max(mx, num(r.Month_Count)), 0),
                       note: getSettings().paymentNote,
@@ -93,6 +98,18 @@ export default function ChitMembers() {
                       <Td className="text-slate-400">{phone(m.Member_Phone_No)}</Td>
                       <Td right className="text-slate-400">{num(m.Member_Percentage)}</Td>
                       <Td><Badge tone={m.Chit_Taken === 'Taken' ? 'green' : 'slate'}>{m.Chit_Taken === 'Taken' ? 'Taken' : 'Not taken'}</Badge></Td>
+                      <Td right>
+                        {pending > 0 ? (
+                          <Link
+                            to={`/chit/member/${encodeURIComponent(m.Member_ID)}`}
+                            className="text-rose-300 hover:underline"
+                            title={`Unpaid: ${unpaid.map(r => `#${num(r.Month_Count)} ${inr(num(r.Pending_Amount))}`).join(', ')}`}
+                          >
+                            {inr(pending)}
+                            <span className="block text-xs text-slate-500">{unpaid.length} month{unpaid.length === 1 ? '' : 's'}</span>
+                          </Link>
+                        ) : <span className="text-slate-500">—</span>}
+                      </Td>
                       <Td right className="text-slate-300">{num(m.Chit_Taken_Amount) ? inr(num(m.Chit_Taken_Amount)) : '—'}</Td>
                       <Td right className="text-rose-300">{num(m.Remaining_Amount) ? inr(num(m.Remaining_Amount)) : '—'}</Td>
                       <Td right>

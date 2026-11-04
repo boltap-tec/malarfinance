@@ -14,11 +14,10 @@ import { inr, phone, fmtDate, num, monthName, monthKey } from '../lib/format'
 type TabKey = 'loans' | 'interest' | 'ledger' | 'statement'
 
 // Quick-view filters for a customer's ledger — jump straight to the loan
-// disbursals or the repayments without scanning interest rows.
+// disbursals and repayments (together, newest first) without scanning interest rows.
 const CUSTOMER_LEDGER_FILTERS = [
   { key: 'all', label: 'All', natures: [] },
-  { key: 'loan-given', label: 'Loan given', natures: ['Loan_To_Customer'] },
-  { key: 'repayment', label: 'Repayment', natures: ['Customer_Loan_Prin_Repayment'] },
+  { key: 'loan', label: 'Loan given & repaid', natures: ['Loan_To_Customer', 'Customer_Loan_Prin_Repayment'] },
   { key: 'interest', label: 'Interest', natures: ['Customer_Interest'] },
 ]
 

@@ -42,7 +42,9 @@ export default function CustomerDetail() {
 
   const { customer, loans, interest, ledger, totals } = useMemo(() => {
     const customer = repo.customer(id)
+    // Newest loan first.
     const loans = repo.loansByCustomer(id)
+      .sort((a, b) => new Date(b.Loan_Given_Date ?? 0).getTime() - new Date(a.Loan_Given_Date ?? 0).getTime())
     const interest = repo.interestByCustomer(id)
     const ledger = repo.ledgerByCustomer(id)
     const totals = {

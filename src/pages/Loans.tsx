@@ -183,8 +183,12 @@ function LoanForm({ finance, initialStl, onClose, onSaved }: { finance: string; 
   })
   const missingLabels = missing.map(k => FORM_FIELDS.loan.find(f => f.key === k)?.label ?? k)
   const valid = customerReady && amt > 0 && num(rate) >= 0 && missing.length === 0
+  // Blocks a second tap while the first save is still writing (else duplicate rows).
+  const [saving, setSaving] = useState(false)
 
   async function save() {
+    if (saving) return
+    setSaving(true)
     let stlNo: string, name: string, phoneNo: Customer['Customer_Phone_No']
     if (mode === 'new') {
       stlNo = newStl; name = nName.trim(); phoneNo = nPhone || undefined
@@ -203,7 +207,7 @@ function LoanForm({ finance, initialStl, onClose, onSaved }: { finance: string; 
       }
       await addCustomer(c)
     } else {
-      if (!cust) return
+      if (!cust) { setSaving(false); return }
       stlNo = cust.Customer_STL_NO; name = cust.Customer_Name; phoneNo = cust.Customer_Phone_No
     }
 
@@ -237,7 +241,7 @@ function LoanForm({ finance, initialStl, onClose, onSaved }: { finance: string; 
       onClose={onClose}
       footer={<>
         <button className="btn-ghost" onClick={onClose}>Cancel</button>
-        <button className="btn-primary" disabled={!valid} onClick={save}>Disburse & post to ledger</button>
+        <button className="btn-primary" disabled={!valid || saving} onClick={save}>{saving ? 'Saving…' : 'Disburse & post to ledger'}</button>
       </>}
     >
       {/* Existing vs new customer */}

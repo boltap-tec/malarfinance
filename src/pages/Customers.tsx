@@ -82,7 +82,8 @@ export default function Customers() {
         prevS = s
         flat.push({ t: 'status', key: 'g:' + g.key + '|s:' + s, name: s, count: tagged.filter(x => x.g.key === g.key && x.s === s).length })
       }
-      flat.push({ t: 'row', key: c.Customer_STL_NO, c })
+      // Finance + STL: the same code can exist in two finances under "All finances".
+      flat.push({ t: 'row', key: `r:${c.Finance_Name}|${c.Customer_STL_NO}`, c })
     }
     return {
       flat, count: filtered.length, pendMap, outMap,
@@ -217,8 +218,11 @@ function CustomerForm({ finance, onClose, onSaved }: { finance: string; onClose:
   const stl = `${prefix}-STL${stlNum.trim()}`
   const stlTaken = existing.some(c => c.Customer_STL_NO === stl)
   const valid = name.trim().length > 0 && stlNum.trim().length > 0 && !stlTaken
+  const [saving, setSaving] = useState(false)
 
   async function save() {
+    if (saving) return
+    setSaving(true)
     const c: Customer = {
       Finance_Name: finance,
       Customer_Name: name.trim(),
@@ -242,7 +246,7 @@ function CustomerForm({ finance, onClose, onSaved }: { finance: string; onClose:
       onClose={onClose}
       footer={<>
         <button className="btn-ghost" onClick={onClose}>Cancel</button>
-        <button className="btn-primary" disabled={!valid} onClick={save}>Save customer</button>
+        <button className="btn-primary" disabled={!valid || saving} onClick={save}>{saving ? 'Saving…' : 'Save customer'}</button>
       </>}
     >
       <Field label="Customer name"><input className="input" value={name} onChange={e => setName(e.target.value)} /></Field>

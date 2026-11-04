@@ -137,7 +137,15 @@ export const repo = {
     return (db.Partner ?? []).filter(p => !finance || p.Finance_Name === finance)
   },
   customers(finance?: string): Customer[] {
-    let list = (db.STL_CRM ?? []).filter(c => !finance || c.Finance_Name === finance)
+    // The live table doesn't enforce a key, so a double-tapped save can leave the
+    // same customer stored twice — show one row per finance + STL no.
+    const seen = new Set<string>()
+    let list = (db.STL_CRM ?? []).filter(c => {
+      if (finance && c.Finance_Name !== finance) return false
+      const k = `${c.Finance_Name}|${c.Customer_STL_NO}`
+      if (seen.has(k)) return false
+      seen.add(k); return true
+    })
     if (viewer?.role === 'partner') {
       const stls = new Set((db.Loan_Processing ?? []).filter(l => l.Referred_Partner === viewer!.partnerId).map(l => l.Customer_STL_NO))
       list = list.filter(c => stls.has(c.Customer_STL_NO))
@@ -1132,6 +1140,8 @@ export async function markOtherFinancePostedUpto(code: string, date: string): Pr
 }
 
 export async function addCustomer(c: Customer): Promise<void> {
+  // A repeat tap while the first save is in flight must not insert a second copy.
+  if ((db.STL_CRM ?? []).some(x => x.Finance_Name === c.Finance_Name && x.Customer_STL_NO === c.Customer_STL_NO)) return
   db.STL_CRM = [c, ...(db.STL_CRM ?? [])]
   await sInsert('STL_CRM', c)
   persist()

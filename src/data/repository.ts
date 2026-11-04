@@ -705,6 +705,9 @@ async function sReplace(table: keyof Dataset, keyVal: string, rows: any[]): Prom
 
 // ── Write helpers (in-memory + localStorage + Supabase write-through) ─────────
 export async function addLoan(loan: Loan): Promise<void> {
+  // The number shown in the form can go stale (another device saved a loan
+  // meanwhile) — never insert a number that is already taken.
+  if ((db.Loan_Processing ?? []).some(l => l.Loan_No === loan.Loan_No)) loan = { ...loan, Loan_No: nextLoanNo(loan.Finance_Name) }
   db.Loan_Processing = [loan, ...(db.Loan_Processing ?? [])]
   await sInsert('Loan_Processing', loan)
   recomputeCustomer(loan.Customer_STL_NO)
@@ -1176,16 +1179,23 @@ export function nextStlNo(finance: string): string {
   return `${prefix}-STL${max + 1}`
 }
 
-// Next loan number for a finance, from the max suffix already used — never the
+// Next loan number for a finance, from the max number already used — never the
 // row count, which repeats an existing number once any loan has been deleted.
+// Interest and ledger rows count too: they outlive a deleted loan, so re-issuing
+// its number would hand its history to the new loan. "New-130-1" (a renumbered
+// duplicate) counts as 130.
 export function nextLoanNo(finance: string): string {
   const prefix = financePrefix(finance)
-  const max = (db.Loan_Processing ?? [])
-    .filter(l => l.Finance_Name === finance)
-    .reduce((m, l) => {
-      const n = Number(String(l.Loan_No).split('-').pop())
-      return isNaN(n) ? m : Math.max(m, n)
-    }, 0)
+  const re = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)`)
+  const codes = [
+    ...(db.Loan_Processing ?? []).filter(l => l.Finance_Name === finance).map(l => l.Loan_No),
+    ...(db.Interest_Details ?? []).filter(i => i.Finance_Name === finance).map(i => i.Loan_No),
+    ...(db.Transaction_Ledger ?? []).filter(t => t.Finance_Name === finance).map(t => t.Loan_No),
+  ]
+  const max = codes.reduce((m: number, c) => {
+    const hit = re.exec(String(c ?? ''))
+    return hit ? Math.max(m, Number(hit[1])) : m
+  }, 0)
   return `${prefix}-${max + 1}`
 }
 

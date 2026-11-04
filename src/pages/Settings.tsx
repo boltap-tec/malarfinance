@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Settings as Cog, RotateCcw, Check, ListChecks, Tags, X, Plus, Boxes, Download, CloudUpload, MessageCircle, Wrench } from 'lucide-react'
 import {
   repo, getSettings, setSettings, revokeInterestForMonth, isRepayInterest, updateFinance, renumberCodes,
-  getMandatory, setMandatory, FORM_FIELDS, type FormKind, type MandatoryConfig,
+  getMandatory, setMandatory, FORM_FIELDS, MAND_LOCKED, type FormKind, type MandatoryConfig,
   getLedgerCategories, setLedgerCategories, type LedgerCategories,
   datasetSnapshot, reconcileBalances, fixFinancePrefixes,
 } from '../data/repository'
@@ -331,12 +331,15 @@ export default function Settings() {
             <div key={kind}>
               <p className="mb-2 text-sm font-semibold capitalize text-slate-300">{kind === 'other' ? 'Other-finance' : kind}</p>
               <div className="space-y-1.5">
-                {FORM_FIELDS[kind].map(f => (
-                  <label key={f.key} className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
-                    <input type="checkbox" className="accent-brand-500" checked={mand[kind].includes(f.key)} onChange={() => toggleMand(kind, f.key)} />
-                    {f.label}
-                  </label>
-                ))}
+                {FORM_FIELDS[kind].map(f => {
+                  const locked = MAND_LOCKED[kind].includes(f.key)
+                  return (
+                    <label key={f.key} className={`flex items-center gap-2 text-sm text-slate-300 ${locked ? 'cursor-not-allowed' : 'cursor-pointer'}`} title={locked ? 'Always required' : undefined}>
+                      <input type="checkbox" className="accent-brand-500" checked={locked || mand[kind].includes(f.key)} disabled={locked} onChange={() => toggleMand(kind, f.key)} />
+                      {f.label}{locked && <span className="text-[11px] text-slate-500">(always)</span>}
+                    </label>
+                  )
+                })}
               </div>
             </div>
           ))}

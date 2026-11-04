@@ -340,9 +340,9 @@ function LoanForm({ finance, initialStl, onClose, onSaved }: { finance: string; 
         <Field label="Cheques received"><input className="input" inputMode="numeric" value={chqs} onChange={e => setChqs(e.target.value)} /></Field>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Referred partner">
+        <Field label="Referred partner *" hint={partners.length === 0 ? 'Add a partner for this finance first.' : undefined}>
           <select className="input" value={partner} onChange={e => setPartner(e.target.value)}>
-            <option value="">—</option>
+            <option value="">Select partner…</option>
             {partners.map(p => <option key={p.Partner_ID} value={p.Partner_ID}>{p.Partner_Name} · {p.Partner_ID}</option>)}
           </select>
         </Field>

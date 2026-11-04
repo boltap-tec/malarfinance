@@ -1726,14 +1726,20 @@ export const FORM_FIELDS: Record<FormKind, FieldDef[]> = {
 }
 export type MandatoryConfig = Record<FormKind, string[]>
 const MAND_DEFAULT: MandatoryConfig = {
-  loan: ['date', 'customer', 'amount', 'interestType', 'rate'],
+  loan: ['date', 'customer', 'amount', 'interestType', 'rate', 'partner'],
   deposit: ['name', 'amount', 'date', 'rate'],
   other: ['lender', 'amount', 'rate', 'date'],
 }
+// Always required, whatever a device's saved Settings say — every loan must name
+// its referred partner (Settings shows these ticked and locked).
+export const MAND_LOCKED: MandatoryConfig = { loan: ['partner'], deposit: [], other: [] }
 const MAND_KEY = 'arul-finance:mandatory:v1'
 export function getMandatory(): MandatoryConfig {
-  try { return { ...MAND_DEFAULT, ...JSON.parse(localStorage.getItem(MAND_KEY) || '{}') } }
-  catch { return { ...MAND_DEFAULT } }
+  let c: MandatoryConfig
+  try { c = { ...MAND_DEFAULT, ...JSON.parse(localStorage.getItem(MAND_KEY) || '{}') } }
+  catch { c = { ...MAND_DEFAULT } }
+  for (const k of Object.keys(MAND_LOCKED) as FormKind[]) c[k] = [...new Set([...(c[k] ?? []), ...MAND_LOCKED[k]])]
+  return c
 }
 export function setMandatory(c: MandatoryConfig): void { localStorage.setItem(MAND_KEY, JSON.stringify(c)) }
 

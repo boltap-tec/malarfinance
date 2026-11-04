@@ -1026,6 +1026,13 @@ export async function updateLedgerEntry(refId: string, patch: Partial<LedgerRow>
   const after = { ...before, ...patch }
   db.Transaction_Ledger = (db.Transaction_Ledger ?? []).map(t => String(t.Ref_ID) === String(refId) ? after : t)
   await sUpdate('Transaction_Ledger', String(refId), patch)
+  // Re-dating a "Loan disbursed" row moves the loan's given date with it —
+  // interest is billed from Loan_Given_Date, so the two must never disagree
+  // (New-134 was re-dated here to 29 Sep but kept 5 Oct, under-billing repayments).
+  if (after.Nature_Transaction === 'Loan_To_Customer' && after.Loan_No && patch.Date_Transaction && patch.Date_Transaction !== before.Date_Transaction) {
+    const loan = (db.Loan_Processing ?? []).find(l => l.Loan_No === after.Loan_No && l.Finance_Name === after.Finance_Name)
+    if (loan && loan.Loan_Given_Date !== patch.Date_Transaction) await updateLoan(loan.Loan_No, { Loan_Given_Date: patch.Date_Transaction })
+  }
   recomputeBalances(String(after.Finance_Name ?? ''))
   writeLog({ Action: 'update', Entity: 'Transaction_Ledger', Entity_Label: `Ref ${refId} · ${after.Description ?? after.Nature_Transaction}`, Before: before, After: after })
   persist()
@@ -1123,6 +1130,15 @@ export async function editLoan(loanNo: string, patch: Partial<Loan>): Promise<vo
   const after = { ...before, ...patch }
   db.Loan_Processing = (db.Loan_Processing ?? []).map(l => l.Loan_No === loanNo ? after : l)
   await sUpdate('Loan_Processing', loanNo, patch)
+  // And the reverse: a new given date re-dates the loan's "Loan disbursed" ledger row.
+  if (patch.Loan_Given_Date && patch.Loan_Given_Date !== before.Loan_Given_Date) {
+    const rows = (db.Transaction_Ledger ?? []).filter(t => t.Nature_Transaction === 'Loan_To_Customer' && t.Loan_No === loanNo && t.Finance_Name === before.Finance_Name && t.Date_Transaction !== patch.Loan_Given_Date)
+    for (const t of rows) {
+      db.Transaction_Ledger = (db.Transaction_Ledger ?? []).map(x => x === t ? { ...x, Date_Transaction: patch.Loan_Given_Date } : x)
+      await sUpdate('Transaction_Ledger', String(t.Ref_ID), { Date_Transaction: patch.Loan_Given_Date })
+    }
+    if (rows.length) recomputeBalances(String(before.Finance_Name ?? ''))
+  }
   recomputeCustomer(before.Customer_STL_NO)
   writeLog({ Action: 'update', Entity: 'Loan_Processing', Entity_Label: `Edit ${loanNo} · ${before.Customer_Name}`, Before: before, After: after })
   persist()

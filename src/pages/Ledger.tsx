@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Search, ArrowDownLeft, ArrowUpRight, Scale, Trash2, Pencil, TrendingDown, TrendingUp, HandCoins, Percent, PiggyBank, Landmark } from 'lucide-react'
 import { repo, addBalanceCorrection, balanceForFinance, deleteLedgerEntry, updateLedgerEntry, addExpense, addOtherIncome, getLedgerCategories } from '../data/repository'
@@ -12,8 +12,7 @@ import type { LedgerRow } from '../data/types'
 // intentionally excluded — it has its own dedicated screens.
 const NATURE_VIEWS: { key: string; label: string; natures: string[] }[] = [
   { key: 'all', label: 'All', natures: [] },
-  { key: 'loan-given', label: 'Loan giving', natures: ['Loan_To_Customer'] },
-  { key: 'loan-repay', label: 'Loan repayment', natures: ['Customer_Loan_Prin_Repayment'] },
+  { key: 'loan', label: 'Loan given & repaid', natures: ['Loan_To_Customer', 'Customer_Loan_Prin_Repayment'] },
   { key: 'deposit', label: 'Deposit', natures: ['Deposit_From_Customer'] },
   { key: 'deposit-repay', label: 'Deposit repay', natures: ['Deposit_Prin_Refund'] },
   { key: 'other-borrowed', label: 'Other finance borrowed', natures: ['Other_Receipt'] },
@@ -35,7 +34,7 @@ export default function Ledger() {
 
   const singleFinance = finance !== 'ALL'
 
-  const { rows, receipts, payments, balance, balByRef } = useMemo(() => {
+  const { rows, days, receipts, payments, balance, balByRef } = useMemo(() => {
     const all = repo.ledger(financeFilter(finance))
 
     // Running balance per entry, computed here from the SAME rows the card totals,
@@ -63,11 +62,19 @@ export default function Ledger() {
       const d = new Date(b.Date_Transaction ?? 0).getTime() - new Date(a.Date_Transaction ?? 0).getTime()
       return d !== 0 ? d : Number(String(b.Ref_ID).replace(/\D/g, '')) - Number(String(a.Ref_ID).replace(/\D/g, ''))
     })
+    // Group the (already newest-first) rows by transaction date, with each day's totals.
+    const days: { date: string; rows: LedgerRow[]; receipts: number; payments: number }[] = []
+    for (const t of list) {
+      const date = fmtDate(t.Date_Transaction)
+      let day = days[days.length - 1]
+      if (!day || day.date !== date) { day = { date, rows: [], receipts: 0, payments: 0 }; days.push(day) }
+      day.rows.push(t); day.receipts += num(t.Receipt_Amount); day.payments += num(t.Payment_Amount)
+    }
     return {
       // Show every matching row — no cap. (A prior 300-row slice silently hid
       // older entries while the totals still counted them, which read as "missing
       // lines".) The list is already filtered by finance/view/search.
-      rows: list,
+      rows: list, days,
       receipts: list.reduce((s2, t) => s2 + num(t.Receipt_Amount), 0),
       payments: list.reduce((s2, t) => s2 + num(t.Payment_Amount), 0),
       // Balance card = net of the whole finance ledger = the newest row's balance.
@@ -134,8 +141,20 @@ export default function Ledger() {
                 <tr><Th>Date</Th><Th>Nature</Th><Th>Description</Th><Th right>Receipt</Th><Th right>Payment</Th>{singleFinance && <Th right>Balance</Th>}<Th>Mode</Th>{isMd && <Th>Actions</Th>}</tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {rows.map((t, i) => (
-                  <tr key={i} className="hover:bg-slate-800/40">
+                {days.map(day => (
+                  <Fragment key={day.date}>
+                  {/* Day header: date, entry count and that day's receipts / payments. */}
+                  <tr className="bg-slate-900/80">
+                    <td colSpan={3} className="px-3 py-1.5">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">{day.date}</span>
+                      <span className="ml-2 text-xs text-slate-400">{day.rows.length} {day.rows.length === 1 ? 'entry' : 'entries'}</span>
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-xs font-semibold text-emerald-400">{day.receipts ? inr(day.receipts) : ''}</td>
+                    <td className="px-3 py-1.5 text-right text-xs font-semibold text-rose-400">{day.payments ? inr(day.payments) : ''}</td>
+                    <td colSpan={1 + (singleFinance ? 1 : 0) + (isMd ? 1 : 0)} />
+                  </tr>
+                  {day.rows.map((t, i) => (
+                  <tr key={`${t.Ref_ID}|${i}`} className="hover:bg-slate-800/40">
                     <Td className="whitespace-nowrap text-slate-400">
                       {fmtDate(t.Date_Transaction)}
                       {t.Created_Date && fmtDate(t.Created_Date) !== fmtDate(t.Date_Transaction) && (
@@ -162,6 +181,8 @@ export default function Ledger() {
                       </div>
                     </Td>}
                   </tr>
+                  ))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

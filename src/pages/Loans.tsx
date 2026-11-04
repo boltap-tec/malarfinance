@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Search, Plus, Trash2 } from 'lucide-react'
-import { repo, addLoan, addCustomer, deleteLoan, missingRequired, FORM_FIELDS, financePrefix } from '../data/repository'
+import { repo, addLoan, addCustomer, deleteLoan, missingRequired, FORM_FIELDS, financePrefix, nextLoanNo } from '../data/repository'
 import { useApp, financeFilter, canEdit } from '../store/app'
 import { PageHeader, Card, Badge, statusTone, Th, Td, EmptyState, Modal, Field, ConfirmModal, AmountHint } from '../components/ui'
 import { inr, fmtDate, num, phone } from '../lib/format'
@@ -127,7 +127,6 @@ export default function Loans() {
 
 function LoanForm({ finance, initialStl, onClose, onSaved }: { finance: string; initialStl?: string; onClose: () => void; onSaved: () => void }) {
   const customers = repo.customers(finance)
-  const existingLoans = repo.loans(finance)
   const partners = repo.partners(finance)
   const prefix = financePrefix(finance)
 
@@ -172,7 +171,7 @@ function LoanForm({ finance, initialStl, onClose, onSaved }: { finance: string; 
 
   const newStl = `${prefix}-STL${stlNum.trim()}`
   const stlTaken = mode === 'new' && customers.some(c => c.Customer_STL_NO === newStl)
-  const loanNo = `${prefix}-${existingLoans.length + 1}`
+  const loanNo = nextLoanNo(finance)
   const amt = num(amount)
 
   const customerReady = mode === 'existing'

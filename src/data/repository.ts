@@ -669,6 +669,15 @@ function sharedCode(table: keyof Dataset, keyVal: string): string[] | null {
   return fins.size > 1 ? [...fins] : null
 }
 function refuseShared(table: keyof Dataset, keyVal: string): boolean {
+  // A loan number held by two loans (old count-based numbering re-issued a deleted
+  // loan's number) — an edit or delete would hit both customers' loans.
+  if (table === 'Loan_Processing') {
+    const dupes = (db.Loan_Processing ?? []).filter(l => String(l.Loan_No) === keyVal)
+    if (dupes.length > 1) {
+      noteErr(`update ${table}`, `${keyVal} is used by ${dupes.map(l => l.Customer_Name).join(' and ')} — renumber one loan first`)
+      return true
+    }
+  }
   const fins = sharedCode(table, keyVal)
   if (!fins) return false
   noteErr(`update ${table}`, `${keyVal} is used by ${fins.join(' and ')} — run Settings → Fix prefixes first`)
@@ -889,7 +898,7 @@ async function bumpJewelPhotoCount(loanNo: string, count: number): Promise<void>
 // ── Deletes (all logged & restorable) ────────────────────────────────────────
 export async function deleteLoan(loanNo: string): Promise<void> {
   const row = (db.Loan_Processing ?? []).find(l => l.Loan_No === loanNo)
-  if (!row) return
+  if (!row || refuseShared('Loan_Processing', loanNo)) return
   db.Loan_Processing = (db.Loan_Processing ?? []).filter(l => l.Loan_No !== loanNo)
   await sDelete('Loan_Processing', loanNo)
   recomputeCustomer(row.Customer_STL_NO)
@@ -1165,6 +1174,19 @@ export function nextStlNo(finance: string): string {
       return isNaN(n) ? m : Math.max(m, n)
     }, 0)
   return `${prefix}-STL${max + 1}`
+}
+
+// Next loan number for a finance, from the max suffix already used — never the
+// row count, which repeats an existing number once any loan has been deleted.
+export function nextLoanNo(finance: string): string {
+  const prefix = financePrefix(finance)
+  const max = (db.Loan_Processing ?? [])
+    .filter(l => l.Finance_Name === finance)
+    .reduce((m, l) => {
+      const n = Number(String(l.Loan_No).split('-').pop())
+      return isNaN(n) ? m : Math.max(m, n)
+    }, 0)
+  return `${prefix}-${max + 1}`
 }
 
 // Interest rows carry a deterministic ID (e.g. `${stl}-${month}`). Skip any whose

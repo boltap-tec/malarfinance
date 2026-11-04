@@ -113,8 +113,7 @@ export default function CustomerDetail() {
         {customer.Customer_Email && <span className="flex items-center gap-1.5"><Mail size={14} /> {customer.Customer_Email}</span>}
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Total loan given" value={inr(totals.given)} tone="blue" />
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="Outstanding loan" value={inr(totals.outstanding)} tone="amber" />
         <StatCard label="Interest paid" value={inr(num(customer.Total_Interest_Paid))} tone="green" />
         <StatCard label="Interest due" value={inr(totals.interestDue)} tone="red" />

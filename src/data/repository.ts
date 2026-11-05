@@ -1313,6 +1313,36 @@ export async function payOtherFinanceInterest(id: string, amount?: number, date?
   persist()
 }
 
+// The highest numeric Ref_ID currently in Supabase (paginated, Ref_ID only).
+async function serverMaxRef(): Promise<number> {
+  if (!supabase) return 0
+  let max = 0
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase.from('Transaction_Ledger').select('Ref_ID').range(from, from + 999)
+    if (error || !data?.length) break
+    for (const r of data) max = Math.max(max, refNum((r as any).Ref_ID))
+    if (data.length < 1000) break
+  }
+  return max
+}
+
+// Insert a ledger row. The Ref_ID was picked from this browser's copy of the
+// ledger, which goes stale when another device/tab posts meanwhile — so on a
+// duplicate-key clash, re-read the server's highest Ref_ID and retry with the
+// next free one (updating the in-memory row to match).
+async function insertLedgerRow(full: LedgerRow, autoRef: boolean): Promise<void> {
+  if (!supabase) return
+  for (let attempt = 0; ; attempt++) {
+    const payload = clean({ ...full, Interest_Amount: full.Interest_Amount != null ? String(full.Interest_Amount) : undefined, Created_Date: undefined })
+    const { error } = await supabase.from('Transaction_Ledger').insert([payload])
+    if (!error) return
+    const dup = error.code === '23505' || /duplicate key/i.test(error.message)
+    if (!autoRef || !dup || attempt >= 4) { noteErr('insert Transaction_Ledger', error.message); return }
+    const localMax = (db.Transaction_Ledger ?? []).filter(r => r !== full).reduce((m, r) => Math.max(m, refNum(r.Ref_ID)), 0)
+    full.Ref_ID = String(Math.max(localMax, await serverMaxRef()) + 1 + attempt)
+  }
+}
+
 // Post a ledger row. Ref_ID and Balance are filled automatically when omitted,
 // so callers only supply the meaningful fields (nature, amounts, who/what).
 export async function recordLedger(row: Partial<LedgerRow>): Promise<LedgerRow> {
@@ -1330,7 +1360,7 @@ export async function recordLedger(row: Partial<LedgerRow>): Promise<LedgerRow> 
   db.Transaction_Ledger = [...(db.Transaction_Ledger ?? []), full]
   // Interest_Amount is a text column in the DB — send it as a string.
   // Created_Date is omitted so the DB's default fills it (see note above).
-  await sInsert('Transaction_Ledger', { ...full, Interest_Amount: full.Interest_Amount != null ? String(full.Interest_Amount) : undefined, Created_Date: undefined })
+  await insertLedgerRow(full, row.Ref_ID == null)
   // Re-run the per-finance, date-ordered balance so a back-dated entry is correct.
   recomputeBalances(String(full.Finance_Name ?? ''))
   persist()

@@ -341,6 +341,20 @@ export interface HandExchange {
   Remarks?: string
 }
 
+// ── Expected amount (money expected in, tracked until adjusted) ──────────────
+// Kept per finance firm and never posted to a ledger. Starts 'Not Adjusted';
+// marking it 'Adjusted' records the date it was adjusted.
+export interface ExpectedAmount {
+  ID: string
+  Finance_Name?: string
+  Date?: string
+  Description?: string
+  Amount: number
+  Status: 'Not Adjusted' | 'Adjusted' | string
+  Adjusted_Date?: string | null
+  Remarks?: string | null
+}
+
 // ── Jewel loan (a gold loan the firm/owner TOOK by pledging jewellery) ───────
 // Mirrors the jewel.xlsx register: money borrowed against gold ornaments —
 // from whom, by whom, how many grams, the item particulars, and photos of the
@@ -483,6 +497,7 @@ export interface Dataset {
   Given: any[]
   Borrowed: any[]
   Hand_Exchange: HandExchange[]
+  Expected_Amount: ExpectedAmount[]
   Jewel_Loan: JewelLoan[]
   Jewel_Loan_Photo: JewelPhoto[]
   Interest_Posting_Log: PostingLog[]

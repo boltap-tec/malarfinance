@@ -29,6 +29,7 @@ import Logs from './pages/Logs'
 import Settings from './pages/Settings'
 import ProfitSummary from './pages/ProfitSummary'
 import HandExchange from './pages/HandExchange'
+import ExpectedAmount from './pages/ExpectedAmount'
 import Messages from './pages/Messages'
 import Chits from './pages/Chits'
 import ChitDetail from './pages/ChitDetail'
@@ -95,6 +96,7 @@ export default function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="/profit" element={<ProfitSummary />} />
         <Route path="/hand" element={<HandExchange />} />
+        <Route path="/expected" element={<ExpectedAmount />} />
         <Route path="/messages" element={<Messages />} />
         <Route path="/menu" element={<Menu />} />
         <Route path="/chits" element={<Chits />} />

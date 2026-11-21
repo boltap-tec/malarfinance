@@ -40,6 +40,7 @@ export const navGroups: NavGroup[] = [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, desc: 'KPIs & recent activity' },
       { to: '/ledger', label: 'Ledger', icon: BookOpenText, desc: 'All receipts & payments' },
       { to: '/hand', label: 'Hand Exchange', icon: Handshake, desc: 'Personal give & take (private)' },
+      { to: '/expected', label: 'Expected Amount', icon: Wallet, desc: 'Amounts expected, until adjusted' },
     ],
   },
   {

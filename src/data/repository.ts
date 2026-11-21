@@ -11,7 +11,7 @@ import type {
   OtherFinanceLoan, Worker, AppNotification, LogEntry, Message,
   ChitCreation, ChitMember, ChitAuction, ChitTakenMember, ChitTakenPayment, ChitLedgerRow,
   InvestedChit, InvestedChitTrans, HandExchange, PostingLog,
-  JewelLoan, JewelPhoto,
+  JewelLoan, JewelPhoto, ExpectedAmount,
 } from './types'
 
 const STORAGE_KEY = 'arul-finance:data:v1'
@@ -509,6 +509,12 @@ export const repo = {
     return { theyOwe, youOwe }
   },
 
+  // ── Expected amounts (per finance firm, newest first) ─────────────────────
+  expectedAmounts(finance?: string): ExpectedAmount[] {
+    return (db.Expected_Amount ?? []).filter(e => !finance || e.Finance_Name === finance)
+      .slice().sort((a, b) => (b.Date ?? '').localeCompare(a.Date ?? ''))
+  },
+
   // ── Jewel loans (gold pledged to borrow — see jewel.xlsx) ──────────────────
   jewelLoans(finance?: string): JewelLoan[] {
     return (db.Jewel_Loan ?? [])
@@ -630,7 +636,7 @@ const PK: Partial<Record<keyof Dataset, string>> = {
   Chit_Creation: 'Chit_ID', Chit_Member: 'Member_ID', Chit_Auction: 'Chit_Auction_ID',
   Chit_Taken_Member: 'Chit_Taken_ID', Chit_Taken_Payment: 'Payment_ID', Chit_Ledger: 'ID',
   Invested_Chit: 'Chit_ID', Invested_Chit_Trans: 'ID',
-  Hand_Exchange: 'ID', Interest_Posting_Log: 'ID',
+  Hand_Exchange: 'ID', Expected_Amount: 'ID', Interest_Posting_Log: 'ID',
   Jewel_Loan: 'Loan_No', Jewel_Loan_Photo: 'id',
 }
 export let lastWriteError = ''
@@ -2935,5 +2941,25 @@ export async function updateHandEntry(id: string, patch: Partial<Omit<HandExchan
 export async function deleteHandEntry(id: string): Promise<void> {
   db.Hand_Exchange = (db.Hand_Exchange ?? []).filter(e => e.ID !== id)
   await sDelete('Hand_Exchange', id)
+  persist()
+}
+
+// ── Expected amount writes (never posted to any finance ledger) ─────────────
+export async function addExpectedAmount(e: Omit<ExpectedAmount, 'ID'>): Promise<void> {
+  const row: ExpectedAmount = { ...e, ID: `EXP-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` }
+  db.Expected_Amount = [row, ...(db.Expected_Amount ?? [])]
+  await sInsert('Expected_Amount', row)
+  persist()
+}
+
+export async function updateExpectedAmount(id: string, patch: Partial<Omit<ExpectedAmount, 'ID'>>): Promise<void> {
+  db.Expected_Amount = (db.Expected_Amount ?? []).map(e => e.ID === id ? { ...e, ...patch } : e)
+  await sUpdate('Expected_Amount', id, patch)
+  persist()
+}
+
+export async function deleteExpectedAmount(id: string): Promise<void> {
+  db.Expected_Amount = (db.Expected_Amount ?? []).filter(e => e.ID !== id)
+  await sDelete('Expected_Amount', id)
   persist()
 }

@@ -350,8 +350,9 @@ export interface ExpectedAmount {
   Date?: string
   Description?: string
   Amount: number
-  Status: 'Not Adjusted' | 'Adjusted' | string
+  Status: 'Not Adjusted' | 'Partially Adjusted' | 'Adjusted' | string
   Adjusted_Date?: string | null
+  Adjusted_Amount?: number | null   // how much is adjusted so far (Partially Adjusted)
   Remarks?: string | null
 }
 

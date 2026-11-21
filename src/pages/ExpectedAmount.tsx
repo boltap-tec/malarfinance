@@ -7,8 +7,23 @@ import type { ExpectedAmount as Row } from '../data/types'
 import { inr, inrShort, fmtDate, num } from '../lib/format'
 
 const NOT_ADJUSTED = 'Not Adjusted'
+const PARTIAL = 'Partially Adjusted'
 const ADJUSTED = 'Adjusted'
+type Status = typeof NOT_ADJUSTED | typeof PARTIAL | typeof ADJUSTED
 const today = () => new Date().toISOString().slice(0, 10)
+
+const statusOf = (r: Row): Status => r.Status === ADJUSTED ? ADJUSTED : r.Status === PARTIAL ? PARTIAL : NOT_ADJUSTED
+// Amount already adjusted: all of it when Adjusted, the recorded part when Partial.
+const adjustedOf = (r: Row) => {
+  const s = statusOf(r)
+  return s === ADJUSTED ? num(r.Amount) : s === PARTIAL ? Math.min(num(r.Adjusted_Amount), num(r.Amount)) : 0
+}
+
+const STATUS_BTN: { key: Status; label: string; on: string }[] = [
+  { key: NOT_ADJUSTED, label: 'Not adjusted', on: 'bg-amber-500/20 text-amber-200' },
+  { key: PARTIAL, label: 'Partially', on: 'bg-brand-500/20 text-brand-200' },
+  { key: ADJUSTED, label: 'Adjusted', on: 'bg-emerald-500/20 text-emerald-200' },
+]
 
 export default function ExpectedAmount() {
   const role = useApp(s => s.user?.role)
@@ -18,35 +33,36 @@ export default function ExpectedAmount() {
   const canAdd = editable && finance !== 'ALL'
   const [tick, setTick] = useState(0)
   const [form, setForm] = useState<{ edit?: Row } | null>(null)
-  const [adjusting, setAdjusting] = useState<Row | null>(null)
+  const [adjusting, setAdjusting] = useState<{ row: Row; status: typeof PARTIAL | typeof ADJUSTED } | null>(null)
   const [del, setDel] = useState<Row | null>(null)
-  const [tab, setTab] = useState<'all' | typeof NOT_ADJUSTED | typeof ADJUSTED>('all')
+  const [tab, setTab] = useState<'all' | Status>('all')
   const [q, setQ] = useState('')
 
   const rows = useMemo(() => repo.expectedAmounts(financeFilter(finance)), [tick, finance])
   const refresh = () => setTick(t => t + 1)
 
-  const pending = rows.filter(r => r.Status !== ADJUSTED)
-  const done = rows.filter(r => r.Status === ADJUSTED)
-  const total = (list: Row[]) => list.reduce((s, r) => s + num(r.Amount), 0)
+  const count = (s: Status) => rows.filter(r => statusOf(r) === s).length
+  const adjustedTotal = rows.reduce((s, r) => s + adjustedOf(r), 0)
+  const pendingTotal = rows.reduce((s, r) => s + num(r.Amount) - adjustedOf(r), 0)
 
   const shown = useMemo(() => {
     let list = rows
-    if (tab !== 'all') list = list.filter(r => (r.Status === ADJUSTED ? ADJUSTED : NOT_ADJUSTED) === tab)
+    if (tab !== 'all') list = list.filter(r => statusOf(r) === tab)
     const query = q.trim().toLowerCase()
     if (query) list = list.filter(r => `${r.Description ?? ''} ${r.Remarks ?? ''}`.toLowerCase().includes(query))
     return list
   }, [rows, tab, q])
 
   async function markNotAdjusted(r: Row) {
-    await updateExpectedAmount(r.ID, { Status: NOT_ADJUSTED, Adjusted_Date: null })
+    await updateExpectedAmount(r.ID, { Status: NOT_ADJUSTED, Adjusted_Date: null, Adjusted_Amount: null })
     refresh()
   }
 
   const tabs: { key: typeof tab; label: string; n: number }[] = [
     { key: 'all', label: 'All', n: rows.length },
-    { key: NOT_ADJUSTED, label: 'Not adjusted', n: pending.length },
-    { key: ADJUSTED, label: 'Adjusted', n: done.length },
+    { key: NOT_ADJUSTED, label: 'Not adjusted', n: count(NOT_ADJUSTED) },
+    { key: PARTIAL, label: 'Partially adjusted', n: count(PARTIAL) },
+    { key: ADJUSTED, label: 'Adjusted', n: count(ADJUSTED) },
   ]
 
   return (
@@ -62,8 +78,8 @@ export default function ExpectedAmount() {
       )}
 
       <div className="mb-4 grid grid-cols-3 gap-3">
-        <StatCard label="Not adjusted" value={inrShort(total(pending))} tone="amber" icon={<CircleDashed size={18} />} />
-        <StatCard label="Adjusted" value={inrShort(total(done))} tone="green" icon={<CircleCheck size={18} />} />
+        <StatCard label="Yet to adjust" value={inrShort(pendingTotal)} tone="amber" icon={<CircleDashed size={18} />} />
+        <StatCard label="Adjusted" value={inrShort(adjustedTotal)} tone="green" icon={<CircleCheck size={18} />} />
         <StatCard label="Entries" value={rows.length} tone="blue" icon={<Wallet size={18} />} />
       </div>
 
@@ -101,7 +117,7 @@ export default function ExpectedAmount() {
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {shown.map(r => {
-                  const isAdj = r.Status === ADJUSTED
+                  const st = statusOf(r)
                   return (
                     <tr key={r.ID} className="hover:bg-slate-800/40">
                       <Td className="whitespace-nowrap text-slate-300">{fmtDate(r.Date)}</Td>
@@ -111,20 +127,22 @@ export default function ExpectedAmount() {
                         <div className="flex flex-wrap items-center gap-1.5">
                           {editable ? (
                             <div className="inline-flex overflow-hidden rounded-lg ring-1 ring-inset ring-slate-700 text-xs">
-                              <button
-                                className={`px-2 py-1 ${!isAdj ? 'bg-amber-500/20 text-amber-200' : 'text-slate-500 hover:text-slate-300'}`}
-                                onClick={() => isAdj && markNotAdjusted(r)}
-                              >Not adjusted</button>
-                              <button
-                                className={`px-2 py-1 ${isAdj ? 'bg-emerald-500/20 text-emerald-200' : 'text-slate-500 hover:text-slate-300'}`}
-                                onClick={() => setAdjusting(r)}
-                                title={isAdj ? 'Change adjusted date' : 'Mark as adjusted'}
-                              >Adjusted</button>
+                              {STATUS_BTN.map(b => (
+                                <button
+                                  key={b.key}
+                                  className={`whitespace-nowrap px-2 py-1 ${st === b.key ? b.on : 'text-slate-500 hover:text-slate-300'}`}
+                                  onClick={() => b.key === NOT_ADJUSTED
+                                    ? st !== NOT_ADJUSTED && markNotAdjusted(r)
+                                    : setAdjusting({ row: r, status: b.key })}
+                                  title={b.key === NOT_ADJUSTED ? 'Mark as not adjusted' : st === b.key ? 'Change date / remark' : `Mark as ${b.key.toLowerCase()}`}
+                                >{b.label}</button>
+                              ))}
                             </div>
                           ) : (
-                            <Badge tone={isAdj ? 'green' : 'amber'}>{isAdj ? 'Adjusted' : 'Not adjusted'}</Badge>
+                            <Badge tone={st === ADJUSTED ? 'green' : st === PARTIAL ? 'blue' : 'amber'}>{st}</Badge>
                           )}
-                          {isAdj && r.Adjusted_Date && <span className="whitespace-nowrap text-xs text-slate-400">on {fmtDate(r.Adjusted_Date)}</span>}
+                          {st === PARTIAL && <span className="whitespace-nowrap text-xs text-slate-400">{inr(adjustedOf(r))} of {inr(num(r.Amount))}</span>}
+                          {st !== NOT_ADJUSTED && r.Adjusted_Date && <span className="whitespace-nowrap text-xs text-slate-400">on {fmtDate(r.Adjusted_Date)}</span>}
                         </div>
                       </Td>
                       <Td className="text-slate-400">{r.Remarks || <span className="text-slate-600">—</span>}</Td>
@@ -146,7 +164,7 @@ export default function ExpectedAmount() {
       )}
 
       {form && <EntryModal edit={form.edit} finance={finance} onClose={() => setForm(null)} onSaved={() => { setForm(null); refresh() }} />}
-      {adjusting && <AdjustModal row={adjusting} onClose={() => setAdjusting(null)} onSaved={() => { setAdjusting(null); refresh() }} />}
+      {adjusting && <AdjustModal row={adjusting.row} status={adjusting.status} onClose={() => setAdjusting(null)} onSaved={() => { setAdjusting(null); refresh() }} />}
       {del && (
         <ConfirmModal
           title="Delete expected amount"
@@ -197,31 +215,56 @@ function EntryModal({ edit, finance, onClose, onSaved }: { edit?: Row; finance: 
   )
 }
 
-// Mark an entry Adjusted — asks for the date it was adjusted (defaults to today).
-function AdjustModal({ row, onClose, onSaved }: { row: Row; onClose: () => void; onSaved: () => void }) {
+// Mark an entry Adjusted or Partially Adjusted — asks for the adjusted date
+// (defaults to today) and a remark; Partially also asks how much is adjusted.
+function AdjustModal({ row, status, onClose, onSaved }: { row: Row; status: typeof PARTIAL | typeof ADJUSTED; onClose: () => void; onSaved: () => void }) {
+  const partial = status === PARTIAL
+  const total = num(row.Amount)
   const [date, setDate] = useState((row.Adjusted_Date ?? today()).slice(0, 10))
+  const [adjAmount, setAdjAmount] = useState(statusOf(row) === PARTIAL && row.Adjusted_Amount ? String(row.Adjusted_Amount) : '')
+  const [remarks, setRemarks] = useState(row.Remarks ?? '')
   const [busy, setBusy] = useState(false)
+  const amt = num(adjAmount)
+  const amountOk = !partial || (amt > 0 && amt < total)
+  const valid = !!date && amountOk
 
   async function save() {
-    if (!date || busy) return
+    if (!valid || busy) return
     setBusy(true)
-    await updateExpectedAmount(row.ID, { Status: ADJUSTED, Adjusted_Date: date })
+    await updateExpectedAmount(row.ID, {
+      Status: status, Adjusted_Date: date,
+      Adjusted_Amount: partial ? amt : total,
+      Remarks: remarks.trim() || null,
+    })
     onSaved()
   }
 
   return (
     <Modal
-      title="Mark as adjusted"
+      title={partial ? 'Mark as partially adjusted' : 'Mark as adjusted'}
       onClose={onClose}
       footer={<>
         <button className="btn-ghost" onClick={onClose}>Cancel</button>
-        <button className="btn-primary" disabled={!date || busy} onClick={save}>Mark adjusted</button>
+        <button className="btn-primary" disabled={!valid || busy} onClick={save}>{partial ? 'Mark partially adjusted' : 'Mark adjusted'}</button>
       </>}
     >
       <div className="rounded-xl bg-slate-800/40 p-3 text-sm text-slate-300">
-        <b className="text-hd">{row.Description || '—'}</b> · {inr(num(row.Amount))} · {fmtDate(row.Date)}
+        <b className="text-hd">{row.Description || '—'}</b> · {inr(total)} · {fmtDate(row.Date)}
       </div>
-      <Field label="Adjusted date"><input type="date" className="input" autoFocus value={date} onChange={e => setDate(e.target.value)} /></Field>
+      {partial ? (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Adjusted date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
+          <Field
+            label="Amount adjusted (₹)"
+            hint={adjAmount && !amountOk ? `Must be more than 0 and less than ${inr(total)}` : amt > 0 ? `Balance ${inr(total - amt)}` : undefined}
+          >
+            <input className="input" inputMode="numeric" autoFocus value={adjAmount} onChange={e => setAdjAmount(e.target.value)} />
+          </Field>
+        </div>
+      ) : (
+        <Field label="Adjusted date"><input type="date" className="input" autoFocus value={date} onChange={e => setDate(e.target.value)} /></Field>
+      )}
+      <Field label="Remark (optional)"><textarea className="input min-h-[70px]" value={remarks} onChange={e => setRemarks(e.target.value)} /></Field>
     </Modal>
   )
 }
